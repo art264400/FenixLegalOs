@@ -154,8 +154,17 @@
         '</div>' +
       '</section>'
     );
-    document.getElementById('start-btn').addEventListener('click', function () {
-      location.hash = '#/intro';
+    document.getElementById('start-btn').addEventListener('click', async function () {
+      if (!state.sessionId) {
+        try {
+          const created = await api('POST', '/api/sessions');
+          state.sessionId = created.id;
+          saveState();
+        } catch (e) { /* offline-tolerant */ }
+      }
+      state.idx = 0;
+      saveState();
+      location.hash = '#/diagnostic';
     });
   }
 
@@ -433,10 +442,26 @@
           '<div class="form-error" id="g-error" hidden></div>' +
           '<button class="btn" type="submit">Открыть полный отчёт</button>' +
         '</form>' +
-      '</section>'
+      '</section>' +
+      '<div class="mobile-sticky-bar">' +
+        '<div class="bar-info">' +
+          '<span class="bar-title">Fenix Legal Score: <b>' + r.overall + '/100</b></span>' +
+          '<span class="bar-sub">Разблокировать все 8 областей</span>' +
+        '</div>' +
+        '<button class="btn btn-sm" id="sticky-pay-btn">Разблокировать (9 900 ₸)</button>' +
+      '</div>'
     );
     animateGauges();
     track('report_gate_viewed');
+
+    const stickyBtn = document.getElementById('sticky-pay-btn');
+    if (stickyBtn) {
+      stickyBtn.addEventListener('click', function () {
+        const nameIn = document.getElementById('g-name');
+        if (nameIn && !nameIn.value) nameIn.focus();
+        document.getElementById('gate').scrollIntoView({ behavior: 'smooth' });
+      });
+    }
 
     document.getElementById('gate-form').addEventListener('submit', async function (e) {
       e.preventDefault();
@@ -501,12 +526,21 @@
               '<div class="tariff-badge">Рекомендуемый выбор</div>' +
               '<div class="t-title">Полный PDF-отчёт и Roadmap</div>' +
               '<div class="t-price">$20 <span style="font-size:16px;color:var(--ink-soft)">(~9 900 ₸)</span></div>' +
-              '<div class="t-desc">• Полная разблокировка 40+ рисков<br>• Выгрузка отчёта в брендированный PDF<br>• Пошаговая дорожная карта устранения рисков<br>• Доступ навсегда в 7.5 раз дешевле консультации</div>' +
+              '<ul class="tariff-checklist">' +
+                '<li><span class="chk">✓</span> Разблокировка всех 40+ рисков и 8 секторов</li>' +
+                '<li><span class="chk">✓</span> Брендированный векторный PDF-отчёт Fenix Law</li>' +
+                '<li><span class="chk">✓</span> Пошаговая дорожная карта устранения уязвимостей</li>' +
+                '<li><span class="chk">✓</span> Вечный доступ (в 7.5 раз дешевле консультации)</li>' +
+              '</ul>' +
             '</div>' +
             '<div class="tariff-card" id="tariff-pro">' +
               '<div class="t-title">Отчёт + Личная консультация</div>' +
               '<div class="t-price">$150 <span style="font-size:16px;color:var(--ink-soft)">(~75 000 ₸)</span></div>' +
-              '<div class="t-desc">• Всё из тарифа «Полный отчёт»<br>• 60-минутная индивидуальная сессия с Нариманом Исановым<br>• Разбор структуры и документов стартапа</div>' +
+              '<ul class="tariff-checklist">' +
+                '<li><span class="chk">✓</span> Всё из тарифа «Полный отчёт»</li>' +
+                '<li><span class="chk">✓</span> 60-минутная сессия с Нариманом Исановым</li>' +
+                '<li><span class="chk">✓</span> Индивидуальный аудит документов и Cap Table</li>' +
+              '</ul>' +
             '</div>' +
           '</div>' +
           '<div style="margin-top:20px">' +

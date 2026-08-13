@@ -679,9 +679,40 @@ table.data tr.clickable:hover td { background: rgba(89, 194, 255, 0.05); }
   break-inside: avoid !important;
 }
 
+/* Quick Wins Styles ---------------------------------------------------- */
+
+.tariff-checklist {
+  list-style: none; padding: 0; margin: 16px 0 0 0; display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; color: var(--ink-soft); text-align: left;
+}
+.tariff-checklist li {
+  display: flex; align-items: flex-start; gap: 8px; line-height: 1.4;
+}
+.tariff-checklist .chk {
+  color: var(--positive); font-weight: bold; font-size: 14px; flex-shrink: 0; margin-top: 1px;
+}
+
+.mobile-sticky-bar {
+  display: none;
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 990;
+  background: rgba(11, 15, 22, 0.95); backdrop-filter: blur(12px);
+  border-top: 1px solid var(--accent); padding: 12px 20px;
+  align-items: center; justify-content: space-between; gap: 12px;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.6);
+}
+.mobile-sticky-bar .bar-info { display: flex; flex-direction: column; }
+.mobile-sticky-bar .bar-title { font-size: 14px; color: #FFF; }
+.mobile-sticky-bar .bar-title b { color: var(--accent); }
+.mobile-sticky-bar .bar-sub { font-size: 11.5px; color: var(--ink-faint); }
+.mobile-sticky-bar .btn-sm { padding: 8px 14px; font-size: 13px; white-space: nowrap; }
+
+@media (max-width: 720px) {
+  .mobile-sticky-bar { display: flex; }
+  body { padding-bottom: 70px; }
+}
+
 @media print {
-  .topbar, .footer, .btn, .paywall-banner, .admin-nav, .top-right-actions, .blurred-overlay-card, #download-pdf-btn, .modal-overlay { display: none !important; }
-  body { background: #0B0F16 !important; color: #E6EDF8 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  .topbar, .footer, .btn, .paywall-banner, .admin-nav, .top-right-actions, .blurred-overlay-card, #download-pdf-btn, .modal-overlay, .mobile-sticky-bar { display: none !important; }
+  body { background: #0B0F16 !important; color: #E6EDF8 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; padding-bottom: 0 !important; }
   .wrap { max-width: 100% !important; padding: 10px !important; }
   .risk-card, .sec-card { border: 1px solid var(--line) !important; background: var(--bg-elev) !important; color: var(--ink) !important; }
   .pdf-header-branded { display: flex !important; }
