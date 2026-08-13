@@ -123,50 +123,34 @@
       '<section class="hero">' +
         '<div class="hero-flex">' +
           '<div class="hero-copy">' +
-            '<div class="hero-badge">Fenix Legal Tech OS · Юридический аудит стартапов</div>' +
-            '<h1>Насколько юридически готова ваша компания к росту?</h1>' +
-            '<p class="sub">Пройдите профессиональную диагностику продукта, фаундеров, IP, данных, команды и инвестиционной готовности. Получите персональный Legal Score за 10–15 минут.</p>' +
-            '<div class="cta-row">' +
-              '<button class="btn" id="start-btn">Начать диагностику</button>' +
-            '</div>' +
-            '<div class="trust-row">' +
-              '<span>⚡ Бесплатно</span><span>⏱ 10–15 минут</span><span>🔒 Без отправки коммерческих тайн</span>' +
-            '</div>' +
+            '<h1>Насколько юридически готова ваша технологическая компания к росту?</h1>' +
+            '<p class="sub">Пройдите профессиональную диагностику продукта, фаундеров, IP, данных, команды и инвестиционной готовности. Получите персональный Legal Score и увидите, какие юридические вопросы требуют внимания сейчас, а какие могут стать проблемой при росте или инвестиционном раунде.</p>' +
           '</div>' +
           '<img class="hero-logo" src="/img/logo.png" alt="Fenix Law">' +
         '</div>' +
-        '<div class="metrics-strip">' +
-          '<div class="metric-item"><div class="val">8</div><div class="lbl">Зон риска</div></div>' +
-          '<div class="metric-item"><div class="val">58</div><div class="lbl">Вопросов</div></div>' +
-          '<div class="metric-item"><div class="val">0–100</div><div class="lbl">Legal Score</div></div>' +
-          '<div class="metric-item"><div class="val">Roadmap</div><div class="lbl">План действий</div></div>' +
+        '<div class="cta-row">' +
+          '<button class="btn" id="start-btn">Начать диагностику</button>' +
         '</div>' +
-        '<div class="process-section">' +
-          '<h2 class="section-heading">Как работает Fenix Legal OS</h2>' +
-          '<div class="process-grid">' +
-            '<div class="process-card"><div class="step-num">01</div><div class="step-title">Ответьте на вопросы</div><div class="step-desc">10–15 минут на ключевые аспекты бизнеса</div></div>' +
-            '<div class="process-card"><div class="step-num">02</div><div class="step-title">Получите Score</div><div class="step-desc">Мгновенный балльный расчет защищённости</div></div>' +
-            '<div class="process-card"><div class="step-num">03</div><div class="step-title">Узнайте риски</div><div class="step-desc">Выявление критических и высоких уязвимостей</div></div>' +
-            '<div class="process-card"><div class="step-num">04</div><div class="step-title">План действий</div><div class="step-desc">Пошаговый юридический Roadmap</div></div>' +
-          '</div>' +
+        '<div class="trust-row">' +
+          '<span>Бесплатно</span><span>Около 10 минут</span><span>Не требует подготовки документов</span>' +
         '</div>' +
         '<div class="hero-domains">' +
-          '<h2 class="section-heading">Восемь областей диагностики</h2>' +
+          '<div class="label">Восемь областей диагностики</div>' +
           '<div class="domain-grid">' +
-            '<div class="domain-card"><div class="d-name">Founders</div><div class="d-tags">роли, доли, vesting, выход</div></div>' +
-            '<div class="domain-card"><div class="d-name">Corporate</div><div class="d-tags">структура, ТОО/МФЦА, cap table</div></div>' +
-            '<div class="domain-card"><div class="d-name">IP</div><div class="d-tags">права на код, дизайн, торговый знак</div></div>' +
-            '<div class="domain-card"><div class="d-name">Team</div><div class="d-tags">сотрудники, подрядчики, NDA</div></div>' +
-            '<div class="domain-card"><div class="d-name">Product</div><div class="d-tags">Terms of Use, оферта, пользователи</div></div>' +
-            '<div class="domain-card"><div class="d-name">Data &amp; AI</div><div class="d-tags">privacy, GDPR, интеграции LLM</div></div>' +
-            '<div class="domain-card"><div class="d-name">Contracts</div><div class="d-tags">B2B-договоры, SLA, лимиты</div></div>' +
-            '<div class="domain-card"><div class="d-name">Investment</div><div class="d-tags">готовность к раунду, Data Room</div></div>' +
+            '<div>Founders<small>роли, доли, vesting, выход</small></div>' +
+            '<div>Corporate<small>структура и cap table</small></div>' +
+            '<div>IP<small>права на продукт и код</small></div>' +
+            '<div>Team<small>сотрудники и подрядчики</small></div>' +
+            '<div>Product<small>пользователи и условия</small></div>' +
+            '<div>Data &amp; AI<small>данные, privacy, AI-сервисы</small></div>' +
+            '<div>Contracts<small>B2B-договоры</small></div>' +
+            '<div>Investment<small>готовность к раунду</small></div>' +
           '</div>' +
         '</div>' +
         '<div class="method">' +
           '<h2>Сначала диагноз. Потом документы.</h2>' +
           '<p>Fenix Law не просто готовит юридические документы. Сначала мы понимаем продукт, бизнес-модель, отношения между фаундерами, движение денег, IP и будущий рост компании — и затем выстраиваем юридическую архитектуру бизнеса.</p>' +
-          '<p>Система поможет определить потенциальные юридические пробелы и понять, какие действия целесообразны дальше.</p>' +
+          '<p>Система поможет определить потенциальные юридические пробелы и понять, какие действия целесообразны дальше. Часть вопросов вы сможете закрыть самостоятельно; для остальных увидите, с чего начать.</p>' +
         '</div>' +
       '</section>'
     );
@@ -191,9 +175,9 @@
     }).join('');
     render(
       '<section class="q-screen wrap-narrow" style="padding-left:0;padding-right:0">' +
-        '<h1 style="font-size:clamp(28px,4.5vw,40px)">Восемь областей вашей юридической конструкции</h1>' +
+        '<h1 style="font-size:clamp(28px,4.5vw,40px)">Мы зададим вопросы о восьми областях вашей компании</h1>' +
         '<div class="intro-list">' + rows + '</div>' +
-        '<div class="note-quote">Здесь нет правильных и неправильных ответов. Задача диагностики — понять вашу текущую юридическую архитектуру и определить уязвимые места.</div>' +
+        '<div class="note-quote">Здесь нет правильных и неправильных компаний. Задача диагностики — понять вашу текущую юридическую конструкцию и определить вопросы, которые могут требовать внимания.</div>' +
         '<div class="q-nav">' +
           '<button class="btn" id="continue-btn">Продолжить</button>' +
           '<button class="btn-ghost" onclick="location.hash=\'#/\'">Назад</button>' +
@@ -245,10 +229,7 @@
 
     render(
       '<section class="q-screen">' +
-        '<div class="q-meta-strip">' +
-          '<span class="q-section-pill">Шаг ' + section.order + ' из ' + bank.sections.length + ' · ' + esc(section.title) + '</span>' +
-          '<span class="q-count-pill">Вопрос ' + (state.idx + 1) + ' из ' + visible.length + '</span>' +
-        '</div>' +
+        '<div class="q-meta">Раздел ' + section.order + ' из ' + bank.sections.length + ' — ' + esc(section.title) + '</div>' +
         '<h1 class="q-title">' + esc(q.question) + '</h1>' +
         '<div class="q-options">' + optionsHtml + '</div>' +
         (q.explanation
@@ -256,8 +237,9 @@
             '<div class="why-text" id="why-text" hidden>' + esc(q.explanation) + '</div></div>'
           : '') +
         '<div class="q-nav">' +
-          (state.idx > 0 ? '<button class="btn-ghost" id="back-btn">← Назад</button>' : '<div></div>') +
+          (state.idx > 0 ? '<button class="btn-ghost" id="back-btn">← Назад</button>' : '') +
           (isMultiple ? '<button class="btn" id="next-btn">Продолжить</button>' : '') +
+          '<span class="q-count">' + (state.idx + 1) + ' / ' + visible.length + '</span>' +
         '</div>' +
       '</section>'
     );
@@ -375,23 +357,11 @@
   }
 
   function sectionCard(s) {
-    const statusText = s.score === null ? 'Не оценен'
-      : s.score >= 75 ? 'Устойчиво'
-      : s.score >= 45 ? 'В зоне внимания'
-      : 'Критический риск';
-    const statusColor = s.score === null ? 'var(--ink-muted)'
-      : s.score >= 75 ? 'var(--positive)'
-      : s.score >= 45 ? 'var(--high)'
-      : 'var(--critical)';
-
     return '<div class="sec-card">' +
-      '<div class="mini-gauge">' + gaugeSvg(s.score, 76) +
-        '<span class="gauge-value">' + (s.score === null ? '—' : s.score + '%') + '</span>' +
+      '<div class="mini-gauge">' + gaugeSvg(s.score, 88) +
+        '<span class="gauge-value">' + (s.score === null ? '—' : s.score) + '</span>' +
       '</div>' +
-      '<div class="sec-info">' +
-        '<div class="sec-name">' + esc(s.title) + '</div>' +
-        '<div class="sec-status" style="color:' + statusColor + '">• ' + statusText + '</div>' +
-      '</div>' +
+      '<div class="sec-name">' + esc(s.title) + '</div>' +
       '</div>';
   }
 
