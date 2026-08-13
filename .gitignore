@@ -1,0 +1,29 @@
+# .NET Build outputs
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+
+# SQLite databases & temp files
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.log
+
+# Temp PDFs and previews generated during testing
+*.pdf
+preview_*.png
+Templates/temp_report_*.typ
+Templates/temp_report_*.pdf
+
+# IDE & Editor files
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# OS generated files
+.DS_Store
+Thumbs.db
