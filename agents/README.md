@@ -1,71 +1,102 @@
-# 🤖 Fenix Legal OS AI Agent Team Architecture
+# 🤖 Fenix Legal OS AI Agent Team Architecture & Operational Rules
 
-Архитектурный регламент и операционная модель AI-команды разработки и развития платформы **Fenix Legal OS**.
+Архитектурный регламент, операционная модель и 7 ключевых принципов работы AI-команды Fenix Legal OS.
 
-## 🏗 Текущий технологический стек и контекст проекта
-
-- **Backend**: C# / .NET 8, ASP.NET Core Minimal APIs
-- **ORM & DB**: Dapper ORM + SQLite (`fenix.db`)
-- **Frontend**: Vanilla JavaScript (ES6+), Vanilla CSS3 (Dark mode `#0B0F16`, accent `#59C2FF`), Single Page Application (SPA) на Hash Router
-- **PDF Engine**: Векторный верстальщик Typst CLI (v0.15+, синтаксис `context`)
-- **Диагностический движок**: 58 профильных вопросов, 8 зон юридических рисков (Risk Domains), алгоритм вычисления Fenix Legal Score (0–100)
-- **Монетизация**: Paywall ($20 / ~9 900 ₸ за отчёт и PDF, $150 / ~75 000 ₸ за консультацию)
-- **CRM Администратора**: Пароль `fenix2026`, вычисление Lead Heat Index, аудит-лог событий (`Events`)
+> **Главный девиз команды:**
+> Делать маленькие законченные улучшения Fenix Legal OS, а не бесконечно перестраивать архитектуру.
 
 ---
 
-## 📜 10 Общих правил для всех AI-агентов
+## 🏛 7 Ключевых Принципов Команды
 
-1. **Проект уже существует и работает**: Категорически запрещено переписывать проект с нуля или менять основной стек без явного решения `00_product_lead.md`.
-2. **Анализ перед действием**: Перед внесением любых изменений агент ОБЯЗАН изучить исходные файлы своего слоя (`Program.cs`, `DataBank.cs`, `app.js`, `style.css`, `report_template.typ` и т.д.).
-3. **Принцип минимально эффективного изменения**: Делать точечные, изолированные изменения. Не занимать overengineering-ом и преждевременными абстракциями.
-4. **Сохранение стека**: Не предлагать миграции на React/Vue/Svelte, ORM Entity Framework, MediatR или микросервисы.
-5. **Цепочка взаимодействия**: Все UI-задачи обязательно проходят через `01_ui_ux_designer.md`, юр-логика — через `05_legal_product_expert.md`, а финальная приёмка — через `06_qa_security_engineer.md`.
-6. **Тестирование и валидация**: Ни одна задача не считается выполненной без компиляции/сборки и проверки QA-сценариев.
-7. **Изоляция изменений**: Не править несвязанные части проекта в рамках одной текущей задачи.
-8. **Фиксация техдолга**: Если обнаружена архитектурная проблема, не мешающая текущей задаче — записать её в Бэклог / Техдолг, но не начинать спонтанный рефакторинг.
-9. **Формат ошибок QA**: Оформлять все выявленные баги по строгому шаблону (Severity, Scenario, Steps, Expected, Actual, Fix).
-10. **Приоритеты MVP (P0–P6)**:
-    ```text
-    P0 — Broken flows (Критические баги, сломанный квиз, упавший сервер)
-    P1 — UX / Paid report quality (Качество и полнота PDF и веб-отчёта)
-    P2 — Paywall / Conversion (Конверсия модалок оплаты и пэйвола)
-    P3 — Payments (Интеграция Kaspi QR, карт, верификация транзакций)
-    P4 — Security (Авторизация админки, XSS, защита от обхода оплаты)
-    P5 — Deployment (Docker, HTTPS, переменные окружения)
-    P6 — Scaling / Architecture (Масштабирование, рефакторинг)
-    ```
+### 1. Запрет на придумывание числового эффекта
+Агенты НЕ должны писать непубликуемые прогнозы вроде:
+- `+15% conversion`
+- `+20% retention`
+- `-30% bounce rate`
+
+если нет результатов реальных A/B тестов или сквозной аналитики.
+
+**Разрешённые гипотетические формулировки:**
+- `Expected impact: hypothesis — clearer CTA and lower cognitive load.`
+- `Expected impact: likely improvement in comprehension; requires measurement after release.`
+
+### 2. Динамический объем PDF-отчёта
+> **Правило:** PDF должен быть настолько коротким, насколько возможно, и настолько подробным, насколько необходимо.
+
+Никаких искусственных ограничений на «2–3 страницы». Для 8 Risk Domains и 40+ рисков многостраничный отчёт полностью оправдан, если каждая страница несёт реальную юридическую ценность. При этом запрещено раздувать объём «водой».
+
+### 3. Гибкий подход DevOps к инфраструктуре
+Docker/VPS/Nginx являются вариантами, а не зафиксированным догматом. DevOps обязан сначала сравнить минимально подходящие варианты для MVP по 8 критериям:
+1. Стоимость
+2. Простота
+3. Persistent storage (сохранность `fenix.db`)
+4. Поддержка .NET 8
+5. Возможность запуска Typst CLI
+6. HTTPS
+7. Backups
+8. Deployment complexity
+
+### 4. Оркестрация через Product Lead
+Пользователю достаточно написать:
+```text
+Команда, задача: <описание задачи>
+```
+После этого `00_product_lead.md` самостоятельно:
+1. Анализирует задачу и определяет Priority (P0–P6);
+2. Выбирает только необходимых агентов;
+3. Определяет порядок и контролирует scope;
+4. Получает QA sign-off;
+5. Возвращает понятный итог пользователю.
+
+### 5. Сначала анализ, затем изменение
+Перед изменением любого файла агент ОБЯЗАН:
+1. Открыть файл (`view_file`);
+2. Понять текущую реализацию;
+3. Найти связанные вызовы и зависимости;
+4. Описать минимальный scope изменений;
+5. Только после этого производить точечное редактирование.
+*Запрещено предполагать содержимое существующего файла без его чтения.*
+
+### 6. Запрет на раздувание задачи (Scope Control & BACKLOG.md)
+Если задача касается только одной части системы (например, «Улучши PDF»), запрещено параллельно менять БД, переписывать API, заменять фронтенд-фреймворк или менять скоринг.
+Все найденные побочные проблемы заносятся в файл **`BACKLOG.md`** с описанием и приоритетом.
+
+### 7. Строгий Definition of Done (DoD)
+Задача считается выполненной **только если**:
+- [x] Точечное изменение реально внесено в код;
+- [x] Проект остаётся 100% работоспособным (`dotnet build` = 0 errors);
+- [x] QA проверил главный пользовательский сценарий;
+- [x] Отсутствуют очевидные регрессионные ошибки;
+- [x] Product Lead кратко отчитался:
+  - Какие файлы изменены;
+  - Что конкретно изменилось;
+  - Что проверено;
+  - Какие сторонние наблюдения записаны в `BACKLOG.md`.
 
 ---
 
-## 🔄 Стандартные Маршруты Делегирования (Workflows)
+## 🚨 Приоритеты задач MVP (P0–P6)
 
 ```text
-UI/UX Задача:
-Product Lead -> UI/UX Designer -> Frontend Engineer -> QA/Security Engineer
-
-Backend / API Задача:
-Product Lead -> Backend Engineer -> QA/Security Engineer
-
-PDF Отчёт Задача:
-Product Lead -> PDF Designer -> Legal Product Expert -> Backend Engineer -> QA/Security Engineer
-
-Оплата / Безопасность:
-Product Lead -> Backend Engineer -> QA/Security Engineer
-
-Деплоймент / Инфраструктура:
-Product Lead -> DevOps Engineer -> QA/Security Engineer
+P0 — Broken flows (Критические баги, упавший квиз или сервер)
+P1 — UX / Paid report quality (Качество и полнота PDF и веб-отчёта)
+P2 — Paywall / Conversion (Конверсия модалок оплаты)
+P3 — Payments (Интеграция Kaspi QR, карт, верификация транзакций)
+P4 — Security (Авторизация админки, XSS, защита от обхода оплаты)
+P5 — Deployment (Инфраструктура, HTTPS, бэкапы)
+P6 — Scaling / Architecture (Масштабирование, рефакторинг)
 ```
 
 ---
 
 ## 👥 Состав Команды Агентов
 
-* [`00_product_lead.md`](00_product_lead.md) — Главный оркестратор команды, декомпозиция задач и контрольscope.
-* [`01_ui_ux_designer.md`](01_ui_ux_designer.md) — Senior UI/UX Designer (Премиальный LegalTech/FinTech стиль).
+* [`00_product_lead.md`](00_product_lead.md) — Главный оркестратор, декомпозитор и хранитель архитектуры.
+* [`01_ui_ux_designer.md`](01_ui_ux_designer.md) — Senior UI/UX Designer (Премиальный Dark Mode стиль).
 * [`02_frontend_engineer.md`](02_frontend_engineer.md) — Senior Frontend Engineer (Vanilla JS, CSS, Hash Router).
 * [`03_backend_engineer.md`](03_backend_engineer.md) — Senior .NET Backend Engineer (C#, Minimal APIs, Dapper, SQLite).
-* [`04_pdf_report_designer.md`](04_pdf_report_designer.md) — Специалист по Typst PDF и информационному дизайну.
+* [`04_pdf_report_designer.md`](04_pdf_report_designer.md) — Специалист по Typst PDF-отчёту и информационному дизайну.
 * [`05_legal_product_expert.md`](05_legal_product_expert.md) — Legal Product Expert (Юридическая продуктовая логика).
 * [`06_qa_security_engineer.md`](06_qa_security_engineer.md) — QA + Security Engineer (Поиск уязвимостей и тестирование).
-* [`07_devops_engineer.md`](07_devops_engineer.md) — DevOps Engineer (Production, Docker, переменные окружения).
+* [`07_devops_engineer.md`](07_devops_engineer.md) — DevOps Engineer (Оценка и настройка инфраструктуры).
