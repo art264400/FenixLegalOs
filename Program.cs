@@ -21,6 +21,107 @@ var app = builder.Build();
 var dbInit = app.Services.GetRequiredService<DbInitializer>();
 dbInit.Initialize();
 
+if (args.Contains("--generate-worst-case"))
+{
+    var scoringEngine = app.Services.GetRequiredService<ScoringEngine>();
+    var pdfService = app.Services.GetRequiredService<TypstPdfService>();
+
+    var answers = new Dictionary<string, object>
+    {
+        ["f_count"] = "two",
+        ["f_equity_fixed"] = "none",
+        ["f_roles"] = "no",
+        ["f_agreement"] = "no",
+        ["f_fulltime"] = "few",
+        ["f_leaver"] = "none",
+        ["f_vesting"] = "no",
+        ["f_decisions"] = "no",
+        ["f_deadlock"] = "no",
+        ["f_transfer"] = "no",
+        ["c_inc"] = "yes",
+        ["c_jur"] = "kz",
+        ["c_match"] = "partial",
+        ["c_promises"] = "yes_verbal",
+        ["c_captable"] = "no",
+        ["c_approvals"] = "no",
+        ["ip_creators"] = "mixed",
+        ["ip_contracts"] = "none",
+        ["ip_transfer"] = "no",
+        ["ip_founder_assign"] = "no",
+        ["ip_control"] = "external",
+        ["ip_domain"] = "external",
+        ["ip_oss"] = "yes",
+        ["ip_oss_check"] = "no",
+        ["ip_registered"] = new string[] { "none" },
+        ["t_size"] = "s6_15",
+        ["t_has"] = "yes",
+        ["t_contracts"] = "none",
+        ["t_provisions"] = "no",
+        ["t_foreign"] = "yes",
+        ["t_core"] = "yes",
+        ["p_users"] = "yes",
+        ["p_revenue"] = "yes",
+        ["p_model"] = "both",
+        ["p_terms"] = "no",
+        ["p_acceptance"] = "no",
+        ["p_payments"] = "recurring",
+        ["p_ugc"] = "yes",
+        ["p_ugc_terms"] = "no",
+        ["d_pd"] = "yes",
+        ["d_categories"] = new string[] { "contact", "behavior", "payment", "location", "sensitive" },
+        ["d_pp"] = "no",
+        ["d_pp_match"] = "no",
+        ["d_services"] = new string[] { "openai", "anthropic", "google", "aws", "firebase", "analytics", "crm", "apis" },
+        ["d_ai"] = "yes",
+        ["d_ai_data"] = "yes",
+        ["d_ai_informed"] = "no",
+        ["d_ai_sensitive"] = "yes",
+        ["d_geo"] = "yes",
+        ["k_b2b"] = "no",
+        ["k_terms"] = "not_sure",
+        ["k_dependency"] = "yes",
+        ["i_funding"] = "yes",
+        ["i_instruments"] = new string[] { "informal" },
+        ["i_captable_reflects"] = "no",
+        ["i_round"] = "m3",
+        ["i_dataroom"] = "no",
+        ["i_dd"] = "no"
+    };
+
+    var scoreResult = scoringEngine.ComputeResult(answers);
+
+    Console.WriteLine($"FENIX_SCORE:{scoreResult.Overall}");
+    Console.WriteLine($"TOTAL_RISKS:{scoreResult.Risks.Count}");
+    Console.WriteLine($"CRITICAL_RISKS:{scoreResult.CriticalCount}");
+    Console.WriteLine($"HIGH_RISKS:{scoreResult.HighCount}");
+    Console.WriteLine($"MEDIUM_RISKS:{scoreResult.MediumCount}");
+
+    foreach (var sec in scoreResult.Sections)
+    {
+        var secRisks = scoreResult.Risks.Count(r => r.SectionId == sec.SectionId);
+        Console.WriteLine($"DOMAIN_STAT:{sec.Title}|{(sec.Score.HasValue ? sec.Score.Value : 0)}|{secRisks}");
+    }
+
+    var typstContent = pdfService.BuildTypstMarkup(scoreResult, "Phoenix Test Startup");
+    var typPath = Path.Combine(Directory.GetCurrentDirectory(), "fenix-worst-case.typ");
+    File.WriteAllText(typPath, typstContent, System.Text.Encoding.UTF8);
+    Console.WriteLine($"TYP_GENERATED:{typPath}");
+
+    var pdfBytes = pdfService.GeneratePdfAsync(scoreResult, "Phoenix Test Startup").GetAwaiter().GetResult();
+    if (pdfBytes != null)
+    {
+        var outputPath = Path.Combine(Directory.GetCurrentDirectory(), "fenix-worst-case-report.pdf");
+        File.WriteAllBytes(outputPath, pdfBytes);
+        Console.WriteLine($"PDF_GENERATED:{outputPath}");
+    }
+    else
+    {
+        Console.WriteLine("PDF_GENERATION_FAILED");
+    }
+
+    return;
+}
+
 // Static Files Configuration (serving wwwroot directory)
 var staticPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
 if (Directory.Exists(staticPath))

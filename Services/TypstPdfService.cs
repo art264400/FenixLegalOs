@@ -69,7 +69,7 @@ public class TypstPdfService
         return null;
     }
 
-    private string BuildTypstMarkup(ScoreResult result, string companyName)
+    public string BuildTypstMarkup(ScoreResult result, string companyName)
     {
         var sb = new StringBuilder();
         sb.AppendLine(@"
