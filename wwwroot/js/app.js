@@ -360,7 +360,7 @@
 
   function sectionCard(s) {
     const scoreVal = s.score === null ? '—' : s.score + '%';
-    const statusText = s.score === null ? 'Не оценивалось'
+    const statusText = s.score === null ? 'Не применимо'
       : s.score >= 75 ? 'Устойчиво'
       : s.score >= 50 ? 'В зоне внимания'
       : 'Критический риск';
