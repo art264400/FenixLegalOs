@@ -381,10 +381,9 @@
   }
 
   function riskCard(r, index, withCta) {
-    const num = index !== undefined ? '<span class="risk-num">' + String(index + 1).padStart(2, '0') + '</span>' : '';
     return (
       '<article class="risk-card rc-' + r.severity + '">' +
-        '<div class="head">' + num + '<h3>' + esc(r.title) + '</h3>' +
+        '<div class="head"><h3>' + esc(r.title) + '</h3>' +
         '<span class="sev sev-' + r.severity + '">' + SEV_LABEL[r.severity] + '</span></div>' +
         '<p class="body">' + esc(r.finding) + '</p>' +
         '<div class="sub-label">Почему это важно</div>' +
