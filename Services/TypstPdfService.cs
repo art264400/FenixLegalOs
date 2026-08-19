@@ -20,6 +20,18 @@ public class TypstPdfService
     public async Task<byte[]?> GeneratePdfAsync(ScoreResult result, string companyName = "Стартап")
     {
         var tempFolder = Path.Combine(_contentRootPath, "Templates");
+        Directory.CreateDirectory(tempFolder);
+
+        var logoInTemplates = Path.Combine(tempFolder, "logo.png");
+        if (!File.Exists(logoInTemplates))
+        {
+            var srcLogo = Path.Combine(_contentRootPath, "wwwroot", "img", "logo.png");
+            if (File.Exists(srcLogo))
+            {
+                File.Copy(srcLogo, logoInTemplates, true);
+            }
+        }
+
         var tempTypFile = Path.Combine(tempFolder, $"temp_report_{Guid.NewGuid():N}.typ");
         var tempPdfFile = Path.Combine(tempFolder, $"temp_report_{Guid.NewGuid():N}.pdf");
 
