@@ -176,9 +176,9 @@ public class TypstPdfService
       #grid(
         columns: (auto, auto, auto),
         gutter: 12pt,
-        [#rect(fill: rgb(""#3D1A24""), inset: (x: 8pt, y: 4pt), radius: 4pt)[#text(size: 8.5pt, weight: ""bold"", fill: rgb(""#FF5964""))[🔴 {result.CriticalCount} Критических]]],
-        [#rect(fill: rgb(""#3D2B1A""), inset: (x: 8pt, y: 4pt), radius: 4pt)[#text(size: 8.5pt, weight: ""bold"", fill: rgb(""#FF9F43""))[🟠 {result.HighCount} Высоких]]],
-        [#rect(fill: rgb(""#38321A""), inset: (x: 8pt, y: 4pt), radius: 4pt)[#text(size: 8.5pt, weight: ""bold"", fill: rgb(""#F5A623""))[🟡 {result.MediumCount} Умеренных]]]
+        [#rect(fill: rgb(""#3D1A24""), inset: (x: 8pt, y: 4pt), radius: 4pt)[#text(size: 8.5pt, weight: ""bold"", fill: rgb(""#FF5964""))[• {result.CriticalCount} Критических]]],
+        [#rect(fill: rgb(""#3D2B1A""), inset: (x: 8pt, y: 4pt), radius: 4pt)[#text(size: 8.5pt, weight: ""bold"", fill: rgb(""#FF9F43""))[• {result.HighCount} Высоких]]],
+        [#rect(fill: rgb(""#38321A""), inset: (x: 8pt, y: 4pt), radius: 4pt)[#text(size: 8.5pt, weight: ""bold"", fill: rgb(""#F5A623""))[• {result.MediumCount} Умеренных]]]
       )
     ]
   )
@@ -190,7 +190,7 @@ public class TypstPdfService
         {
             sb.AppendLine(@"
 #v(16pt)
-#text(size: 14pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[📊 Оценка по 8 ключевым разделам]
+#text(size: 14pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[Оценка по 8 ключевым разделам]
 #v(6pt)
 #grid(
   columns: (1fr, 1fr),
@@ -200,14 +200,15 @@ public class TypstPdfService
             foreach (var s in result.Sections)
             {
                 int score = s.Score ?? 0;
-                string scoreColor = score >= 80 ? "#2ED573" : score >= 50 ? "#FF9F43" : "#FF5964";
-                string statusText = score >= 80 ? "Устойчиво" : score >= 50 ? "В зоне внимания" : "Критический риск";
+                string scoreColor = s.Score == null ? "#8E9BAE" : score >= 75 ? "#2ED573" : score >= 50 ? "#FF9F43" : "#FF5964";
+                string statusText = s.Score == null ? "Не применимо" : score >= 75 ? "Устойчиво" : score >= 50 ? "В зоне внимания" : "Критический риск";
+                string scoreLabel = s.Score == null ? "—" : $"{score}%";
 
                 sb.AppendLine($@"
   rect(width: 100%, fill: rgb(""#141B26""), stroke: 0.5pt + rgb(""#243042""), radius: 6pt, inset: 10pt)[
-    #grid(columns: (1fr, auto), [ #text(weight: ""bold"")[{sectionIdx++}. {Sanitize(s.Title)}] ], [#text(fill: rgb(""{scoreColor}""), weight: ""bold"")[{score}%]])
+    #grid(columns: (1fr, auto), [ #text(weight: ""bold"")[{sectionIdx++}. {Sanitize(s.Title)}] ], [#text(fill: rgb(""{scoreColor}""), weight: ""bold"")[{scoreLabel}]])
     #v(4pt)
-    #rect(width: 100%, height: 4pt, fill: rgb(""#243042""), radius: 2pt)[#rect(width: {score}%, height: 4pt, fill: rgb(""{scoreColor}""), radius: 2pt)]
+    #rect(width: 100%, height: 4pt, fill: rgb(""#243042""), radius: 2pt)[#rect(width: {Math.Max(4, score)}%, height: 4pt, fill: rgb(""{scoreColor}""), radius: 2pt)]
     #v(2pt)
     #text(size: 8pt, fill: rgb(""#8E9BAE""))[Статус: {statusText}]
   ],");
@@ -220,7 +221,7 @@ public class TypstPdfService
         {
             sb.AppendLine(@"
 #v(14pt)
-#text(size: 14pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[✅ Сильные стороны юридической конструкции]
+#text(size: 14pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[Сильные стороны юридической конструкции]
 #v(6pt)
 #rect(
   width: 100%,
@@ -232,7 +233,7 @@ public class TypstPdfService
 ");
             foreach (var st in result.Strengths)
             {
-                sb.AppendLine($"  #text(size: 9.5pt, fill: rgb(\"#2ED573\"))[✔ {Sanitize(st)}] \\");
+                sb.AppendLine($"  #text(size: 9.5pt, fill: rgb(\"#2ED573\"))[• {Sanitize(st)}] \\");
             }
             sb.AppendLine("]\n");
         }
@@ -240,7 +241,7 @@ public class TypstPdfService
         // Complete Registry of Risks
         sb.AppendLine(@"
 #v(16pt)
-#text(size: 14pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[🔴 Полный реестр выявленных рисков и рекомендаций]
+#text(size: 14pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[Полный реестр выявленных рисков и рекомендаций]
 #v(6pt)
 ");
 
@@ -293,7 +294,7 @@ public class TypstPdfService
         // Dynamic Roadmap Section based on actual risks
         sb.AppendLine(@"
 #v(16pt)
-#text(size: 14pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[🗺 Пошаговая дорожная карта устранения рисков (Roadmap)]
+#text(size: 14pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[Пошаговая дорожная карта устранения рисков (Roadmap)]
 #v(6pt)
 #rect(
   width: 100%,
@@ -308,7 +309,7 @@ public class TypstPdfService
         var highRisks = result.Risks?.Where(x => x.Severity == "high").ToList() ?? new();
         var mediumRisks = result.Risks?.Where(x => x.Severity == "medium").ToList() ?? new();
 
-        sb.AppendLine("  #text(weight: \"bold\", fill: rgb(\"#FF5964\"))[🚨 1. Первоочередные задачи (Сделать прямо сейчас)] \\");
+        sb.AppendLine("  #text(weight: \"bold\", fill: rgb(\"#FF5964\"))[1. Первоочередные задачи (Сделать прямо сейчас)] \\");
         sb.AppendLine("  #v(4pt)");
         if (criticalRisks.Count > 0)
         {
@@ -323,7 +324,7 @@ public class TypstPdfService
         }
 
         sb.AppendLine("  #v(10pt)");
-        sb.AppendLine("  #text(weight: \"bold\", fill: rgb(\"#FF9F43\"))[📅 2. В течение 30 дней (Закрепление основы)] \\");
+        sb.AppendLine("  #text(weight: \"bold\", fill: rgb(\"#FF9F43\"))[2. В течение 30 дней (Закрепление основы)] \\");
         sb.AppendLine("  #v(4pt)");
         if (highRisks.Count > 0)
         {
@@ -338,7 +339,7 @@ public class TypstPdfService
         }
 
         sb.AppendLine("  #v(10pt)");
-        sb.AppendLine("  #text(weight: \"bold\", fill: rgb(\"#59C2FF\"))[🚀 3. Перед инвестиционным раундом (Data Room)] \\");
+        sb.AppendLine("  #text(weight: \"bold\", fill: rgb(\"#59C2FF\"))[3. Перед инвестиционным раундом (Data Room)] \\");
         sb.AppendLine("  #v(4pt)");
         if (mediumRisks.Count > 0)
         {

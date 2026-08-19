@@ -96,9 +96,9 @@
       #grid(
         columns: (auto, auto, auto),
         gutter: 12pt,
-        [#rect(fill: rgb("#3D1A24"), inset: (x: 8pt, y: 4pt), radius: 4pt)[#text(size: 8.5pt, weight: "bold", fill: rgb("#FF5964"))[🔴 3 Критических]]],
-        [#rect(fill: rgb("#3D2B1A"), inset: (x: 8pt, y: 4pt), radius: 4pt)[#text(size: 8.5pt, weight: "bold", fill: rgb("#FF9F43"))[🟠 7 Высоких]]],
-        [#rect(fill: rgb("#38321A"), inset: (x: 8pt, y: 4pt), radius: 4pt)[#text(size: 8.5pt, weight: "bold", fill: rgb("#F5A623"))[🟡 5 Умеренных]]]
+        [#rect(fill: rgb("#3D1A24"), inset: (x: 8pt, y: 4pt), radius: 4pt)[#text(size: 8.5pt, weight: "bold", fill: rgb("#FF5964"))[3 Критических]]],
+        [#rect(fill: rgb("#3D2B1A"), inset: (x: 8pt, y: 4pt), radius: 4pt)[#text(size: 8.5pt, weight: "bold", fill: rgb("#FF9F43"))[7 Высоких]]],
+        [#rect(fill: rgb("#38321A"), inset: (x: 8pt, y: 4pt), radius: 4pt)[#text(size: 8.5pt, weight: "bold", fill: rgb("#F5A623"))[5 Умеренных]]]
       )
     ]
   )
@@ -110,7 +110,7 @@
 // 3. ЗДОРОВЬЕ БИЗНЕСА ПО 8 РАЗДЕЛАМ
 // -----------------------------------------------------------------------------
 
-#text(size: 14pt, weight: "bold", fill: rgb("#FFFFFF"))[📊 Оценка по 8 ключевым разделам]
+#text(size: 14pt, weight: "bold", fill: rgb("#FFFFFF"))[Оценка по 8 ключевым разделам]
 #v(6pt)
 
 #grid(
@@ -172,7 +172,7 @@
 // 4. ДЕТАЛЬНАЯ КАРТА РИСКОВ
 // -----------------------------------------------------------------------------
 
-#text(size: 14pt, weight: "bold", fill: rgb("#FFFFFF"))[🔴 Критические зоны риска]
+#text(size: 14pt, weight: "bold", fill: rgb("#FFFFFF"))[Критические зоны риска]
 #v(6pt)
 
 // Карточка Риска 1
@@ -223,7 +223,7 @@
 // 5. ROADMAP УСТРАНЕНИЯ ПРОБЛЕМ
 // -----------------------------------------------------------------------------
 
-#text(size: 14pt, weight: "bold", fill: rgb("#FFFFFF"))[🗺 Дорожная карта действий (Roadmap)]
+#text(size: 14pt, weight: "bold", fill: rgb("#FFFFFF"))[Дорожная карта действий (Roadmap)]
 #v(6pt)
 
 #rect(
