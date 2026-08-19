@@ -331,14 +331,16 @@
   // ---------------------------------------------------------------------
 
   function gaugeSvg(value, size) {
-    const stroke = Math.max(5, Math.round(size * 0.055));
+    const stroke = Math.max(5, Math.round(size * 0.075));
     const r = (size - stroke) / 2;
     const c = 2 * Math.PI * r;
     const cls = value === null ? 'g-na'
-      : value >= 75 ? 'g-good' : value >= 60 ? 'g-ok' : value >= 40 ? 'g-mid' : 'g-low';
-    const dash = value === null ? 0 : c * value / 100;
+      : value >= 75 ? 'g-good' : value >= 50 ? 'g-ok' : value >= 30 ? 'g-mid' : 'g-low';
+
+    const effectiveVal = (value !== null && value >= 0) ? Math.max(4, value) : 0;
+    const dash = value === null ? 0 : (c * effectiveVal / 100);
     const half = size / 2;
-    return '<svg class="gauge ' + cls + '" width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" role="img" aria-label="' + (value === null ? 'не применимо' : value + ' из 100') + '">' +
+    return '<svg class="gauge ' + cls + '" width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" role="img" aria-label="' + (value === null ? 'не применимо' : value + '% из 100%') + '">' +
       '<circle class="gauge-bg" cx="' + half + '" cy="' + half + '" r="' + r + '" stroke-width="' + stroke + '"></circle>' +
       '<circle class="gauge-arc" cx="' + half + '" cy="' + half + '" r="' + r + '" stroke-width="' + stroke + '"' +
         ' stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + c.toFixed(1) + '"' +
@@ -357,11 +359,24 @@
   }
 
   function sectionCard(s) {
+    const scoreVal = s.score === null ? '—' : s.score + '%';
+    const statusText = s.score === null ? 'Не оценивалось'
+      : s.score >= 75 ? 'Устойчиво'
+      : s.score >= 50 ? 'В зоне внимания'
+      : 'Критический риск';
+    const statusColor = s.score === null ? 'var(--ink-faint)'
+      : s.score >= 75 ? 'var(--positive)'
+      : s.score >= 50 ? 'var(--high)'
+      : 'var(--critical)';
+
     return '<div class="sec-card">' +
-      '<div class="mini-gauge">' + gaugeSvg(s.score, 88) +
-        '<span class="gauge-value">' + (s.score === null ? '—' : s.score) + '</span>' +
+      '<div class="mini-gauge">' + gaugeSvg(s.score, 76) +
+        '<span class="gauge-value">' + scoreVal + '</span>' +
       '</div>' +
-      '<div class="sec-name">' + esc(s.title) + '</div>' +
+      '<div class="sec-info">' +
+        '<div class="sec-name">' + esc(s.title) + '</div>' +
+        '<div class="sec-status" style="color:' + statusColor + '">• ' + statusText + '</div>' +
+      '</div>' +
       '</div>';
   }
 
