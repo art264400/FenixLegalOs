@@ -699,7 +699,7 @@
       '<section class="gate" style="margin-top:56px">' +
         '<h2>Разберём конкретно вашу ситуацию</h2>' +
         '<p>Мы уже знаем основные результаты вашей диагностики. Не нужно заново объяснять историю компании: вместе с запросом будут переданы ваши ответы, выявленные риски и Legal Score.</p>' +
-        '<div class="cta-row" style="margin-top:22px">' +
+        '<div class="cta-row" style="margin-top:22px;display:flex;justify-content:center;align-items:center">' +
           '<button class="btn risk-cta" data-code="" data-cta="Разобрать мои результаты">Разобрать мои результаты с Fenix Law</button>' +
         '</div>' +
       '</section>';
