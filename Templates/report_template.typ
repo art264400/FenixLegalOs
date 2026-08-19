@@ -38,7 +38,7 @@
 )
 
 #set text(font: ("Liberation Sans", "DejaVu Sans", "Roboto"), fill: rgb("#E6EDF8"), size: 10pt)
-#set par(justify: true, leading: 0.6em)
+#set par(justify: false, leading: 0.6em)
 
 // -----------------------------------------------------------------------------
 // 1. БРЕНДИРОВАННЫЙ ЗАГОЛОВОК
