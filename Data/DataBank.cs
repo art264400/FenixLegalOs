@@ -5,7 +5,7 @@ namespace FenixLegalOs.Data;
 public static class DataBank
 {
     public const string QuestionBankVersion = "1.1.0";
-    public const string ScoringEngineVersion = "1.0.0";
+    public const string ScoringEngineVersion = "1.1.0";
     public const string RiskLibraryVersion = "1.1.0";
 
     public static readonly List<DiagnosticSection> Sections = new()
@@ -22,143 +22,383 @@ public static class DataBank
 
     public static readonly List<DiagnosticQuestion> Questions = new()
     {
-        // 1. FOUNDERS
-        new() { Id = "f_count", SectionId = "founders", Order = 1, Type = "single", Weight = 0, Tags = new(){"founders","base"}, Question = "Сколько у проекта активных сооснователей?", Options = new(){ new("one", "Я единственный основатель", 1), new("two", "Два сооснователя", 1), new("three", "Три сооснователя", 1), new("four_plus", "Четыре и более", 1) } },
-        new() { Id = "f_equity_fixed", SectionId = "founders", Order = 2, Type = "single", Weight = 3, Tags = new(){"founders","equity"}, ShowIf = new(){ new(){ QuestionId = "f_count", Op = "neq", Value = "one" } }, Question = "Зафиксированы ли доли каждого из сооснователей?", Explanation = "Устная договорённость о долях работает, пока все согласны.", Options = new(){ new("docs", "Да, доли закреплены документально", 1, "positive"), new("verbal", "Договорённость есть, но только устная", 0.25, "high", "R_FOUNDERS_EQUITY_UNFIXED"), new("none", "Доли ещё не распределены", 0, "high", "R_FOUNDERS_EQUITY_UNFIXED") } },
-        new() { Id = "f_roles", SectionId = "founders", Order = 3, Type = "single", Weight = 1.5, Tags = new(){"founders","roles"}, ShowIf = new(){ new(){ QuestionId = "f_count", Op = "neq", Value = "one" } }, Question = "Закреплены ли роли и зоны ответственности каждого сооснователя?", Options = new(){ new("yes", "Да, роли определены письменно", 1, "positive"), new("partial", "Обсуждали, но письменно не фиксировали", 0.5, "medium", "R_FOUNDERS_ROLES"), new("no", "Роли размыты", 0.25, "medium", "R_FOUNDERS_ROLES") } },
-        new() { Id = "f_agreement", SectionId = "founders", Order = 4, Type = "single", Weight = 3, Tags = new(){"founders","agreement"}, ShowIf = new(){ new(){ QuestionId = "f_count", Op = "neq", Value = "one" } }, Question = "Есть ли между сооснователями письменное соглашение о ролях, долях, принятии решений и выходе из проекта?", Options = new(){ new("yes", "Да, все правила зафиксированы", 1, "positive"), new("partial", "Частично", 0.5, "medium", "R_FOUNDERS_AGREEMENT_PARTIAL"), new("no", "Нет", 0, "high", "R_FOUNDERS_NO_AGREEMENT") } },
-        new() { Id = "f_fulltime", SectionId = "founders", Order = 5, Type = "single", Weight = 1, Tags = new(){"founders","commitment"}, ShowIf = new(){ new(){ QuestionId = "f_count", Op = "neq", Value = "one" } }, Question = "Все ли сооснователи работают над проектом full-time?", Options = new(){ new("all", "Да, все full-time", 1, "positive"), new("some", "Часть совмещает", 0.5, "info"), new("few", "Большинство по остаточному принципу", 0.25, "medium") } },
-        new() { Id = "f_leaver", SectionId = "founders", Order = 6, Type = "single", Weight = 3, Tags = new(){"founders","leaver"}, ShowIf = new(){ new(){ QuestionId = "f_count", Op = "neq", Value = "one" } }, Question = "Определено ли, что происходит с долей фаундера, если он перестаёт работать над проектом?", Options = new(){ new("defined", "Да, правила зафиксированы", 1, "positive"), new("discussed", "Обсуждали, но не зафиксировали", 0.5, "medium", "R_FOUNDERS_NO_LEAVER"), new("none", "Не обсуждали", 0, "high", "R_FOUNDERS_NO_LEAVER") } },
-        new() { Id = "f_vesting", SectionId = "founders", Order = 7, Type = "single", Weight = 3, Tags = new(){"founders","vesting"}, ShowIf = new(){ new(){ QuestionId = "f_count", Op = "neq", Value = "one" } }, Question = "Используется ли vesting или другой механизм постепенного закрепления долей?", Options = new(){ new("yes", "Да, vesting оформлен", 1, "positive"), new("planned", "Планируем, но не оформили", 0.5, "medium", "R_FOUNDERS_NO_VESTING"), new("no", "Нет", 0, "high", "R_FOUNDERS_NO_VESTING") } },
-        new() { Id = "f_decisions", SectionId = "founders", Order = 8, Type = "single", Weight = 2, Tags = new(){"founders","governance"}, ShowIf = new(){ new(){ QuestionId = "f_count", Op = "neq", Value = "one" } }, Question = "Определено ли, какие решения принимаются самостоятельно, большинством или единогласно?", Options = new(){ new("yes", "Да, правила зафиксированы", 1, "positive"), new("partial", "Есть общее понимание", 0.5, "medium", "R_FOUNDERS_DECISIONS"), new("no", "Решаем по ситуации", 0.25, "medium", "R_FOUNDERS_DECISIONS") } },
-        new() { Id = "f_deadlock", SectionId = "founders", Order = 9, Type = "single", Weight = 2, Tags = new(){"founders","deadlock"}, ShowIf = new(){ new(){ QuestionId = "f_count", Op = "eq", Value = "two" } }, Question = "Есть ли механизм на случай, когда вы вдвоём не можете договориться по критически важному вопросу?", Options = new(){ new("yes", "Да, механизм определён", 1, "positive"), new("discussed", "Обсуждали", 0.5, "medium"), new("no", "Нет", 0, "high") } },
-        new() { Id = "f_transfer", SectionId = "founders", Order = 10, Type = "single", Weight = 1, Tags = new(){"founders","transfer"}, ShowIf = new(){ new(){ QuestionId = "f_count", Op = "neq", Value = "one" } }, Question = "Определены ли правила продажи или передачи доли третьим лицам?", Options = new(){ new("yes", "Да, правила определены", 1, "positive"), new("no", "Нет", 0.25, "medium", "R_FOUNDERS_TRANSFER") } },
+        // =====================================================================
+        // 1. FOUNDERS (Блок 1 — Сооснователи)
+        // =====================================================================
+        new() {
+            Id = "FND-C01", SectionId = "founders", Order = 1, Type = "single", ScoreMode = "context", Weight = 0,
+            Question = "Сколько человек сейчас фактически участвуют в проекте как сооснователи?",
+            Options = new() {
+                new("solo", "Единственный основатель", 1),
+                new("2", "2 сооснователя", 1),
+                new("3", "3 сооснователя", 1),
+                new("4plus", "4 и более", 1),
+                new("inactive_exist", "Формально несколько, но не все участвуют", 1)
+            }
+        },
+        new() {
+            Id = "FND-C03", SectionId = "founders", Order = 2, Type = "single", ScoreMode = "trigger", Weight = 0,
+            ShowIf = new() { new() { QuestionId = "FND-C01", Op = "neq", Value = "solo" } },
+            Question = "Есть ли человек, который получил или должен был получить долю, но уже перестал участвовать?",
+            Options = new() {
+                new("none", "Нет", 1),
+                new("resolved", "Выход полностью урегулирован письменно", 1),
+                new("unresolved", "Есть нерешённые вопросы по доле/выходу", 0, "HIGH", "R_FOUNDERS_NO_LEAVER"),
+                new("dispute", "Есть активный спор или конфликт", 0, "CRITICAL", "R_FOUNDERS_EQUITY_UNFIXED"),
+                new("unknown", "Не уверен(а)", 0.5)
+            }
+        },
+        new() {
+            Id = "FND-C04", SectionId = "founders", Order = 3, Type = "single", ScoreMode = "context", Weight = 0,
+            ShowIf = new() { new() { QuestionId = "FND-C01", Op = "neq", Value = "solo" } },
+            Question = "Есть ли подписанный документ, регулирующий отношения между основателями?",
+            Options = new() {
+                new("signed", "Подписан единый Founder Agreement / SHA", 1),
+                new("multiple_docs", "Правила в нескольких документах", 0.8),
+                new("draft", "Подготовлен, но ещё не подписан", 0.5),
+                new("informal", "Переписка, таблица или устная договорённость", 0.25),
+                new("none", "Документа нет", 0),
+                new("unknown", "Не уверен(а)", 0.25)
+            }
+        },
+        new() {
+            Id = "FND-01", SectionId = "founders", DimensionId = "existing_dispute", Order = 4, Type = "single", ScoreMode = "diagnostic", Weight = 8, DimensionWeight = 8, WithinDimensionWeight = 100,
+            ShowIf = new() { new() { QuestionId = "FND-C01", Op = "neq", Value = "solo" } },
+            Question = "Есть ли нерешённые разногласия по долям, ролям, деньгам или выходу из проекта?",
+            Options = new() {
+                new("none", "Нет", 1.0, ConfidenceClass: "known"),
+                new("minor", "Отдельные некритические вопросы", 0.75, ConfidenceClass: "known"),
+                new("significant", "Существенные нерешённые вопросы", 0.25, Severity: "HIGH", RiskCode: "R_FOUNDERS_NO_AGREEMENT", ConfidenceClass: "partial"),
+                new("active_conflict", "Активный конфликт между фаундерами", 0.0, Severity: "CRITICAL", RiskCode: "R_FOUNDERS_EQUITY_UNFIXED", ConfidenceClass: "known"),
+                new("formal_dispute", "Формальный спор или судебные претензии", 0.0, Severity: "CRITICAL", RiskCode: "R_FOUNDERS_EQUITY_UNFIXED", ConfidenceClass: "known")
+            }
+        },
+        new() {
+            Id = "FND-02", SectionId = "founders", DimensionId = "roles", Order = 5, Type = "single", ScoreMode = "diagnostic", Weight = 8, DimensionWeight = 8, WithinDimensionWeight = 100,
+            ShowIf = new() { new() { QuestionId = "FND-C01", Op = "neq", Value = "solo" } },
+            Question = "Насколько чётко закреплены роли и зоны ответственности каждого сооснователя?",
+            Options = new() {
+                new("written", "Закреплены письменно", 1.0, ConfidenceClass: "known"),
+                new("verbal_clear", "Понятно всем, но только устно", 0.75, ConfidenceClass: "known"),
+                new("overlap", "Есть дублирование и пересечения задач", 0.5, Severity: "MEDIUM", RiskCode: "R_FOUNDERS_ROLES", ConfidenceClass: "partial"),
+                new("shared", "Многое общее без ответственных лиц", 0.25, Severity: "MEDIUM", RiskCode: "R_FOUNDERS_ROLES", ConfidenceClass: "partial"),
+                new("dispute", "Споры о ролях и обязанностях", 0.0, Severity: "HIGH", RiskCode: "R_FOUNDERS_ROLES", ConfidenceClass: "known")
+            }
+        },
+        new() {
+            Id = "FND-03", SectionId = "founders", DimensionId = "commitment", Order = 6, Type = "single", ScoreMode = "diagnostic", Weight = 10, DimensionWeight = 10, WithinDimensionWeight = 100,
+            ShowIf = new() { new() { QuestionId = "FND-C01", Op = "neq", Value = "solo" } },
+            Question = "Соответствует ли фактическая занятость каждого сооснователя договорённостям?",
+            Options = new() {
+                new("full", "Да, все работают в полном объёме", 1.0, ConfidenceClass: "known"),
+                new("parttime_agreed", "Частичная занятость согласована всеми", 0.85, ConfidenceClass: "known"),
+                new("accepted_diff", "Вклад различается, но устраивает всех", 0.65, ConfidenceClass: "known"),
+                new("less_no_rules", "Меньше ожидаемого без фиксированных правил", 0.25, Severity: "HIGH", RiskCode: "R_FOUNDERS_NO_VESTING", ConfidenceClass: "partial"),
+                new("stopped", "Один из сооснователей практически перестал работать", 0.0, Severity: "CRITICAL", RiskCode: "R_FOUNDERS_NO_LEAVER", ConfidenceClass: "known")
+            }
+        },
+        new() {
+            Id = "FND-04", SectionId = "founders", DimensionId = "equity_clarity", Order = 7, Type = "single", ScoreMode = "diagnostic", Weight = 12, DimensionWeight = 12, WithinDimensionWeight = 100,
+            ShowIf = new() { new() { QuestionId = "FND-C01", Op = "neq", Value = "solo" } },
+            Question = "Насколько определённо зафиксировано распределение долей между фаундерами?",
+            Options = new() {
+                new("registered", "Оформлено в уставных документах компании", 1.0, ConfidenceClass: "known"),
+                new("written_agreed", "Согласовано письменно в договоре", 0.8, ConfidenceClass: "known"),
+                new("preliminary", "Письменная предварительная договорённость", 0.6, ConfidenceClass: "partial"),
+                new("verbal", "Только устная договорённость", 0.4, Severity: "HIGH", RiskCode: "R_FOUNDERS_EQUITY_UNFIXED", ConfidenceClass: "known"),
+                new("ambiguous", "Несколько неясных обещаний долей", 0.15, Severity: "HIGH", RiskCode: "R_FOUNDERS_EQUITY_UNFIXED", ConfidenceClass: "partial"),
+                new("dispute", "Спор по долям", 0.0, Severity: "CRITICAL", RiskCode: "R_FOUNDERS_EQUITY_UNFIXED", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.15, ConfidenceClass: "unknown")
+            }
+        },
+        new() {
+            Id = "FND-05", SectionId = "founders", DimensionId = "early_exit_equity", Order = 8, Type = "single", ScoreMode = "diagnostic", Weight = 18, DimensionWeight = 18, WithinDimensionWeight = 70,
+            ShowIf = new() { new() { QuestionId = "FND-C01", Op = "neq", Value = "solo" } },
+            Question = "Что происходит с долей, если основатель прекращает работу над проектом раньше времени?",
+            Options = new() {
+                new("vesting", "Оформлен график постепенного закрепления (Vesting)", 1.0, ConfidenceClass: "known"),
+                new("repurchase", "Оформлен обязательный выкуп/возврат доли", 0.9, ConfidenceClass: "known"),
+                new("verbal_rule", "Договорились устно, не оформили", 0.55, Severity: "MEDIUM", RiskCode: "R_FOUNDERS_NO_VESTING", ConfidenceClass: "partial"),
+                new("retains_all", "Сохраняет всю долю без условий работы", 0.1, Severity: "HIGH", RiskCode: "R_FOUNDERS_NO_LEAVER", ConfidenceClass: "known"),
+                new("not_discussed", "Вопрос не обсуждался", 0.0, Severity: "HIGH", RiskCode: "R_FOUNDERS_NO_LEAVER", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.15, ConfidenceClass: "unknown")
+            }
+        },
+        new() {
+            Id = "FND-05A", SectionId = "founders", DimensionId = "early_exit_equity", Order = 9, Type = "single", ScoreMode = "diagnostic", Weight = 18, DimensionWeight = 18, WithinDimensionWeight = 30,
+            ShowIf = new() { new() { QuestionId = "FND-C01", Op = "neq", Value = "solo" } },
+            Question = "Различаются ли условия выкупа доли при обычном уходе и уходе из-за нарушения (Good / Bad Leaver)?",
+            Options = new() {
+                new("yes", "Да, правила Good/Bad Leaver оформлены", 1.0, ConfidenceClass: "known"),
+                new("partial", "Частично зафиксированы", 0.7, ConfidenceClass: "partial"),
+                new("verbal", "Только устно", 0.4, Severity: "MEDIUM", RiskCode: "R_FOUNDERS_NO_LEAVER", ConfidenceClass: "partial"),
+                new("no", "Нет различий", 0.15, Severity: "MEDIUM", RiskCode: "R_FOUNDERS_NO_LEAVER", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.15, ConfidenceClass: "unknown")
+            }
+        },
+        new() {
+            Id = "FND-06", SectionId = "founders", DimensionId = "governance", Order = 10, Type = "single", ScoreMode = "diagnostic", Weight = 12, DimensionWeight = 12, WithinDimensionWeight = 100,
+            ShowIf = new() { new() { QuestionId = "FND-C01", Op = "neq", Value = "solo" } },
+            Question = "Зафиксировано ли, какие решения требуют согласия всех сооснователей?",
+            Options = new() {
+                new("written", "Письменно зафиксирован перечень единогласных решений", 1.0, ConfidenceClass: "known"),
+                new("verbal", "Понимание есть, но только устно", 0.75, ConfidenceClass: "known"),
+                new("partial", "Зафиксирована только часть правил", 0.5, Severity: "MEDIUM", RiskCode: "R_FOUNDERS_DECISIONS", ConfidenceClass: "partial"),
+                new("all_together", "Все решения принимаем строго вместе", 0.25, Severity: "MEDIUM", RiskCode: "R_FOUNDERS_DECISIONS", ConfidenceClass: "known"),
+                new("none", "Правил принятия решений нет", 0.0, Severity: "HIGH", RiskCode: "R_FOUNDERS_DECISIONS", ConfidenceClass: "known")
+            }
+        },
+        new() {
+            Id = "FND-07", SectionId = "founders", DimensionId = "deadlock", Order = 11, Type = "single", ScoreMode = "diagnostic", Weight = 15, DimensionWeight = 15, WithinDimensionWeight = 100,
+            ShowIf = new() { new() { QuestionId = "FND-C01", Op = "neq", Value = "solo" } },
+            Question = "Есть ли зафиксированный механизм на случай тупикового разногласия (Deadlock), когда голоса равны?",
+            Options = new() {
+                new("mechanism", "Оформлен чёткий механизм (решающий голос / выкуп / медиация)", 1.0, ConfidenceClass: "known"),
+                new("stages", "Несколько этапов переговоров", 0.85, ConfidenceClass: "known"),
+                new("mediator", "Привлечение внешнего медиатора", 0.55, ConfidenceClass: "partial"),
+                new("casting_vote", "Решающий голос конкретного сооснователя", 0.7, ConfidenceClass: "known"),
+                new("only_agree", "Только договариваться устно", 0.15, Severity: "HIGH", RiskCode: "R_FOUNDERS_DECISIONS", ConfidenceClass: "known"),
+                new("none", "Механизма нет", 0.0, Severity: "CRITICAL", RiskCode: "R_FOUNDERS_DECISIONS", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.1, ConfidenceClass: "unknown")
+            }
+        },
 
-        // 2. CORPORATE
-        new() { Id = "c_inc", SectionId = "corporate", Order = 1, Type = "single", Weight = 2, Tags = new(){"corporate","base"}, Question = "Зарегистрировано ли юридическое лицо для проекта?", Options = new(){ new("yes", "Да", 1, "positive"), new("in_progress", "В процессе регистрации", 0.75, "info"), new("no", "Нет, работаем без юрлица", 0.5, "info") } },
-        new() { Id = "c_jur", SectionId = "corporate", Order = 2, Type = "single", Weight = 0, Tags = new(){"corporate","jurisdiction"}, ShowIf = new(){ new(){ QuestionId = "c_inc", Op = "eq", Value = "yes" } }, Question = "В какой юрисдикции зарегистрирована компания?", Options = new(){ new("kz", "Казахстан (общий режим)", 1), new("hub", "Казахстан, Astana Hub", 1), new("aifc", "МФЦА (AIFC)", 1), new("foreign", "Иностранная юрисдикция", 1), new("multi", "Несколько юрисдикций / холдинг", 1) } },
-        new() { Id = "c_match", SectionId = "corporate", Order = 3, Type = "single", Weight = 3, Tags = new(){"corporate","equity"}, ShowIf = new(){ new(){ All = new(){ new(){ QuestionId = "c_inc", Op = "eq", Value = "yes" }, new(){ QuestionId = "f_count", Op = "neq", Value = "one" } } } }, Question = "Соответствуют ли официально зарегистрированные доли фактическим договорённостям между фаундерами?", Options = new(){ new("yes", "Да, полностью соответствуют", 1, "positive"), new("partial", "Не полностью", 0.25, "high", "R_CORP_SHARES_MISMATCH"), new("not_sure", "Не уверен(а)", 0.25, "medium", "R_CORP_SHARES_MISMATCH") } },
-        new() { Id = "c_promises", SectionId = "corporate", Order = 4, Type = "single", Weight = 3, Tags = new(){"corporate","equity","promises"}, Question = "Давались ли кому-либо обещания будущих долей или опционов — сотрудникам, советникам, ранним помощникам?", Options = new(){ new("no", "Нет", 1, "positive"), new("yes_doc", "Да, и они оформлены документально", 0.75, "info"), new("yes_verbal", "Да, устно или в переписке", 0, "high", "R_CORP_VERBAL_PROMISES") } },
-        new() { Id = "c_captable", SectionId = "corporate", Order = 5, Type = "single", Weight = 2, Tags = new(){"corporate","captable"}, ShowIf = new(){ new(){ QuestionId = "c_inc", Op = "eq", Value = "yes" } }, Question = "Есть ли актуальная таблица капитализации (cap table)?", Options = new(){ new("yes", "Да, актуальная", 1, "positive"), new("outdated", "Есть, но давно не обновлялась", 0.5, "medium", "R_CORP_CAPTABLE_STALE"), new("no", "Нет", 0, "high", "R_CORP_NO_CAPTABLE") } },
-        new() { Id = "c_approvals", SectionId = "corporate", Order = 6, Type = "single", Weight = 1, Tags = new(){"corporate","governance"}, ShowIf = new(){ new(){ QuestionId = "c_inc", Op = "eq", Value = "yes" } }, Question = "Оформляются ли корпоративные решения по ключевым сделкам — протоколы, решения участников?", Options = new(){ new("yes", "Да, по всем вопросам", 1, "positive"), new("sometimes", "Иногда", 0.5, "medium", "R_CORP_APPROVALS"), new("no", "Нет", 0.25, "medium", "R_CORP_APPROVALS") } },
+        // =====================================================================
+        // 2. CORPORATE (Блок 2 — Корпоративная структура)
+        // =====================================================================
+        new() {
+            Id = "COR-C01", SectionId = "corporate", Order = 1, Type = "single", ScoreMode = "context", Weight = 0,
+            Question = "Зарегистрировано ли юридическое лицо для проекта?",
+            Options = new() {
+                new("one", "Да, зарегистрирована одна компания", 1),
+                new("several", "Да, зарегистрирована группа из нескольких компаний", 1),
+                new("process", "В процессе регистрации", 0.75),
+                new("none", "Нет, компания ещё не зарегистрирована", 0.5),
+                new("unknown", "Не уверен(а)", 0.5)
+            }
+        },
+        new() {
+            Id = "COR-01", SectionId = "corporate", DimensionId = "ownership_accuracy", Order = 2, Type = "single", ScoreMode = "diagnostic", Weight = 20, DimensionWeight = 20, WithinDimensionWeight = 100,
+            ShowIf = new() { new() { QuestionId = "COR-C01", Op = "in", Value = new List<string>{"one","several"} } },
+            Question = "Соответствуют ли официально зарегистрированные доли фактическим договоренностям фаундеров?",
+            Options = new() {
+                new("full", "Да, полностью соответствуют", 1.0, ConfidenceClass: "known"),
+                new("future_planned", "Запланированы изменения у нотариуса/в юрисдикции", 0.8, ConfidenceClass: "known"),
+                new("undocumented_future", "Есть неоформленные обещания долей", 0.5, Severity: "HIGH", RiskCode: "R_CORP_VERBAL_PROMISES", ConfidenceClass: "partial"),
+                new("mismatch", "Официальные доли существенно расходятся с фактическими", 0.2, Severity: "CRITICAL", RiskCode: "R_CORP_SHARES_MISMATCH", ConfidenceClass: "known"),
+                new("dispute", "Есть спор о юридическом владении", 0.0, Severity: "CRITICAL", RiskCode: "R_CORP_SHARES_MISMATCH", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.15, ConfidenceClass: "unknown")
+            }
+        },
+        new() {
+            Id = "COR-02", SectionId = "corporate", DimensionId = "cap_table", Order = 3, Type = "single", ScoreMode = "diagnostic", Weight = 15, DimensionWeight = 15, WithinDimensionWeight = 100,
+            ShowIf = new() { new() { QuestionId = "COR-C01", Op = "in", Value = new List<string>{"one","several"} } },
+            Question = "Есть ли у компании актуальная таблица капитализации (Cap Table)?",
+            Options = new() {
+                new("full_table", "Ведётся актуальная Cap Table со всеми конвертируемыми правами", 1.0, ConfidenceClass: "known"),
+                new("future_separate", "Ведётся, но опционы/займы считаются отдельно", 0.8, ConfidenceClass: "known"),
+                new("irregular", "Есть, но давно не обновлялась", 0.5, Severity: "MEDIUM", RiskCode: "R_CORP_CAPTABLE_STALE", ConfidenceClass: "partial"),
+                new("scattered", "Данные рассыпаны по документам", 0.25, Severity: "HIGH", RiskCode: "R_CORP_NO_CAPTABLE", ConfidenceClass: "partial"),
+                new("none", "Таблицы капитализации нет", 0.0, Severity: "HIGH", RiskCode: "R_CORP_NO_CAPTABLE", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.15, ConfidenceClass: "unknown")
+            }
+        },
 
-        // 3. INTELLECTUAL PROPERTY
-        new() { Id = "ip_creators", SectionId = "ip", Order = 1, Type = "single", Weight = 1, Tags = new(){"ip","base"}, Question = "Кто первоначально создавал код и ключевые элементы продукта?", Options = new(){ new("founders", "Только фаундеры", 1), new("employees", "Штатные сотрудники", 0.75), new("freelancers", "Фрилансеры / внешние разработчики", 0.5), new("agency", "Внешняя студия или агентство", 0.5), new("mixed", "Смешанно", 0.5) } },
-        new() { Id = "ip_contracts", SectionId = "ip", Order = 2, Type = "single", Weight = 3, Tags = new(){"ip","chain-of-title"}, ShowIf = new(){ new(){ QuestionId = "ip_creators", Op = "neq", Value = "founders" } }, Question = "Есть ли письменные договоры со всеми, кто участвовал в создании продукта?", Options = new(){ new("all", "Да, со всеми", 1, "positive"), new("part", "С частью", 0.25, "high", "R_IP_CONTRACTS_PARTIAL"), new("none", "Письменных договоров нет", 0, "high", "R_IP_NO_CONTRACTS") } },
-        new() { Id = "ip_transfer", SectionId = "ip", Order = 3, Type = "single", Weight = 3, Tags = new(){"ip","chain-of-title"}, ShowIf = new(){ new(){ All = new(){ new(){ QuestionId = "ip_creators", Op = "neq", Value = "founders" }, new(){ QuestionId = "ip_contracts", Op = "in", Value = new List<string>{"all","part"} } } } }, Question = "Предусматривают ли эти договоры передачу интеллектуальных прав компании?", Options = new(){ new("yes", "Да, передача прав предусмотрена", 1, "positive"), new("not_sure", "Не уверен(а)", 0.25, "high", "R_IP_TRANSFER_UNSURE"), new("no", "Нет", 0, "high", "R_IP_NO_TRANSFER") } },
-        new() { Id = "ip_founder_assign", SectionId = "ip", Order = 4, Type = "single", Weight = 2, Tags = new(){"ip","chain-of-title"}, ShowIf = new(){ new(){ QuestionId = "c_inc", Op = "eq", Value = "yes" } }, Question = "Оформлена ли передача компании прав на то, что создавали сами фаундеры до и после регистрации?", Options = new(){ new("yes", "Да, права переданы документально", 1, "positive"), new("no", "Нет, отдельно не оформляли", 0.25, "medium", "R_IP_FOUNDER_ASSIGN") } },
-        new() { Id = "ip_control", SectionId = "ip", Order = 5, Type = "single", Weight = 2, Tags = new(){"ip","control"}, Question = "Кто контролирует ключевые аккаунты: GitHub, app stores, облачную инфраструктуру, домены, дизайн-файлы?", Options = new(){ new("company", "Компания: доступы централизованы", 1, "positive"), new("one_founder", "Один из фаундеров лично", 0.5, "medium", "R_IP_CONTROL_PERSONAL"), new("mixed", "Бессистемно", 0.25, "medium", "R_IP_CONTROL_PERSONAL"), new("external", "Внешний разработчик или подрядчик", 0, "high", "R_IP_CONTROL_EXTERNAL") } },
-        new() { Id = "ip_domain", SectionId = "ip", Order = 6, Type = "single", Weight = 1, Tags = new(){"ip","control"}, Question = "На кого зарегистрирован основной домен продукта?", Options = new(){ new("company", "На компанию", 1, "positive"), new("founder", "На одного из фаундеров", 0.5, "info"), new("external", "На внешнее лицо", 0, "high", "R_IP_DOMAIN_EXTERNAL"), new("not_sure", "Не знаю", 0.25, "medium", "R_IP_DOMAIN_UNSURE") } },
-        new() { Id = "ip_oss", SectionId = "ip", Order = 7, Type = "single", Weight = 0, Tags = new(){"ip","opensource"}, Question = "Использует ли продукт open-source компоненты?", Options = new(){ new("yes", "Да", 1), new("no", "Нет", 1), new("not_sure", "Не знаю", 1) } },
-        new() { Id = "ip_oss_check", SectionId = "ip", Order = 8, Type = "single", Weight = 1, Tags = new(){"ip","opensource"}, ShowIf = new(){ new(){ QuestionId = "ip_oss", Op = "eq", Value = "yes" } }, Question = "Проверялись ли лицензии ключевых open-source компонентов?", Options = new(){ new("yes", "Да, проверяли", 1, "positive"), new("no", "Нет", 0.25, "medium", "R_IP_OSS") } },
-        new() { Id = "ip_registered", SectionId = "ip", Order = 9, Type = "multiple", Weight = 0, Tags = new(){"ip","assets"}, Question = "Что из этого у компании уже есть?", Options = new(){ new("trademark", "Зарегистрированный товарный знак", 1), new("software", "Регистрация ПО", 1), new("patents", "Патенты", 1), new("domains", "Портфель доменов", 1), new("datasets", "Собственные датасеты", 1), new("none", "Ничего из перечисленного", 1, Exclusive: true) } },
+        // =====================================================================
+        // 3. IP (Блок 3 — Права на продукт)
+        // =====================================================================
+        new() {
+            Id = "IP-01", SectionId = "ip", Order = 1, Type = "single", ScoreMode = "context", Weight = 0,
+            Question = "Есть ли уже созданный продукт или его технический прототип?",
+            Options = new() {
+                new("idea", "Пока только идея / концепция", 1),
+                new("prototype", "Есть прототип / MVP", 1),
+                new("live_product", "Работающий готовый продукт", 1),
+                new("multiple", "Несколько продуктов", 1)
+            }
+        },
+        new() {
+            Id = "IP-04", SectionId = "ip", DimensionId = "core_ownership", Order = 2, Type = "single", ScoreMode = "diagnostic", Weight = 22, DimensionWeight = 22, WithinDimensionWeight = 100,
+            Question = "Есть ли документальное подтверждение, что права на ключевой код и дизайн принадлежат компании?",
+            Options = new() {
+                new("full", "Да, по всему ключевому продукту есть акты и договоры", 1.0, ConfidenceClass: "known"),
+                new("main", "По основной части продукта есть документы", 0.75, ConfidenceClass: "known"),
+                new("part", "Только по незначительной части", 0.4, Severity: "HIGH", RiskCode: "R_IP_CONTRACTS_PARTIAL", ConfidenceClass: "partial"),
+                new("verbal", "Договорились, но документов передачи прав нет", 0.2, Severity: "CRITICAL", RiskCode: "R_IP_NO_CONTRACTS", ConfidenceClass: "known"),
+                new("none", "Документы отсутствуют", 0.0, Severity: "CRITICAL", RiskCode: "R_IP_NO_CONTRACTS", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.15, ConfidenceClass: "unknown")
+            }
+        },
+        new() {
+            Id = "IP-05", SectionId = "ip", DimensionId = "founders_rights", Order = 3, Type = "single", ScoreMode = "diagnostic", Weight = 12, DimensionWeight = 12, WithinDimensionWeight = 100,
+            Question = "Передавали ли фаундеры свои ранние наработки и код на юридическое лицо компании?",
+            Options = new() {
+                new("yes", "Да, оформлен договор передачи IP (Assignment) в компанию", 1.0, ConfidenceClass: "known"),
+                new("charter", "Предусмотрено в соглашении сооснователей", 0.9, ConfidenceClass: "known"),
+                new("partial", "Часть наработок передана", 0.5, Severity: "MEDIUM", RiskCode: "R_IP_FOUNDER_ASSIGN", ConfidenceClass: "partial"),
+                new("verbal", "Договорились устно", 0.35, Severity: "MEDIUM", RiskCode: "R_IP_FOUNDER_ASSIGN", ConfidenceClass: "known"),
+                new("on_founders", "Права остаются на фаундерах как физлицах", 0.1, Severity: "HIGH", RiskCode: "R_IP_FOUNDER_ASSIGN", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.15, ConfidenceClass: "unknown")
+            }
+        },
 
-        // 4. TEAM
-        new() { Id = "t_size", SectionId = "team", Order = 1, Type = "single", Weight = 0, Tags = new(){"team","base"}, Question = "Сколько человек сейчас работает над продуктом, включая подрядчиков?", Options = new(){ new("s1_2", "1–2", 1), new("s3_5", "3–5", 1), new("s6_15", "6–15", 1), new("s16", "16 и более", 1) } },
-        new() { Id = "t_has", SectionId = "team", Order = 2, Type = "single", Weight = 0, Tags = new(){"team","base"}, Question = "Есть ли сотрудники или внешние подрядчики помимо фаундеров?", Options = new(){ new("yes", "Да", 1), new("no", "Нет, пока только фаундеры", 1) } },
-        new() { Id = "t_contracts", SectionId = "team", Order = 3, Type = "single", Weight = 3, Tags = new(){"team","contracts"}, ShowIf = new(){ new(){ QuestionId = "t_has", Op = "eq", Value = "yes" } }, Question = "Все ли сотрудники и подрядчики работают по письменным договорам?", Options = new(){ new("all", "Да, все", 1, "positive"), new("part", "Часть — без договоров", 0.25, "high", "R_TEAM_CONTRACTS"), new("none", "Письменных договоров нет", 0, "high", "R_TEAM_CONTRACTS") } },
-        new() { Id = "t_provisions", SectionId = "team", Order = 4, Type = "single", Weight = 3, Tags = new(){"team","ip","confidentiality"}, ShowIf = new(){ new(){ QuestionId = "t_contracts", Op = "in", Value = new List<string>{"all","part"} } }, Question = "Содержат ли эти договоры положения о конфиденциальности и передаче компании прав на результаты работы?", Options = new(){ new("yes", "Да, и конфиденциальность, и передача прав", 1, "positive"), new("partial", "Частично", 0.5, "medium", "R_TEAM_PROVISIONS"), new("no", "Нет", 0, "high", "R_TEAM_NO_IP_CLAUSES"), new("not_sure", "Не уверен(а)", 0.25, "medium", "R_TEAM_PROVISIONS") } },
-        new() { Id = "t_foreign", SectionId = "team", Order = 5, Type = "single", Weight = 0.5, Tags = new(){"team","crossborder"}, ShowIf = new(){ new(){ QuestionId = "t_has", Op = "eq", Value = "yes" } }, Question = "Есть ли иностранные или удалённые подрядчики?", Options = new(){ new("yes", "Да", 0.75, "info"), new("no", "Нет", 1) } },
-        new() { Id = "t_core", SectionId = "team", Order = 6, Type = "single", Weight = 0, Tags = new(){"team","ip"}, ShowIf = new(){ new(){ QuestionId = "t_has", Op = "eq", Value = "yes" } }, Question = "Создают ли сотрудники или подрядчики ключевые элементы продукта — код, дизайн, алгоритмы?", Options = new(){ new("yes", "Да", 1), new("no", "Нет, только вспомогательные задачи", 1) } },
+        // =====================================================================
+        // 4. TEAM (Блок 4 — Команда)
+        // =====================================================================
+        new() {
+            Id = "TEAM-C01", SectionId = "team", Order = 1, Type = "single", ScoreMode = "context", Weight = 0,
+            Question = "Есть ли в команде привлекаемые разработчики, дизайнеры или сотрудники помимо фаундеров?",
+            Options = new() {
+                new("founders_only", "Нет, над продуктом работают только фаундеры", 1),
+                new("contractors", "Есть фрилансеры / подрядчики", 1),
+                new("employees", "Есть штатные сотрудники", 1),
+                new("mixed", "Есть и сотрудники, и фрилансеры", 1)
+            }
+        },
+        new() {
+            Id = "TEAM-01", SectionId = "team", DimensionId = "documentation", Order = 2, Type = "single", ScoreMode = "diagnostic", Weight = 25, DimensionWeight = 25, WithinDimensionWeight = 100,
+            ShowIf = new() { new() { QuestionId = "TEAM-C01", Op = "neq", Value = "founders_only" } },
+            Question = "Все ли участники команды работают по оформленным письменным договорам?",
+            Options = new() {
+                new("all", "Да, со всеми заключены договоры", 1.0, ConfidenceClass: "known"),
+                new("most", "С большинством", 0.75, ConfidenceClass: "known"),
+                new("part", "С частью команды договоров нет", 0.25, Severity: "HIGH", RiskCode: "R_TEAM_CONTRACTS", ConfidenceClass: "partial"),
+                new("none", "Письменные договоры не заключались", 0.0, Severity: "HIGH", RiskCode: "R_TEAM_CONTRACTS", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.15, ConfidenceClass: "unknown")
+            }
+        },
 
-        // 5. PRODUCT & USERS
-        new() { Id = "p_users", SectionId = "product", Order = 1, Type = "single", Weight = 0, Tags = new(){"product","base"}, Question = "Есть ли у продукта реальные пользователи или клиенты?", Options = new(){ new("yes", "Да", 1), new("launching", "Запуск в ближайшее время", 1), new("no", "Пока нет", 1) } },
-        new() { Id = "p_revenue", SectionId = "product", Order = 2, Type = "single", Weight = 0, Tags = new(){"product","revenue"}, Question = "Есть ли у компании выручка?", Options = new(){ new("yes", "Да, стабильная", 1), new("first", "Первые продажи", 1), new("no", "Пока нет", 1) } },
-        new() { Id = "p_model", SectionId = "product", Order = 3, Type = "single", Weight = 0, Tags = new(){"product","base"}, ShowIf = new(){ new(){ QuestionId = "p_users", Op = "neq", Value = "no" } }, Question = "Кому продаёт или будет продавать продукт?", Options = new(){ new("b2c", "Частным пользователям (B2C)", 1), new("b2b", "Компаниям (B2B)", 1), new("both", "И тем, и другим", 1) } },
-        new() { Id = "p_terms", SectionId = "product", Order = 4, Type = "single", Weight = 3, Tags = new(){"product","terms"}, Question = "Есть ли у продукта Terms of Use / пользовательское соглашение?", Options = new(){ new("custom", "Да, подготовленное под наш продукт", 1, "positive"), new("template", "Есть, но шаблон «как у всех»", 0.5, "medium", "R_PRODUCT_TERMS_TEMPLATE"), new("no", "Нет", 0, "high", "R_PRODUCT_NO_TERMS") } },
-        new() { Id = "p_acceptance", SectionId = "product", Order = 5, Type = "single", Weight = 1.5, Tags = new(){"product","terms"}, ShowIf = new(){ new(){ QuestionId = "p_terms", Op = "in", Value = new List<string>{"custom","template"} } }, Question = "Фиксируется ли юридически принятие пользователем условий — чекбокс, подтверждение, лог?", Options = new(){ new("yes", "Да", 1, "positive"), new("no", "Нет, документ просто размещён на сайте", 0.25, "medium", "R_PRODUCT_ACCEPTANCE"), new("not_sure", "Не уверен(а)", 0.25, "medium", "R_PRODUCT_ACCEPTANCE") } },
-        new() { Id = "p_payments", SectionId = "product", Order = 6, Type = "single", Weight = 0, Tags = new(){"product","payments"}, ShowIf = new(){ new(){ QuestionId = "p_users", Op = "eq", Value = "yes" } }, Question = "Есть ли в продукте платные механики: подписка, recurring-платежи, trial, возвраты?", Options = new(){ new("recurring", "Да, подписка или recurring-платежи", 1), new("onetime", "Да, разовые платежи", 1), new("none", "Нет", 1) } },
-        new() { Id = "p_ugc", SectionId = "product", Order = 7, Type = "single", Weight = 0, Tags = new(){"product","ugc"}, ShowIf = new(){ new(){ QuestionId = "p_users", Op = "eq", Value = "yes" } }, Question = "Могут ли пользователи публиковать в продукте собственный контент?", Options = new(){ new("yes", "Да", 1), new("no", "Нет", 1) } },
-        new() { Id = "p_ugc_terms", SectionId = "product", Order = 8, Type = "single", Weight = 1, Tags = new(){"product","ugc"}, ShowIf = new(){ new(){ QuestionId = "p_ugc", Op = "eq", Value = "yes" } }, Question = "Определены ли права компании на пользовательский контент и правила его использования?", Options = new(){ new("yes", "Да, в пользовательских документах", 1, "positive"), new("no", "Нет", 0.25, "medium", "R_PRODUCT_UGC") } },
+        // =====================================================================
+        // 5. PRODUCT (Блок 5 — Продукт)
+        // =====================================================================
+        new() {
+            Id = "PROD-01", SectionId = "product", DimensionId = "presence", Order = 1, Type = "single", ScoreMode = "diagnostic", Weight = 12, DimensionWeight = 12, WithinDimensionWeight = 100,
+            Question = "Есть ли у вашего сервиса публичные Terms of Use / Пользовательское соглашение?",
+            Options = new() {
+                new("yes_custom", "Да, персонально разработанное соглашение", 1.0, ConfidenceClass: "known"),
+                new("template", "Да, составлено по шаблону из интернета", 0.5, Severity: "MEDIUM", RiskCode: "R_PRODUCT_TERMS_TEMPLATE", ConfidenceClass: "known"),
+                new("draft", "Готовится, но не опубликовано", 0.25, Severity: "HIGH", RiskCode: "R_PRODUCT_NO_TERMS", ConfidenceClass: "partial"),
+                new("none", "Пользовательского соглашения нет", 0.0, Severity: "HIGH", RiskCode: "R_PRODUCT_NO_TERMS", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.15, ConfidenceClass: "unknown")
+            }
+        },
 
-        // 6. DATA, PRIVACY & AI
-        new() { Id = "d_pd", SectionId = "data", Order = 1, Type = "single", Weight = 0, Tags = new(){"data","base"}, Question = "Собирает ли продукт персональные данные — имена, email, телефоны, поведение пользователей?", Options = new(){ new("yes", "Да", 1), new("no", "Нет", 1), new("not_sure", "Не уверен(а)", 1) } },
-        new() { Id = "d_categories", SectionId = "data", Order = 2, Type = "multiple", Weight = 0, Tags = new(){"data","categories"}, ShowIf = new(){ new(){ QuestionId = "d_pd", Op = "neq", Value = "no" } }, Question = "Какие категории данных собираются?", Options = new(){ new("contact", "Контактные данные", 1), new("behavior", "Поведение и аналитика", 1), new("payment", "Платёжные данные", 1), new("location", "Геолокация", 1), new("sensitive", "Чувствительные данные: здоровье, финансы, дети", 1) } },
-        new() { Id = "d_pp", SectionId = "data", Order = 3, Type = "single", Weight = 3, Tags = new(){"data","privacy"}, ShowIf = new(){ new(){ QuestionId = "d_pd", Op = "neq", Value = "no" } }, Question = "Есть ли у продукта Privacy Policy?", Options = new(){ new("yes", "Да, подготовленная под наш продукт", 1, "positive"), new("template", "Есть шаблонная", 0.5, "medium", "R_DATA_PP_TEMPLATE"), new("no", "Нет", 0, "high", "R_DATA_NO_PP") } },
-        new() { Id = "d_pp_match", SectionId = "data", Order = 4, Type = "single", Weight = 2, Tags = new(){"data","privacy"}, ShowIf = new(){ new(){ QuestionId = "d_pp", Op = "in", Value = new List<string>{"yes","template"} } }, Question = "Соответствует ли Privacy Policy тому, как продукт реально собирает и использует данные?", Options = new(){ new("yes", "Да, сверяли с работой продукта", 1, "positive"), new("not_checked", "Не сверяли", 0.25, "medium", "R_DATA_PP_MISMATCH"), new("no", "Нет, продукт изменился", 0, "high", "R_DATA_PP_MISMATCH") } },
-        new() { Id = "d_services", SectionId = "data", Order = 5, Type = "multiple", Weight = 0, Tags = new(){"data","vendors"}, Question = "Какие внешние сервисы использует продукт?", Options = new(){ new("openai", "OpenAI", 1), new("anthropic", "Anthropic", 1), new("google", "Google Cloud / Gemini", 1), new("aws", "AWS", 1), new("firebase", "Firebase", 1), new("analytics", "Аналитика", 1), new("crm", "CRM", 1), new("apis", "Другие API", 1), new("none", "Ничего из перечисленного", 1, Exclusive: true) } },
-        new() { Id = "d_ai", SectionId = "data", Order = 6, Type = "single", Weight = 0, Tags = new(){"data","ai","base"}, Question = "Используются ли внешние AI-модели для обработки запросов, документов или данных пользователей?", Options = new(){ new("yes", "Да", 1), new("no", "Нет", 1) } },
-        new() { Id = "d_ai_data", SectionId = "data", Order = 7, Type = "single", Weight = 3, Tags = new(){"data","ai"}, ShowIf = new(){ new(){ QuestionId = "d_ai", Op = "eq", Value = "yes" } }, Question = "Передаются ли AI-сервисам данные пользователей?", Options = new(){ new("no", "Нет, только обезличенные данные", 1, "positive"), new("anonymized", "Да, но в обезличенном виде", 0.75, "info"), new("yes", "Да, включая пользовательский контент", 0.25, "high", "R_DATA_AI_TRANSFER"), new("not_sure", "Не уверен(а)", 0.25, "high", "R_DATA_AI_UNSURE") } },
-        new() { Id = "d_ai_informed", SectionId = "data", Order = 8, Type = "single", Weight = 2, Tags = new(){"data","ai"}, ShowIf = new(){ new(){ QuestionId = "d_ai_data", Op = "in", Value = new List<string>{"yes","not_sure","anonymized"} } }, Question = "Уведомлены ли пользователи, что их данные обрабатываются с помощью внешних AI-сервисов?", Options = new(){ new("yes", "Да, отражено в документах", 1, "positive"), new("no", "Нет", 0, "high", "R_DATA_AI_NOT_INFORMED") } },
-        new() { Id = "d_ai_sensitive", SectionId = "data", Order = 9, Type = "single", Weight = 1.5, Tags = new(){"data","ai","sensitive"}, ShowIf = new(){ new(){ QuestionId = "d_ai", Op = "eq", Value = "yes" } }, Question = "Могут ли через AI-сервисы обрабатываться чувствительные данные?", Options = new(){ new("no", "Нет", 1, "positive"), new("possible", "Теоретически возможно", 0.25, "high", "R_DATA_AI_SENSITIVE"), new("yes", "Да", 0, "high", "R_DATA_AI_SENSITIVE") } },
-        new() { Id = "d_geo", SectionId = "data", Order = 10, Type = "single", Weight = 1, Tags = new(){"data","crossborder"}, ShowIf = new(){ new(){ QuestionId = "d_pd", Op = "neq", Value = "no" } }, Question = "Есть ли пользователи из нескольких стран?", Options = new(){ new("no", "Нет, одна страна", 1), new("yes", "Да", 0.5, "medium", "R_DATA_CROSSBORDER") } },
+        // =====================================================================
+        // 6. DATA & AI (Блок 6 — Данные и ИИ)
+        // =====================================================================
+        new() {
+            Id = "DATA-01", SectionId = "data", DimensionId = "privacy_notice", Order = 1, Type = "single", ScoreMode = "diagnostic", Weight = 15, DimensionWeight = 15, WithinDimensionWeight = 100,
+            Question = "Есть ли на сайте/в приложении опубликованная Политика конфиденциальности (Privacy Policy)?",
+            Options = new() {
+                new("yes_custom", "Да, актуальная Privacy Policy под реальные потоки данных", 1.0, ConfidenceClass: "known"),
+                new("template", "Да, шаблонный документ", 0.5, Severity: "MEDIUM", RiskCode: "R_DATA_PP_TEMPLATE", ConfidenceClass: "known"),
+                new("outdated", "Есть, но давно не обновлялась после смены функционала", 0.5, Severity: "HIGH", RiskCode: "R_DATA_PP_MISMATCH", ConfidenceClass: "known"),
+                new("none", "Политика конфиденциальности отсутствует", 0.0, Severity: "HIGH", RiskCode: "R_DATA_NO_PP", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.15, ConfidenceClass: "unknown")
+            }
+        },
+        new() {
+            Id = "AI-01", SectionId = "data", DimensionId = "ai_transfer", Order = 2, Type = "single", ScoreMode = "diagnostic", Weight = 12, DimensionWeight = 12, WithinDimensionWeight = 100,
+            Question = "Передаются ли данные или файлы пользователей во внешние нейросети (OpenAI, Anthropic и др.)?",
+            Options = new() {
+                new("no", "Нет, ИИ не используется или данные не передаются", 1.0, ConfidenceClass: "known"),
+                new("anonymized", "Передаются только анонимизированные данные", 0.85, ConfidenceClass: "known"),
+                new("raw_data", "Передаются обычные персональные данные пользователей", 0.4, Severity: "HIGH", RiskCode: "R_DATA_AI_TRANSFER", ConfidenceClass: "known"),
+                new("sensitive", "В нейросети могут попадать чувствительные/финансовые данные", 0.0, Severity: "CRITICAL", RiskCode: "R_DATA_AI_SENSITIVE", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.15, ConfidenceClass: "unknown")
+            }
+        },
 
-        // 7. COMMERCIAL CONTRACTS
-        new() { Id = "k_b2b", SectionId = "contracts", Order = 1, Type = "single", Weight = 3, Tags = new(){"contracts","b2b"}, ShowIf = new(){ new(){ QuestionId = "p_model", Op = "in", Value = new List<string>{"b2b","both"} } }, Question = "Есть ли стандартный договор с B2B-клиентами?", Options = new(){ new("yes", "Да, свой стандартный договор", 1, "positive"), new("client", "Работаем по договорам клиентов", 0.5, "medium", "R_CONTRACTS_CLIENT_PAPER"), new("adhoc", "Каждый раз по-разному", 0.5, "medium", "R_CONTRACTS_ADHOC"), new("no", "Работаем без договоров", 0, "high", "R_CONTRACTS_NONE") } },
-        new() { Id = "k_terms", SectionId = "contracts", Order = 2, Type = "single", Weight = 2, Tags = new(){"contracts","b2b"}, ShowIf = new(){ new(){ QuestionId = "k_b2b", Op = "in", Value = new List<string>{"yes","client","adhoc"} } }, Question = "Определены ли в договорах ответственность, SLA, IP-права, конфиденциальность?", Options = new(){ new("yes", "Да, все ключевые условия", 1, "positive"), new("partial", "Частично", 0.5, "medium", "R_CONTRACTS_TERMS"), new("not_sure", "Не уверен(а)", 0.25, "medium", "R_CONTRACTS_TERMS") } },
-        new() { Id = "k_dependency", SectionId = "contracts", Order = 3, Type = "single", Weight = 1, Tags = new(){"contracts","dependency"}, Question = "Зависит ли существенная часть бизнеса от одного клиента или партнёра?", Options = new(){ new("no", "Нет", 1, "positive"), new("partly", "Отчасти", 0.5, "info"), new("yes", "Да", 0.25, "medium", "R_CONTRACTS_DEPENDENCY") } },
+        // =====================================================================
+        // 7. CONTRACTS (Блок 7 — Договоры)
+        // =====================================================================
+        new() {
+            Id = "CONTRACT-01", SectionId = "contracts", Order = 1, Type = "single", ScoreMode = "context", Weight = 0,
+            Question = "Есть ли у компании существенные B2B-клиенты, крупные партнёры или поставщики?",
+            Options = new() {
+                new("clients", "Да, работаем с B2B-клиентами", 1),
+                new("partners", "Да, есть крупные партнёры / поставщики", 1),
+                new("none", "Нет, работаем только с физическими лицами (B2C)", 1)
+            }
+        },
+        new() {
+            Id = "CONTRACT-02", SectionId = "contracts", DimensionId = "written", Order = 2, Type = "single", ScoreMode = "diagnostic", Weight = 20, DimensionWeight = 20, WithinDimensionWeight = 100,
+            ShowIf = new() { new() { QuestionId = "CONTRACT-01", Op = "neq", Value = "none" } },
+            Question = "Подписываются ли с B2B-контрагентами полноценные письменные договоры?",
+            Options = new() {
+                new("always", "Практически всегда подписываем договора", 1.0, ConfidenceClass: "known"),
+                new("invoices", "Часть отношений держится только на счетах и переписке", 0.5, Severity: "MEDIUM", RiskCode: "R_CONTRACTS_ADHOC", ConfidenceClass: "partial"),
+                new("none", "Работаем без подписания бумаг", 0.0, Severity: "HIGH", RiskCode: "R_CONTRACTS_NONE", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.15, ConfidenceClass: "unknown")
+            }
+        },
 
-        // 8. INVESTOR READINESS
-        new() { Id = "i_funding", SectionId = "investment", Order = 1, Type = "single", Weight = 0, Tags = new(){"investment","base"}, Question = "Привлекались ли в проект внешние деньги?", Options = new(){ new("yes", "Да", 1), new("no", "Нет", 1) } },
-        new() { Id = "i_instruments", SectionId = "investment", Order = 2, Type = "multiple", Weight = 3, Tags = new(){"investment","instruments"}, ShowIf = new(){ new(){ QuestionId = "i_funding", Op = "eq", Value = "yes" } }, Question = "Как оформлены договорённости с инвесторами?", Options = new(){ new("safe", "SAFE", 1), new("convertible", "Convertible note", 1), new("loan", "Заём", 1), new("agreement", "Инвестиционный договор", 1), new("informal", "Есть неоформленные договорённости", 0, "high", "R_INV_INFORMAL") } },
-        new() { Id = "i_captable_reflects", SectionId = "investment", Order = 3, Type = "single", Weight = 2, Tags = new(){"investment","captable"}, ShowIf = new(){ new(){ QuestionId = "i_funding", Op = "eq", Value = "yes" } }, Question = "Все ли инвестиционные договорённости отражены в cap table?", Options = new(){ new("yes", "Да", 1, "positive"), new("no", "Нет", 0, "high", "R_INV_CAPTABLE"), new("no_captable", "Cap table нет", 0, "high", "R_INV_CAPTABLE") } },
-        new() { Id = "i_round", SectionId = "investment", Order = 4, Type = "single", Weight = 0, Tags = new(){"investment","fundraise"}, Question = "Планируется ли инвестиционный раунд?", Options = new(){ new("m3", "В ближайшие 3 месяца", 1), new("m3_6", "Через 3–6 месяцев", 1), new("m6_12", "Через 6–12 месяцев", 1), new("later", "Позже", 1), new("no", "Не планируется", 1) } },
-        new() { Id = "i_dataroom", SectionId = "investment", Order = 5, Type = "single", Weight = 2, Tags = new(){"investment","dataroom"}, ShowIf = new(){ new(){ QuestionId = "i_round", Op = "in", Value = new List<string>{"m3","m3_6"} } }, Question = "Есть ли структурированный data room?", Options = new(){ new("yes", "Да", 1, "positive"), new("partial", "Частично собран", 0.5, "medium", "R_INV_DATAROOM"), new("no", "Нет", 0.25, "medium", "R_INV_DATAROOM") } },
-        new() { Id = "i_dd", SectionId = "investment", Order = 6, Type = "single", Weight = 0.5, Tags = new(){"investment","dd"}, Question = "Проводилась ли ранее юридическая проверка компании?", Options = new(){ new("yes", "Да", 1, "positive"), new("no", "Нет", 0.5, "info") } },
+        // =====================================================================
+        // 8. INVESTMENT (Блок 8 — Инвестиции)
+        // =====================================================================
+        new() {
+            Id = "INVEST-01", SectionId = "investment", Order = 1, Type = "single", ScoreMode = "context", Weight = 0,
+            Question = "Планируете ли вы привлекать венчурные или частные инвестиции?",
+            Options = new() {
+                new("m3", "В ближайшие 3 месяца", 1),
+                new("m3_6", "Через 3–6 месяцев", 1),
+                new("m6_12", "Через 6–12 месяцев", 1),
+                new("none", "Не планируем", 1)
+            }
+        },
+        new() {
+            Id = "INVEST-02", SectionId = "investment", DimensionId = "prior_investments", Order = 2, Type = "single", ScoreMode = "diagnostic", Weight = 15, DimensionWeight = 15, WithinDimensionWeight = 100,
+            Question = "Получала ли компания ранее деньги в обмен на долю или обещание доли?",
+            Options = new() {
+                new("none", "Нет, инвестиций не было", 1.0, ConfidenceClass: "known"),
+                new("all_formal", "Да, всё оформлено через устав или SAFE/Convertible Note", 1.0, ConfidenceClass: "known"),
+                new("informal", "Да, деньги получены по устным или неформальным соглашениям", 0.0, Severity: "HIGH", RiskCode: "R_INV_INFORMAL", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.15, ConfidenceClass: "unknown")
+            }
+        }
     };
 
     public static readonly List<RiskDefinition> Risks = new()
     {
         // FOUNDERS
-        new() { Code = "R_FOUNDERS_EQUITY_UNFIXED", Severity = "critical", SectionId = "founders", Title = "Доли сооснователей не зафиксированы документально", Finding = "Доли фаундеров зафиксированы только устно или не распределены.", WhyItMatters = "Устная договорённость работает, пока всё хорошо. При первом разногласии юридически считается, что компании нет или доли не принадлежат никому.", Recommendation = "Закрепить доли документально в Корпоративном соглашении / SHA.", Resolution = "lawyer_required", Cta = "Оформить доли сооснователей" },
-        new() { Code = "R_FOUNDERS_ROLES", Severity = "medium", SectionId = "founders", Title = "Роли сооснователей не закреплены письменно", Finding = "Зоны ответственности сооснователей зафиксированы только устно.", WhyItMatters = "Приводит к дублированию задач или ситуациям, когда критические направления остаются без ответственного.", Recommendation = "Составить и подписать соглашение о распределении ролей и KPI сооснователей.", Resolution = "check_with_lawyer" },
-        new() { Code = "R_FOUNDERS_AGREEMENT_PARTIAL", Severity = "medium", SectionId = "founders", Title = "Соглашение сооснователей оформлено частично", Finding = "Правила между фаундерами зафиксированы не в полном объёме.", WhyItMatters = "Непокрытые вопросы (deadlock, выход фаундера) обычно вызывают самые острые конфликты.", Recommendation = "Доработать соглашение сооснователей до полноценного Founder Agreement.", Resolution = "check_with_lawyer" },
-        new() { Code = "R_FOUNDERS_NO_AGREEMENT", Severity = "high", SectionId = "founders", Title = "Отсутствует соглашение сооснователей", Finding = "Между фаундерами нет письменных правил распределения долей, ролей и выхода.", WhyItMatters = "При уходе сооснователя возникает 'мёртвый капитал' — человек забирает долю и не работает.", Recommendation = "Разработать Founder Agreement с правилами принятия решений и Vesting.", Resolution = "lawyer_required", Cta = "Разработать соглашение сооснователей" },
-        new() { Code = "R_FOUNDERS_NO_LEAVER", Severity = "high", SectionId = "founders", Title = "Не определены правила выхода фаундера (Bad/Good Leaver)", Finding = "Отсутствует механизм выкупа или возврата доли при прекращении участия фаундера.", WhyItMatters = "Если один из фаундеров решит покинуть проект, за ним остаётся вся доля без обязательств по работе.", Recommendation = "Внедрить правила Bad/Good Leaver с фиксированными условиями выкупа долей.", Resolution = "lawyer_required" },
-        new() { Code = "R_FOUNDERS_NO_VESTING", Severity = "high", SectionId = "founders", Title = "Vesting долей сооснователей не оформлен", Finding = "Доли сооснователей переданы сразу без графика вестинга.", WhyItMatters = "Инвесторы требуют наличие vesting (обычно 4 года с 1 годом cliff) до выделения инвестиций.", Recommendation = "Подписать соглашение о вестинге долей сооснователей.", Resolution = "lawyer_required" },
-        new() { Code = "R_FOUNDERS_DECISIONS", Severity = "medium", SectionId = "founders", Title = "Правила принятия ключевых решений не зафиксированы", Finding = "Отсутствует порядок голосования и зафиксированный перечень единогласных решений.", WhyItMatters = "Один фаундер может принять критическое решение без согласия остальных или заблокировать работу.", Recommendation = "Определить матрицу принятия решений (простые, большинство, 100% голосов).", Resolution = "check_with_lawyer" },
-        new() { Code = "R_FOUNDERS_TRANSFER", Severity = "medium", SectionId = "founders", Title = "Правила продажи и передачи долей не зафиксированы", Finding = "Нет ограничений на продажу, дарение или залог долей фаундеров.", WhyItMatters = "Фаундер может продать свою долю недружественному третьему лицу или конкуренту.", Recommendation = "Включить права преимущественной покупки (Right of First Refusal) и запреты на залог.", Resolution = "check_with_lawyer" },
+        new() { Code = "R_FOUNDERS_EQUITY_UNFIXED", RootCauseGroup = "FOUNDER_CONTROL", Severity = "CRITICAL", Priority = "NOW", SectionId = "founders", Modules = new() { "founders", "corporate" }, Title = "Доли сооснователей не зафиксированы документально", Finding = "Доли фаундеров зафиксированы только устно или не распределены.", WhyItMatters = "Устная договорённость работает, пока всё хорошо. При первом разногласии юридически считается, что компании нет или доли не принадлежат никому.", Recommendation = "Закрепить доли документально в Корпоративном соглашении / SHA.", Recommendations = new() { "Закрепить доли документально в Корпоративном соглашении / SHA." }, LawyerRequired = true, Resolution = "lawyer_required", ServiceCode = "FOUNDERS_REVIEW", Cta = "Разобрать структуру между основателями" },
+        new() { Code = "R_FOUNDERS_ROLES", RootCauseGroup = "FOUNDER_CONTROL", Severity = "MEDIUM", Priority = "30_DAYS", SectionId = "founders", Modules = new() { "founders" }, Title = "Роли сооснователей не закреплены письменно", Finding = "Зоны ответственности сооснователей зафиксированы только устно.", WhyItMatters = "Приводит к дублированию задач или ситуациям, когда критические направления остаются без ответственного.", Recommendation = "Составить и подписать соглашение о распределении ролей и KPI сооснователей.", Recommendations = new() { "Составить и подписать соглашение о распределении ролей и KPI сооснователей." }, LawyerRequired = false, Resolution = "check_with_lawyer", ServiceCode = "FOUNDERS_REVIEW" },
+        new() { Code = "R_FOUNDERS_AGREEMENT_PARTIAL", RootCauseGroup = "FOUNDER_CONTROL", Severity = "MEDIUM", Priority = "30_DAYS", SectionId = "founders", Modules = new() { "founders" }, Title = "Соглашение сооснователей оформлено частично", Finding = "Правила между фаундерами зафиксированы не в полном объёме.", WhyItMatters = "Непокрытые вопросы (deadlock, выход фаундера) обычно вызывают самые острые конфликты.", Recommendation = "Доработать соглашение сооснователей до полноценного Founder Agreement.", Recommendations = new() { "Доработать соглашение сооснователей до полноценного Founder Agreement." }, LawyerRequired = false, Resolution = "check_with_lawyer", ServiceCode = "FOUNDERS_REVIEW" },
+        new() { Code = "R_FOUNDERS_NO_AGREEMENT", RootCauseGroup = "FOUNDER_CONTROL", Severity = "HIGH", Priority = "NOW", SectionId = "founders", Modules = new() { "founders" }, Title = "Отсутствует соглашение сооснователей", Finding = "Между фаундерами нет письменных правил распределения долей, ролей и выхода.", WhyItMatters = "При уходе сооснователя возникает 'мёртвый капитал' — человек забирает долю и не работает.", Recommendation = "Разработать Founder Agreement с правилами принятия решений и Vesting.", Recommendations = new() { "Разработать Founder Agreement с правилами принятия решений и Vesting." }, LawyerRequired = true, Resolution = "lawyer_required", ServiceCode = "FOUNDERS_REVIEW", Cta = "Разработать соглашение сооснователей" },
+        new() { Code = "R_FOUNDERS_NO_LEAVER", RootCauseGroup = "FOUNDER_EXIT", Severity = "HIGH", Priority = "NOW", SectionId = "founders", Modules = new() { "founders" }, Title = "Не определены правила выхода фаундера (Bad/Good Leaver)", Finding = "Отсутствует механизм выкупа или возврата доли при прекращении участия фаундера.", WhyItMatters = "Если один из фаундеров решит покинуть проект, за ним остаётся вся доля без обязательств по работе.", Recommendation = "Внедрить правила Bad/Good Leaver с фиксированными условиями выкупа долей.", Recommendations = new() { "Внедрить правила Bad/Good Leaver с фиксированными условиями выкупа долей." }, LawyerRequired = true, Resolution = "lawyer_required", ServiceCode = "FOUNDERS_REVIEW" },
+        new() { Code = "R_FOUNDERS_NO_VESTING", RootCauseGroup = "FOUNDER_EXIT", Severity = "HIGH", Priority = "30_DAYS", SectionId = "founders", Modules = new() { "founders" }, Title = "Vesting долей сооснователей не оформлен", Finding = "Доли сооснователей переданы сразу без графика вестинга.", WhyItMatters = "Инвесторы требуют наличие vesting (обычно 4 года с 1 годом cliff) до выделения инвестиций.", Recommendation = "Подписать соглашение о вестинге долей сооснователей.", Recommendations = new() { "Подписать соглашение о вестинге долей сооснователей." }, LawyerRequired = true, Resolution = "lawyer_required", ServiceCode = "FOUNDERS_REVIEW" },
+        new() { Code = "R_FOUNDERS_DECISIONS", RootCauseGroup = "FOUNDER_CONTROL", Severity = "HIGH", Priority = "NOW", SectionId = "founders", Modules = new() { "founders" }, Title = "Правила принятия ключевых решений не зафиксированы", Finding = "Отсутствует порядок голосования и механизм разблокировки тупиковых ситуаций (Deadlock).", WhyItMatters = "Один фаундер может заблокировать работу всей компании или принять критическое решение без согласия остальных.", Recommendation = "Определить матрицу решений и механизм тупика.", Recommendations = new() { "Определить матрицу решений и механизм тупика." }, LawyerRequired = false, Resolution = "check_with_lawyer", ServiceCode = "FOUNDERS_REVIEW" },
 
         // CORPORATE
-        new() { Code = "R_CORP_SHARES_MISMATCH", Severity = "critical", SectionId = "corporate", Title = "Официальные доли расходятся с фактическими", Finding = "Зарегистрированные доли в юрлице отличаются от устных договоренностей.", WhyItMatters = "При инвестиционном Due Diligence инвестор проверяет только официальный устав и реестр участников.", Recommendation = "Привести официальную структуру в соответствие с фактическими договоренностями.", Resolution = "lawyer_required" },
-        new() { Code = "R_CORP_VERBAL_PROMISES", Severity = "high", SectionId = "corporate", Title = "Устные обещания долей или опционов", Finding = "Сотрудникам, эдвайзерам или партнерам обещаны доли только на словах.", WhyItMatters = "В будущем эти лица могут предъявить юридические претензии или заблокировать инвестиционный раунд.", Recommendation = "Оформить устные обещания в опционный план (ESOP) или письменный опционный договор.", Resolution = "lawyer_required" },
-        new() { Code = "R_CORP_CAPTABLE_STALE", Severity = "medium", SectionId = "corporate", Title = "Таблица капитализации (Cap Table) устарела", Finding = "Таблица капитализации давно не обновлялась.", WhyItMatters = "Затрудняет оценку разводнения долей перед переговорами с инвесторами.", Recommendation = "Обновить Cap Table с учётом всех конвертируемых займов и опционов.", Resolution = "self_service" },
-        new() { Code = "R_CORP_NO_CAPTABLE", Severity = "high", SectionId = "corporate", Title = "Отсутствует таблица капитализации (Cap Table)", Finding = "У компании нет структурированного Cap Table.", WhyItMatters = "Обязательное требование любого венчурного фонда перед подготовкой Term Sheet.", Recommendation = "Сформировать актуальную таблицу капитализации компании.", Resolution = "check_with_lawyer" },
-        new() { Code = "R_CORP_APPROVALS", Severity = "medium", SectionId = "corporate", Title = "Корпоративные решения не оформляются протоколами", Finding = "Ключевые сделки и назначения происходят без протоколов и решений.", WhyItMatters = "Любая крупная сделка может быть оспорена в суде как недействительная.", Recommendation = "Внедрить стандартное протоколирование ключевых решений участников/совета.", Resolution = "check_with_lawyer" },
+        new() { Code = "R_CORP_SHARES_MISMATCH", RootCauseGroup = "ENTITY_ALIGNMENT", Severity = "CRITICAL", Priority = "NOW", SectionId = "corporate", Modules = new() { "corporate" }, Title = "Официальные доли расходятся с фактическими", Finding = "Зарегистрированные доли в юрлице отличаются от устных договоренностей.", WhyItMatters = "При инвестиционном Due Diligence инвестор проверяет только официальный устав и реестр участников.", Recommendation = "Привести официальную структуру в соответствие с фактическими договоренностями.", Recommendations = new() { "Привести официальную структуру в соответствие с фактическими договоренностями." }, LawyerRequired = true, Resolution = "lawyer_required", ServiceCode = "CORPORATE_CLEANUP", Cta = "Привести корпоративную структуру в порядок" },
+        new() { Code = "R_CORP_VERBAL_PROMISES", RootCauseGroup = "EQUITY_PROMISE", Severity = "HIGH", Priority = "30_DAYS", SectionId = "corporate", Modules = new() { "corporate" }, Title = "Устные обещания долей или опционов", Finding = "Сотрудникам, эдвайзерам или партнерам обещаны доли только на словах.", WhyItMatters = "В будущем эти лица могут предъявить юридические претензии или заблокировать инвестиционный раунд.", Recommendation = "Оформить устные обещания в опционный план (ESOP) или письменный опционный договор.", Recommendations = new() { "Оформить устные обещания в опционный план (ESOP) или письменный опционный договор." }, LawyerRequired = true, Resolution = "lawyer_required", ServiceCode = "CORPORATE_CLEANUP" },
+        new() { Code = "R_CORP_CAPTABLE_STALE", RootCauseGroup = "ENTITY_ALIGNMENT", Severity = "MEDIUM", Priority = "BEFORE_ROUND", SectionId = "corporate", Modules = new() { "corporate" }, Title = "Таблица капитализации (Cap Table) устарела", Finding = "Таблица капитализации давно не обновлялась.", WhyItMatters = "Затрудняет оценку разводнения долей перед переговорами с инвесторами.", Recommendation = "Обновить Cap Table с учётом всех конвертируемых займов и опционов.", Recommendations = new() { "Обновить Cap Table с учётом всех конвертируемых займов и опционов." }, LawyerRequired = false, Resolution = "self" },
+        new() { Code = "R_CORP_NO_CAPTABLE", RootCauseGroup = "ENTITY_ALIGNMENT", Severity = "HIGH", Priority = "BEFORE_ROUND", SectionId = "corporate", Modules = new() { "corporate" }, Title = "Отсутствует таблица капитализации (Cap Table)", Finding = "У компании нет структурированного Cap Table.", WhyItMatters = "Обязательное требование любого венчурного фонда перед подготовкой Term Sheet.", Recommendation = "Сформировать актуальную таблицу капитализации компании.", Recommendations = new() { "Сформировать актуальную таблицу капитализации компании." }, LawyerRequired = false, Resolution = "check_with_lawyer", ServiceCode = "CORPORATE_CLEANUP" },
 
         // IP
-        new() { Code = "R_IP_CONTRACTS_PARTIAL", Severity = "high", SectionId = "ip", Title = "Часть разработчиков работает без договоров", Finding = "Не со всеми создателями кода и дизайна заключены письменные соглашения.", WhyItMatters = "Авторские права на фрагменты продукта принадлежат конкретным фрилансерам.", Recommendation = "Заключить договоры уступки прав (IP Assignment) со всеми авторами.", Resolution = "lawyer_required" },
-        new() { Code = "R_IP_NO_CONTRACTS", Severity = "critical", SectionId = "ip", Title = "Отсутствуют договоры с разработчиками", Finding = "Продукт создавался внешними специалистами без письменных договоров.", WhyItMatters = "По закону авторские права принадлежат создателю. Код юридически принадлежит фрилансерам.", Recommendation = "Подписать договоры уступки прав (IP Assignment) прошлым числом.", Resolution = "lawyer_required", Cta = "Передать права на продукт компании" },
-        new() { Code = "R_IP_TRANSFER_UNSURE", Severity = "high", SectionId = "ip", Title = "Передача прав на IP не верифицирована", Finding = "В существующих договорах с разработчиками не гарантирована полная передача исключительных прав.", WhyItMatters = "Договор подряда не всегда означает передачу интеллектуальных прав без специального акта или формулировок.", Recommendation = "Провести ревизию договоров разработки и подписать дополнительные соглашения об уступке IP.", Resolution = "lawyer_required" },
-        new() { Code = "R_IP_NO_TRANSFER", Severity = "high", SectionId = "ip", Title = "Договоры разработки не содержат условий передачи IP", Finding = "Разработчики работали по договорам, где нет условий о передаче исключительных прав компании.", WhyItMatters = "Разработчик сохраняет право продавать тот же код третьим лицам или запретить его использование.", Recommendation = "Оформить уступку прав на интеллектуальную собственность.", Resolution = "lawyer_required" },
-        new() { Code = "R_IP_FOUNDER_ASSIGN", Severity = "medium", SectionId = "ip", Title = "Права фаундеров на ранний код не переданы компании", Finding = "Код и интеллектуальная собственность, созданные фаундерами до регистрации юрлица, не переданы компании.", WhyItMatters = "Права остаются за физическими лицами, а не за юридическим лицом стартапа.", Recommendation = "Подписать договор передачи IP (Founder IP Assignment) от фаундеров в компанию.", Resolution = "check_with_lawyer" },
-        new() { Code = "R_IP_CONTROL_PERSONAL", Severity = "medium", SectionId = "ip", Title = "Доступы к продукту оформлены на личный аккаунт", Finding = "GitHub, облако или домены привязаны к личному аккаунту одного из фаундеров.", WhyItMatters = "При конфликте фаундеров компания теряет доступ к коду и инфраструктуре.", Recommendation = "Перевести все ключевые сервисы на корпоративные аккаунты компании.", Resolution = "self_service" },
-        new() { Code = "R_IP_CONTROL_EXTERNAL", Severity = "high", SectionId = "ip", Title = "Ключевые доступы принадлежат внешнему подрядчику", Finding = "Доступы к GitHub, серверам или доменам находятся у стороннего разработчика или студии.", WhyItMatters = "Подрядчик может удерживать доступы при спорных финансовых вопросах.", Recommendation = "Передать права администратора на аккаунты владельцам стартапа.", Resolution = "check_with_lawyer" },
-        new() { Code = "R_IP_DOMAIN_EXTERNAL", Severity = "high", SectionId = "ip", Title = "Основной домен зарегистрирован на стороннее лицо", Finding = "Доменное имя стартапа принадлежит третьим лицам.", WhyItMatters = "Риск потери домена и остановки работы сервиса.", Recommendation = "Переоформить доменное имя на юридическое лицо компании.", Resolution = "check_with_lawyer" },
-        new() { Code = "R_IP_DOMAIN_UNSURE", Severity = "medium", SectionId = "ip", Title = "Статус принадлежности домена не верифицирован", Finding = "Нет четких подтверждающих документов на владение доменным именем.", WhyItMatters = "Может затруднить Due Diligence со стороны инвесторов.", Recommendation = "Проверить WHOIS и зафиксировать домен на балансе компании.", Resolution = "self_service" },
-        new() { Code = "R_IP_OSS", Severity = "medium", SectionId = "ip", Title = "Open-source лицензии не проверялись", Finding = "Используются открытые библиотеки без проверки условий их лицензий.", WhyItMatters = "Лицензии вроде GPL v3 требуют открытия исходного кода коммерческого продукта.", Recommendation = "Провести аудит open-source зависимостей на отсутствие вирусообразных лицензий.", Resolution = "self_service" },
+        new() { Code = "R_IP_CONTRACTS_PARTIAL", RootCauseGroup = "KEY_DEVELOPER", Severity = "HIGH", Priority = "NOW", SectionId = "ip", Modules = new() { "ip" }, Title = "Часть разработчиков работает без договоров", Finding = "Не со всеми создателями кода и дизайна заключены письменные соглашения.", WhyItMatters = "Авторские права на фрагменты продукта принадлежат конкретным фрилансерам.", Recommendation = "Заключить договоры уступки прав (IP Assignment) со всеми авторами.", Recommendations = new() { "Заключить договоры уступки прав (IP Assignment) со всеми авторами." }, LawyerRequired = true, Resolution = "lawyer_required", ServiceCode = "IP_RIGHTS_REVIEW", Cta = "Проверить права на продукт" },
+        new() { Code = "R_IP_NO_CONTRACTS", RootCauseGroup = "KEY_DEVELOPER", Severity = "CRITICAL", Priority = "NOW", SectionId = "ip", Modules = new() { "ip" }, Title = "Отсутствуют договоры с разработчиками", Finding = "Продукт создавался внешними специалистами без письменных договоров.", WhyItMatters = "По закону авторские права принадлежат создателю. Код юридически принадлежит фрилансерам.", Recommendation = "Подписать договоры уступки прав (IP Assignment) прошлым числом.", Recommendations = new() { "Подписать договоры уступки прав (IP Assignment) прошлым числом." }, LawyerRequired = true, Resolution = "lawyer_required", ServiceCode = "IP_RIGHTS_REVIEW", Cta = "Передать права на продукт компании" },
+        new() { Code = "R_IP_FOUNDER_ASSIGN", RootCauseGroup = "KEY_DEVELOPER", Severity = "MEDIUM", Priority = "30_DAYS", SectionId = "ip", Modules = new() { "ip" }, Title = "Права фаундеров на ранний код не переданы компании", Finding = "Код и интеллектуальная собственность, созданные фаундерами до регистрации юрлица, не переданы компании.", WhyItMatters = "Права остаются за физическими лицами, а не за юридическим лицом стартапа.", Recommendation = "Подписать договор передачи IP (Founder IP Assignment) от фаундеров в компанию.", Recommendations = new() { "Подписать договор передачи IP (Founder IP Assignment) от фаундеров в компанию." }, LawyerRequired = false, Resolution = "check_with_lawyer", ServiceCode = "IP_RIGHTS_REVIEW" },
 
         // TEAM
-        new() { Code = "R_TEAM_CONTRACTS", Severity = "high", SectionId = "team", Title = "Сотрудники или подрядчики работают без договоров", Finding = "Часть команды выполняет задачи без оформленных соглашений.", WhyItMatters = "Риски штрафов от налоговой/трудовой инспекции и споры о правах на результаты работы.", Recommendation = "Заключить трудовые или ГПХ договоры со всеми участниками команды.", Resolution = "check_with_lawyer" },
-        new() { Code = "R_TEAM_PROVISIONS", Severity = "medium", SectionId = "team", Title = "Договоры с командой не содержат условий NDA и IP", Finding = "В договорах с командой частично отсутствуют положения о конфиденциальности и передаче прав.", WhyItMatters = "Утечка конфиденциальных данных и риски оспаривания авторских прав.", Recommendation = "Дополнить договоры разделами о конфиденциальности и автоматической передаче результатов интеллектуальной деятельности.", Resolution = "check_with_lawyer" },
-        new() { Code = "R_TEAM_NO_IP_CLAUSES", Severity = "high", SectionId = "team", Title = "В договорах с командой отсутствуют пункты о передаче IP", Finding = "Договоры с сотрудниками/подрядчиками не содержат условий уступки прав на создаваемые объекты.", WhyItMatters = "Все созданные командой разработки материалы принадлежат им лично.", Recommendation = "Внести служебные задания и условия отчуждения прав в договоры с командой.", Resolution = "lawyer_required" },
+        new() { Code = "R_TEAM_CONTRACTS", RootCauseGroup = "KEY_DEVELOPER", Severity = "HIGH", Priority = "NOW", SectionId = "team", Modules = new() { "team" }, Title = "Сотрудники или подрядчики работают без договоров", Finding = "Часть команды выполняет задачи без оформленных соглашений.", WhyItMatters = "Риски штрафов от налоговой/трудовой инспекции и споры о правах на результаты работы.", Recommendation = "Заключить трудовые или ГПХ договоры со всеми участниками команды.", Recommendations = new() { "Заключить трудовые или ГПХ договоры со всеми участниками команды." }, LawyerRequired = false, Resolution = "check_with_lawyer", ServiceCode = "TEAM_LEGAL_REVIEW", Cta = "Проверить юридическую конструкцию команды" },
 
         // PRODUCT
-        new() { Code = "R_PRODUCT_TERMS_TEMPLATE", Severity = "medium", SectionId = "product", Title = "Terms of Use скопированы по шаблону", Finding = "Пользовательское соглашение не адаптировано под реальную бизнес-модель продукта.", WhyItMatters = "Шаблонные условия не защищают компанию от судебных исков пользователей и возвратов.", Recommendation = "Разработать персонализированные Terms of Use под особенности вашего сервиса.", Resolution = "check_with_lawyer" },
-        new() { Code = "R_PRODUCT_NO_TERMS", Severity = "high", SectionId = "product", Title = "Отсутствует пользовательское соглашение (Terms of Use)", Finding = "У сервиса нет публичной оферты или пользовательского соглашения.", WhyItMatters = "Компания не ограничила свою ответственность перед пользователями за сбои и убытки.", Recommendation = "Подготовить и опубликовать оферту / Terms of Use на сайте и в приложении.", Resolution = "lawyer_required" },
-        new() { Code = "R_PRODUCT_ACCEPTANCE", Severity = "medium", SectionId = "product", Title = "Принятие условий сервиса не фиксируется юридически", Finding = "Пользователи не совершают явный акцепт оферты (нет чекбокса при регистрации).", WhyItMatters = "Суд может признать, что пользователь не выражал согласие с условиями соглашения.", Recommendation = "Внедрить обязательный чекбокс акцепта оферты и фиксацию логов согласия.", Resolution = "self_service" },
-        new() { Code = "R_PRODUCT_UGC", Severity = "medium", SectionId = "product", Title = "Права компании на контент пользователей не зафиксированы", Finding = "Пользователи публикуют контент, но оферта не содержит лицензии на его использование.", WhyItMatters = "Риски исков о нарушении авторских прав при использовании UGC в маркетинге или продукте.", Recommendation = "Включить условия о пользовательском контенте и модерации в Terms of Use.", Resolution = "check_with_lawyer" },
+        new() { Code = "R_PRODUCT_TERMS_TEMPLATE", RootCauseGroup = "PRODUCT_DOCS", Severity = "MEDIUM", Priority = "30_DAYS", SectionId = "product", Modules = new() { "product" }, Title = "Terms of Use скопированы по шаблону", Finding = "Пользовательское соглашение не адаптировано под реальную бизнес-модель продукта.", WhyItMatters = "Шаблонные условия не защищают компанию от судебных исков пользователей и возвратов.", Recommendation = "Разработать персонализированные Terms of Use под особенности вашего сервиса.", Recommendations = new() { "Разработать персонализированные Terms of Use под особенности вашего сервиса." }, LawyerRequired = false, Resolution = "check_with_lawyer", ServiceCode = "PRODUCT_LEGAL_REVIEW" },
+        new() { Code = "R_PRODUCT_NO_TERMS", RootCauseGroup = "PRODUCT_DOCS", Severity = "HIGH", Priority = "NOW", SectionId = "product", Modules = new() { "product" }, Title = "Отсутствует пользовательское соглашение (Terms of Use)", Finding = "У сервиса нет публичной оферты или пользовательского соглашения.", WhyItMatters = "Компания не ограничила свою ответственность перед пользователями за сбои и убытки.", Recommendation = "Подготовить и опубликовать оферту / Terms of Use на сайте и в приложении.", Recommendations = new() { "Подготовить и опубликовать оферту / Terms of Use на сайте и в приложении." }, LawyerRequired = true, Resolution = "lawyer_required", ServiceCode = "PRODUCT_LEGAL_REVIEW", Cta = "Проверить юридическую модель продукта" },
 
-        // DATA
-        new() { Code = "R_DATA_PP_TEMPLATE", Severity = "medium", SectionId = "data", Title = "Privacy Policy составлена по шаблону", Finding = "Политика конфиденциальности не отражает реальные каналы и цели сбора данных.", WhyItMatters = "Регуляторы штрафуют за неточное информирование пользователей о сборе данных.", Recommendation = "Обновить Privacy Policy в точном соответствии с используемыми метриками и сервисами.", Resolution = "check_with_lawyer" },
-        new() { Code = "R_DATA_NO_PP", Severity = "high", SectionId = "data", Title = "Отсутствует Privacy Policy", Finding = "Продукт собирает персональные данные, но не имеет Политики конфиденциальности.", WhyItMatters = "Штрафы регуляторов и блокировка приложении в App Store / Google Play.", Recommendation = "Подготовить Privacy Policy под реальные потоки данных.", Resolution = "check_with_lawyer" },
-        new() { Code = "R_DATA_PP_MISMATCH", Severity = "high", SectionId = "data", Title = "Privacy Policy не соответствует фактическому сбору данных", Finding = "Продукт собирает данные, которые не упоминаются в Политике конфиденциальности.", WhyItMatters = "Нарушение законодательства о персональных данных.", Recommendation = "Сверить Privacy Policy с продуктовыми логами и трекерами и внести изменения.", Resolution = "check_with_lawyer" },
-        new() { Code = "R_DATA_AI_TRANSFER", Severity = "high", SectionId = "data", Title = "Персональные данные передаются в сторонние AI-сервисы", Finding = "Данные пользователей в неанонимизированном виде отправляются во внешние нейросети (OpenAI, Anthropic и др.).", WhyItMatters = "Риски утечки данных и прямые нарушения GDPR / законов о персональных данных.", Recommendation = "Внедрить анонимизацию данных перед отправкой в AI-API и обновить Privacy Policy.", Resolution = "lawyer_required" },
-        new() { Code = "R_DATA_AI_UNSURE", Severity = "high", SectionId = "data", Title = "Не проверен статус передачи данных в AI-сервисы", Finding = "Нет уверенности, обрабатываются ли персональные данные внешними AI-моделями.", WhyItMatters = "Риски непреднамеренного нарушения законов о конфиденциальности.", Recommendation = "Провести аудит отправки данных в AI и зафиксировать условия использования API.", Resolution = "check_with_lawyer" },
-        new() { Code = "R_DATA_AI_NOT_INFORMED", Severity = "high", SectionId = "data", Title = "Пользователи не уведомлены об обработке данных нейросетями", Finding = "В документах не указано, что данные пользователей обрабатываются через AI.", WhyItMatters = "Пользователи могут заявить о нарушении конфиденциальности.", Recommendation = "Добавить явное информирование и согласие на обработку данных AI-сервисами.", Resolution = "check_with_lawyer" },
-        new() { Code = "R_DATA_AI_SENSITIVE", Severity = "high", SectionId = "data", Title = "через AI могут обрабатываться чувствительные данные", Finding = "В нейросети могут попадать финансовые, медицинские или детские данные.", WhyItMatters = "Высокие штрафы регуляторов за трансграничную передачу чувствительной информации.", Recommendation = "Исключить передачу чувствительных данных в коммерческие AI-API.", Resolution = "lawyer_required" },
-        new() { Code = "R_DATA_CROSSBORDER", Severity = "medium", SectionId = "data", Title = "Трансграничная передача данных не оформлена", Finding = "Данные зарубежных пользователей обрабатываются без учёта требований локальных законов.", WhyItMatters = "Риск блокировки домена в иностранных юрисдикциях.", Recommendation = "Привести обработку персональных данных в соответствие с GDPR / локальным законодательством.", Resolution = "check_with_lawyer" },
+        // DATA & AI
+        new() { Code = "R_DATA_PP_TEMPLATE", RootCauseGroup = "DATA_AI_TRANSPARENCY", Severity = "MEDIUM", Priority = "30_DAYS", SectionId = "data", Modules = new() { "data" }, Title = "Privacy Policy составлена по шаблону", Finding = "Политика конфиденциальности не отражает реальные каналы и цели сбора данных.", WhyItMatters = "Регуляторы штрафуют за неточное информирование пользователей о сборе данных.", Recommendation = "Обновить Privacy Policy в точном соответствии с используемыми метриками и сервисами.", Recommendations = new() { "Обновить Privacy Policy в точном соответствии с используемыми метриками и сервисами." }, LawyerRequired = false, Resolution = "check_with_lawyer", ServiceCode = "DATA_AI_REVIEW" },
+        new() { Code = "R_DATA_NO_PP", RootCauseGroup = "DATA_AI_TRANSPARENCY", Severity = "HIGH", Priority = "NOW", SectionId = "data", Modules = new() { "data" }, Title = "Отсутствует Privacy Policy", Finding = "Продукт собирает персональные данные, но не имеет Политики конфиденциальности.", WhyItMatters = "Штрафы регуляторов и блокировка приложении в App Store / Google Play.", Recommendation = "Подготовить Privacy Policy под реальные потоки данных.", Recommendations = new() { "Подготовить Privacy Policy под реальные потоки данных." }, LawyerRequired = false, Resolution = "check_with_lawyer", ServiceCode = "DATA_AI_REVIEW", Cta = "Разобрать модель работы с данными и ИИ" },
+        new() { Code = "R_DATA_PP_MISMATCH", RootCauseGroup = "DATA_AI_TRANSPARENCY", Severity = "HIGH", Priority = "30_DAYS", SectionId = "data", Modules = new() { "data" }, Title = "Privacy Policy не соответствует фактическому сбору данных", Finding = "Продукт собирает данные, которые не упоминаются в Политике конфиденциальности.", WhyItMatters = "Нарушение законодательства о персональных данных.", Recommendation = "Сверить Privacy Policy с продуктовыми логами и трекерами и внести изменения.", Recommendations = new() { "Сверить Privacy Policy с продуктовыми логами и трекерами и внести изменения." }, LawyerRequired = false, Resolution = "check_with_lawyer", ServiceCode = "DATA_AI_REVIEW" },
+        new() { Code = "R_DATA_AI_TRANSFER", RootCauseGroup = "DATA_AI_TRANSPARENCY", Severity = "HIGH", Priority = "NOW", SectionId = "data", Modules = new() { "data" }, Title = "Персональные данные передаются в сторонние AI-сервисы", Finding = "Данные пользователей отправляются во внешние нейросети (OpenAI, Anthropic и др.).", WhyItMatters = "Риски утечки данных и прямые нарушения GDPR / законов о персональных данных.", Recommendation = "Внедрить анонимизацию данных перед отправкой в AI-API и обновить Privacy Policy.", Recommendations = new() { "Внедрить анонимизацию данных перед отправкой в AI-API и обновить Privacy Policy." }, LawyerRequired = true, Resolution = "lawyer_required", ServiceCode = "DATA_AI_REVIEW" },
+        new() { Code = "R_DATA_AI_SENSITIVE", RootCauseGroup = "DATA_AI_TRANSPARENCY", Severity = "CRITICAL", Priority = "NOW", SectionId = "data", Modules = new() { "data" }, Title = "Через AI обрабатываются чувствительные данные", Finding = "В нейросети могут попадать финансовые, медицинские или детские данные.", WhyItMatters = "Высокие штрафы регуляторов за трансграничную передачу чувствительной информации.", Recommendation = "Исключить передачу чувствительных данных в коммерческие AI-API.", Recommendations = new() { "Исключить передачу чувствительных данных в коммерческие AI-API." }, LawyerRequired = true, Resolution = "lawyer_required", ServiceCode = "DATA_AI_REVIEW" },
 
         // CONTRACTS
-        new() { Code = "R_CONTRACTS_CLIENT_PAPER", Severity = "medium", SectionId = "contracts", Title = "Работа с B2B-клиентами по их формам", Finding = "Договоры подписываются в редакции клиента без юриста.", WhyItMatters = "Формы клиентов обычно содержат невыгодные условия ответственности, штрафы и задержки платежей.", Recommendation = "Разработать свою стандартную оферту/договор и регламент согласования разногласий.", Resolution = "check_with_lawyer" },
-        new() { Code = "R_CONTRACTS_ADHOC", Severity = "medium", SectionId = "contracts", Title = "Договоры с клиентами заключаются бессистемно", Finding = "Каждая сделка оформляется по разным условиям без единой матрицы.", WhyItMatters = "Сложность контроля обязательств, сроков и условий интеллектуальной собственности.", Recommendation = "Внедрить типовую форму B2B-договора и стандартизировать процессы продажи.", Resolution = "check_with_lawyer" },
-        new() { Code = "R_CONTRACTS_NONE", Severity = "high", SectionId = "contracts", Title = "B2B-клиенты обслуживаются без договоров", Finding = "Услуги или доступ к продукту предоставляются B2B-клиентам без подписания бумаг.", WhyItMatters = "Невозможно взыскать дебиторскую задолженность или доказать факт оказания услуг.", Recommendation = "Перевести всех клиентов на единую оферту или стандартный договор.", Resolution = "lawyer_required" },
-        new() { Code = "R_CONTRACTS_TERMS", Severity = "medium", SectionId = "contracts", Title = "В коммерческих договорах отсутствуют условия об ответственности", Finding = "Договоры не содержат ограничений ответственности и четких правил SLA.", WhyItMatters = "Компания рискует неограниченными убытками при сбое сервиса.", Recommendation = "Включить ограничение ответственности (Cap on Liability) размером полученного платежа.", Resolution = "check_with_lawyer" },
-        new() { Code = "R_CONTRACTS_DEPENDENCY", Severity = "medium", SectionId = "contracts", Title = "Зависимость бизнеса от одного клиента", Finding = "Существенная доля выручки приходится на одного контрагента.", WhyItMatters = "Расторжение одного договора приводит к кассовому разрыву.", Recommendation = "Диверсифицировать клиентуру и зафиксировать долгосрочные условия расторжения.", Resolution = "self_service" },
+        new() { Code = "R_CONTRACTS_ADHOC", RootCauseGroup = "PRODUCT_DOCS", Severity = "MEDIUM", Priority = "30_DAYS", SectionId = "contracts", Modules = new() { "contracts" }, Title = "Договоры с клиентами заключаются бессистемно", Finding = "Каждая сделка оформляется по разным условиям без единой матрицы.", WhyItMatters = "Сложность контроля обязательств, сроков и условий интеллектуальной собственности.", Recommendation = "Внедрить типовую форму B2B-договора и стандартизировать процессы продажи.", Recommendations = new() { "Внедрить типовую форму B2B-договора и стандартизировать процессы продажи." }, LawyerRequired = false, Resolution = "check_with_lawyer", ServiceCode = "CONTRACTS_REVIEW" },
+        new() { Code = "R_CONTRACTS_NONE", RootCauseGroup = "PRODUCT_DOCS", Severity = "HIGH", Priority = "NOW", SectionId = "contracts", Modules = new() { "contracts" }, Title = "B2B-клиенты обслуживаются без договоров", Finding = "Услуги или доступ к продукту предоставляются B2B-клиентам без подписания бумаг.", WhyItMatters = "Невозможно взыскать дебиторскую задолженность или доказать факт оказания услуг.", Recommendation = "Перевести всех клиентов на единую оферту или стандартный договор.", Recommendations = new() { "Перевести всех клиентов на единую оферту или стандартный договор." }, LawyerRequired = true, Resolution = "lawyer_required", ServiceCode = "CONTRACTS_REVIEW", Cta = "Проверить ключевые договоры" },
 
         // INVESTMENT
-        new() { Code = "R_INV_INFORMAL", Severity = "high", SectionId = "investment", Title = "Инвестиционные договоренности не оформлены", Finding = "Деньги инвесторов получены по неформальным соглашениям или устным обещаниям.", WhyItMatters = "Инвестор может передумать и потребовать сумму обратно как задолженность с процентами.", Recommendation = "Оформить инвестиционные средства через SAFE, Convertible Note или долю в компании.", Resolution = "lawyer_required" },
-        new() { Code = "R_INV_CAPTABLE", Severity = "high", SectionId = "investment", Title = "Инвестиционные доли не отражены в Cap Table", Finding = "Фактически полученные инвестиции не зафиксированы в таблице капитализации.", WhyItMatters = "Приводит к спорам о цене компании на следующем раунде.", Recommendation = "Внести все инвестиционные конвертируемые инструменты в Cap Table.", Resolution = "check_with_lawyer" },
-        new() { Code = "R_INV_DATAROOM", Severity = "medium", SectionId = "investment", Title = "Не подготовлен Data Room для инвесторов", Finding = "Юридические документы не структурированы для проверки инвесторами.", WhyItMatters = "Затягивает инвестиционный раунд на 2–3 месяца при Due Diligence.", Recommendation = "Сформировать готовый виртуальный Data Room со всеми корпоративными и IP документами.", Resolution = "check_with_lawyer" },
+        new() { Code = "R_INV_INFORMAL", RootCauseGroup = "ROUND_BLOCKER", Severity = "HIGH", Priority = "BEFORE_ROUND", SectionId = "investment", Modules = new() { "investment" }, Title = "Инвестиционные договоренности не оформлены", Finding = "Деньги инвесторов получены по неформальным соглашениям или устным обещаниям.", WhyItMatters = "Инвестор может передумать и потребовать сумму обратно как задолженность с процентами.", Recommendation = "Оформить инвестиционные средства через SAFE, Convertible Note или долю в компании.", Recommendations = new() { "Оформить инвестиционные средства через SAFE, Convertible Note или долю в компании." }, LawyerRequired = true, Resolution = "lawyer_required", ServiceCode = "INVESTOR_READINESS", Cta = "Подготовить компанию к проверке инвестором" }
     };
 }
