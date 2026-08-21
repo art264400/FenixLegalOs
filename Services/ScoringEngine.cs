@@ -6,34 +6,49 @@ namespace FenixLegalOs.Services;
 
 public class ConditionsEvaluator
 {
-    public static bool IsVisible(List<ConditionalRule>? rules, Dictionary<string, object> answers)
+    public static bool IsVisible(List<ConditionalRule>? rules, Dictionary<string, object> answers, SharedFactStore? factStore = null)
     {
         if (rules == null || rules.Count == 0) return true;
-        return rules.All(r => EvaluateRule(r, answers));
+        return rules.All(r => EvaluateRule(r, answers, factStore));
     }
 
-    public static bool EvaluateRule(ConditionalRule rule, Dictionary<string, object> answers)
+    public static bool EvaluateRule(ConditionalRule rule, Dictionary<string, object> answers, SharedFactStore? factStore = null)
     {
         if (rule.All != null && rule.All.Count > 0)
-            return rule.All.All(r => EvaluateRule(r, answers));
+            return rule.All.All(r => EvaluateRule(r, answers, factStore));
 
         if (rule.Any != null && rule.Any.Count > 0)
-            return rule.Any.Any(r => EvaluateRule(r, answers));
+            return rule.Any.Any(r => EvaluateRule(r, answers, factStore));
 
         if (string.IsNullOrEmpty(rule.QuestionId)) return true;
 
+        // Check if QuestionId refers to a FactStore key
+        if (factStore != null && rule.QuestionId.Contains('.'))
+        {
+            if (factStore.Facts.TryGetValue(rule.QuestionId, out var factVal) && factVal != null)
+            {
+                return EvaluateOp(rule.Op, factVal.ToString() ?? "", rule.Value);
+            }
+        }
+
         if (!answers.TryGetValue(rule.QuestionId, out var rawVal) || rawVal == null)
-            return rule.Op == "neq";
+            return rule.Op == "neq" || rule.Op == "notIn";
 
         var valStr = rawVal.ToString() ?? "";
+        return EvaluateOp(rule.Op, valStr, rule.Value);
+    }
 
-        return rule.Op switch
+    private static bool EvaluateOp(string? op, string valStr, object? ruleValue)
+    {
+        return op switch
         {
-            "eq" => valStr.Equals(rule.Value?.ToString(), StringComparison.OrdinalIgnoreCase),
-            "neq" => !valStr.Equals(rule.Value?.ToString(), StringComparison.OrdinalIgnoreCase),
-            "in" => RuleValueContains(rule.Value, valStr),
-            "notIn" => !RuleValueContains(rule.Value, valStr),
+            "eq" => valStr.Equals(ruleValue?.ToString(), StringComparison.OrdinalIgnoreCase),
+            "neq" => !valStr.Equals(ruleValue?.ToString(), StringComparison.OrdinalIgnoreCase),
+            "in" => RuleValueContains(ruleValue, valStr),
+            "notIn" => !RuleValueContains(ruleValue, valStr),
             "answered" => !string.IsNullOrEmpty(valStr),
+            "gte" => double.TryParse(valStr, out var v1) && double.TryParse(ruleValue?.ToString(), out var v2) && v1 >= v2,
+            "lte" => double.TryParse(valStr, out var v3) && double.TryParse(ruleValue?.ToString(), out var v4) && v3 <= v4,
             _ => true
         };
     }
@@ -52,7 +67,75 @@ public class ConditionsEvaluator
         {
             return list.Any(x => x.Equals(val, StringComparison.OrdinalIgnoreCase));
         }
+        if (ruleVal is string s)
+        {
+            return s.Equals(val, StringComparison.OrdinalIgnoreCase);
+        }
         return false;
+    }
+}
+
+public class FactNormalizer
+{
+    public static SharedFactStore NormalizeFacts(Dictionary<string, object> answers)
+    {
+        var store = new SharedFactStore();
+        var f = store.Facts;
+
+        // Company Facts
+        var corC01 = GetAnswerStr(answers, "COR-C01");
+        f["company.entityStatus"] = corC01 switch
+        {
+            "one" or "several" => "incorporated",
+            "process" => "in_progress",
+            _ => "none"
+        };
+
+        // Founders Facts
+        var fndC01 = GetAnswerStr(answers, "FND-C01");
+        f["founders.count"] = fndC01 switch { "solo" => 1, "2" => 2, "3" => 3, "4plus" => 4, _ => 1 };
+        f["founders.inactiveExists"] = fndC01 == "inactive_exist" || GetAnswerStr(answers, "FND-C03") != "none";
+
+        var fnd01 = GetAnswerStr(answers, "FND-01");
+        f["founders.dispute"] = fnd01 == "active_conflict" || fnd01 == "formal_dispute";
+
+        // Team Facts
+        var teamC01 = GetAnswerStr(answers, "TEAM-C01");
+        f["team.hasNonFounderTeam"] = teamC01 != "founders_only" && !string.IsNullOrEmpty(teamC01);
+
+        // Data & AI Facts
+        var data01 = GetAnswerStr(answers, "DATA-01");
+        var data02 = GetAnswerStr(answers, "DATA-02");
+        f["data.personalDataProcessed"] = data01 == "yes" || (!string.IsNullOrEmpty(data02) && data02 != "none");
+
+        var ai01 = GetAnswerStr(answers, "AI-01");
+        f["ai.used"] = ai01 == "external" || ai01 == "own" || ai01 == "both";
+
+        var ai02 = GetAnswerStr(answers, "AI-02");
+        f["ai.sensitiveDataSent"] = ai02 == "sensitive";
+
+        // Contracts Facts
+        var contract01 = GetAnswerStr(answers, "CONTRACT-01");
+        f["contracts.b2bRelevant"] = contract01 != "none" && !string.IsNullOrEmpty(contract01);
+
+        // Investment Facts
+        var invest01 = GetAnswerStr(answers, "INVEST-01");
+        f["investment.timing"] = invest01 switch
+        {
+            "m3" or "m3_6" => "near_term",
+            "m6_12" => "mid_term",
+            "looking" or "discussing" or "terms" => "active",
+            _ => "none"
+        };
+        var invest02 = GetAnswerStr(answers, "INVEST-02");
+        f["investment.priorInvestment"] = invest02 != "none" && !string.IsNullOrEmpty(invest02);
+
+        return store;
+    }
+
+    private static string GetAnswerStr(Dictionary<string, object> answers, string key)
+    {
+        return answers.TryGetValue(key, out var val) && val != null ? val.ToString() ?? "" : "";
     }
 }
 
@@ -60,93 +143,272 @@ public class ScoringEngine
 {
     public ScoreResult ComputeResult(Dictionary<string, object> answers)
     {
+        var factStore = FactNormalizer.NormalizeFacts(answers);
+
+        // Filter visible questions according to showIf and skipIf
         var visibleQs = DataBank.Questions
             .Where(q => q.Enabled)
-            .Where(q => ConditionsEvaluator.IsVisible(q.ShowIf, answers))
+            .Where(q => ConditionsEvaluator.IsVisible(q.ShowIf, answers, factStore))
+            .Where(q => q.SkipIf == null || !ConditionsEvaluator.IsVisible(q.SkipIf, answers, factStore))
             .ToList();
 
+        // 1. Calculate Section Scores & Confidence per section
         var sections = DataBank.Sections.Select(s =>
         {
-            var qs = visibleQs.Where(q => q.SectionId == s.Id && q.Weight > 0).ToList();
-            double weightSum = 0;
-            double scoreSum = 0;
+            var sectionQs = visibleQs.Where(q => q.SectionId == s.Id).ToList();
+            bool isModuleApplicable = IsModuleApplicable(s.Id, factStore, sectionQs);
 
-            foreach (var q in qs)
+            if (!isModuleApplicable)
             {
-                if (!answers.TryGetValue(q.Id, out var ansVal) || ansVal == null) continue;
-                var sc = GetAnswerScore(q, ansVal);
-                if (sc == null) continue;
-                weightSum += q.Weight;
-                scoreSum += sc.Value * q.Weight;
+                return new SectionScore
+                {
+                    SectionId = s.Id,
+                    Title = s.Title,
+                    Score = null,
+                    Weight = s.Weight,
+                    Status = "N_A",
+                    Confidence = 100
+                };
             }
 
-            int? finalScore = weightSum > 0 ? (int)Math.Round((scoreSum / weightSum) * 100) : null;
-            return new SectionScore { SectionId = s.Id, Title = s.Title, Score = finalScore, Weight = s.Weight };
+            var diagnosticQs = sectionQs.Where(q => q.ScoreMode == "diagnostic" && q.Weight > 0).ToList();
+            double totalWeight = 0;
+            double weightedScoreSum = 0;
+            double knownWeight = 0;
+
+            foreach (var q in diagnosticQs)
+            {
+                if (!answers.TryGetValue(q.Id, out var ansVal) || ansVal == null) continue;
+                var opt = q.Options?.FirstOrDefault(o => o.Id == ansVal.ToString());
+                if (opt == null) continue;
+
+                totalWeight += q.Weight * q.WithinDimensionWeight;
+                weightedScoreSum += opt.Score * (q.Weight * q.WithinDimensionWeight);
+
+                if (opt.ConfidenceClass != "unknown")
+                {
+                    knownWeight += q.Weight * q.WithinDimensionWeight;
+                }
+            }
+
+            int? finalScore = totalWeight > 0 ? (int)Math.Round((weightedScoreSum / totalWeight) * 100) : null;
+            int confidence = totalWeight > 0 ? (int)Math.Round((knownWeight / totalWeight) * 100) : 100;
+
+            return new SectionScore
+            {
+                SectionId = s.Id,
+                Title = s.Title,
+                Score = finalScore,
+                Weight = s.Weight,
+                Status = finalScore.HasValue ? "APPLICABLE" : "N_A",
+                Confidence = confidence
+            };
         }).ToList();
 
-        var applicable = sections.Where(s => s.Score.HasValue).ToList();
-        double totalWeight = applicable.Sum(s => s.Weight);
-        int overall = totalWeight > 0
-            ? (int)Math.Round(applicable.Sum(s => s.Score!.Value * s.Weight) / totalWeight)
+        // 2. Overall Legal Score & Confidence
+        var applicableSections = sections.Where(s => s.Status == "APPLICABLE" && s.Score.HasValue).ToList();
+        double totalSectionWeight = applicableSections.Sum(s => s.Weight);
+
+        int overallScore = totalSectionWeight > 0
+            ? (int)Math.Round(applicableSections.Sum(s => s.Score!.Value * s.Weight) / totalSectionWeight)
             : 0;
 
-        var riskMap = CollectOptionRisks(visibleQs, answers);
+        int overallConfidence = applicableSections.Count > 0
+            ? (int)Math.Round(applicableSections.Average(s => s.Confidence))
+            : 85;
 
-        var risks = riskMap.Values.OrderBy(r => GetSeverityOrder(r.Severity)).ToList();
-        var level = GetLevel(overall);
+        // 3. Merged & Suppressed Findings
+        var rawFindings = CollectRawFindings(visibleQs, answers);
+        var mergedFindings = MergeAndSuppressFindings(rawFindings, factStore);
+
+        // 4. Investment Readiness Overlay
+        var investmentOverlay = CalculateInvestmentReadiness(answers, factStore, mergedFindings);
+
+        // 5. Consulting Recommendation
+        var consulting = CalculateConsultingRecommendation(mergedFindings, factStore, overallScore);
+
+        var level = GetLevel(overallScore);
 
         return new ScoreResult
         {
-            Overall = overall,
+            Overall = overallScore,
+            Confidence = overallConfidence,
+            ConfidenceText = GetConfidenceText(overallConfidence),
             Level = level,
             LevelTitle = GetLevelTitle(level),
             LevelText = GetLevelText(level),
             Sections = sections,
-            Risks = risks,
-            CriticalCount = risks.Count(r => r.Severity == "critical"),
-            HighCount = risks.Count(r => r.Severity == "high"),
-            MediumCount = risks.Count(r => r.Severity == "medium"),
-            Strengths = applicable.Where(s => s.Score >= 75).Select(s => s.Title).ToList(),
+            Risks = mergedFindings,
+            CriticalCount = mergedFindings.Count(r => r.Severity is "CRITICAL" or "BLOCKER"),
+            HighCount = mergedFindings.Count(r => r.Severity == "HIGH"),
+            MediumCount = mergedFindings.Count(r => r.Severity == "MEDIUM"),
+            Strengths = applicableSections.Where(s => s.Score >= 75).Select(s => s.Title).ToList(),
             AnsweredCount = visibleQs.Count(q => answers.ContainsKey(q.Id)),
+            InvestmentReadiness = investmentOverlay,
+            Consulting = consulting,
             Versions = new ScoreVersions(),
             ComputedAt = DateTime.UtcNow.ToString("o")
         };
     }
 
-    private double? GetAnswerScore(DiagnosticQuestion q, object answer)
+    private bool IsModuleApplicable(string sectionId, SharedFactStore facts, List<DiagnosticQuestion> sectionQs)
     {
-        if (q.Options == null || q.Options.Count == 0) return null;
-        var str = answer.ToString();
-        var opt = q.Options.FirstOrDefault(o => o.Id == str);
-        return opt?.Score;
+        var f = facts.Facts;
+        return sectionId switch
+        {
+            "team" => GetBoolFact(f, "team.hasNonFounderTeam"),
+            "data" => GetBoolFact(f, "data.personalDataProcessed") || GetBoolFact(f, "ai.used"),
+            "contracts" => GetBoolFact(f, "contracts.b2bRelevant"),
+            "investment" => (string)f["investment.timing"]! != "none" || GetBoolFact(f, "investment.priorInvestment"),
+            _ => sectionQs.Count > 0
+        };
     }
 
-    private Dictionary<string, RiskFinding> CollectOptionRisks(List<DiagnosticQuestion> visibleQs, Dictionary<string, object> answers)
+    private bool GetBoolFact(Dictionary<string, object?> f, string key)
     {
-        var found = new Dictionary<string, RiskFinding>();
+        return f.TryGetValue(key, out var val) && val is bool b && b;
+    }
+
+    private List<RiskFinding> CollectRawFindings(List<DiagnosticQuestion> visibleQs, Dictionary<string, object> answers)
+    {
+        var list = new List<RiskFinding>();
+
         foreach (var q in visibleQs)
         {
             if (!answers.TryGetValue(q.Id, out var ansVal) || ansVal == null || q.Options == null) continue;
             var strVal = ansVal.ToString();
             var opt = q.Options.FirstOrDefault(o => o.Id == strVal);
-            if (opt?.RiskCode != null && !found.ContainsKey(opt.RiskCode))
+            if (opt?.RiskCode == null) continue;
+
+            var def = DataBank.Risks.FirstOrDefault(r => r.Code == opt.RiskCode);
+            if (def != null)
             {
-                var def = DataBank.Risks.FirstOrDefault(r => r.Code == opt.RiskCode);
-                if (def != null)
+                list.Add(new RiskFinding
                 {
-                    found[def.Code] = new RiskFinding
-                    {
-                        Code = def.Code, Severity = def.Severity, SectionId = def.SectionId,
-                        Title = def.Title, Finding = def.Finding, WhyItMatters = def.WhyItMatters,
-                        Recommendation = def.Recommendation, Resolution = def.Resolution, Cta = def.Cta
-                    };
-                }
+                    Code = def.Code,
+                    RootCauseGroup = def.RootCauseGroup,
+                    Severity = def.Severity,
+                    Priority = def.Priority,
+                    SectionId = def.SectionId,
+                    Title = def.Title,
+                    Finding = def.Finding,
+                    WhyItMatters = def.WhyItMatters,
+                    Recommendation = def.Recommendation.Length > 0 ? def.Recommendation : (def.Recommendations.FirstOrDefault() ?? ""),
+                    Recommendations = def.Recommendations.Count > 0 ? def.Recommendations : new List<string> { def.Recommendation },
+                    Basis = new List<RiskFindingBasis> { new() { QuestionId = q.Id, AnswerId = strVal ?? "" } },
+                    LawyerRequired = def.LawyerRequired,
+                    Resolution = def.Resolution,
+                    ServiceCode = def.ServiceCode,
+                    Cta = def.Cta
+                });
             }
         }
-        return found;
+        return list;
     }
 
-    private int GetSeverityOrder(string sev) => sev switch { "critical" => 0, "high" => 1, _ => 2 };
+    private List<RiskFinding> MergeAndSuppressFindings(List<RiskFinding> rawFindings, SharedFactStore facts)
+    {
+        var grouped = rawFindings.GroupBy(f => f.RootCauseGroup).ToList();
+        var merged = new List<RiskFinding>();
+
+        foreach (var group in grouped)
+        {
+            var highestSeverity = group.OrderBy(f => GetSeverityOrder(f.Severity)).First();
+
+            // Collect all unique recommendations and bases
+            var allRecs = group.SelectMany(f => f.Recommendations).Distinct().ToList();
+            var allBases = group.SelectMany(f => f.Basis).DistinctBy(b => b.QuestionId).ToList();
+
+            highestSeverity.Recommendations = allRecs;
+            highestSeverity.Basis = allBases;
+
+            merged.Add(highestSeverity);
+        }
+
+        return merged.OrderBy(r => GetSeverityOrder(r.Severity)).ToList();
+    }
+
+    private InvestmentReadinessOverlay CalculateInvestmentReadiness(Dictionary<string, object> answers, SharedFactStore facts, List<RiskFinding> findings)
+    {
+        bool applicable = (string)facts.Facts["investment.timing"]! != "none" || (bool)facts.Facts["investment.priorInvestment"]!;
+        if (!applicable) return new InvestmentReadinessOverlay { Applicable = false, ReadinessScore = 100 };
+
+        var blockers = findings
+            .Where(f => f.Severity is "CRITICAL" or "BLOCKER")
+            .Select(f => f.Title)
+            .ToList();
+
+        int readiness = 85;
+        if (blockers.Count >= 2) readiness = 35;
+        else if (blockers.Count == 1) readiness = 55;
+
+        return new InvestmentReadinessOverlay
+        {
+            Applicable = true,
+            ReadinessScore = readiness,
+            Blockers = blockers
+        };
+    }
+
+    private ConsultingRecommendation CalculateConsultingRecommendation(List<RiskFinding> findings, SharedFactStore facts, int overallScore)
+    {
+        int opportunityScore = 30;
+        if (findings.Any(f => f.Severity == "BLOCKER")) opportunityScore += 25;
+        if (findings.Any(f => f.Severity == "CRITICAL")) opportunityScore += 20;
+
+        string primary = "FULL_LEGAL_ARCHITECTURE";
+        string primaryCta = "Провести полный юридический аудит компании";
+        string? secondary = null;
+        string? secondaryCta = null;
+
+        var topFinding = findings.FirstOrDefault(f => !string.IsNullOrEmpty(f.ServiceCode));
+        if (topFinding != null && !string.IsNullOrEmpty(topFinding.ServiceCode))
+        {
+            primary = topFinding.ServiceCode;
+            primaryCta = topFinding.Cta ?? GetServiceCta(topFinding.ServiceCode);
+            secondary = "FULL_LEGAL_ARCHITECTURE";
+            secondaryCta = "Провести полный юридический аудит компании";
+        }
+
+        return new ConsultingRecommendation
+        {
+            PrimaryServiceCode = primary,
+            PrimaryCta = primaryCta,
+            SecondaryServiceCode = secondary,
+            SecondaryCta = secondaryCta,
+            ConsultingOpportunityScore = Math.Min(100, opportunityScore)
+        };
+    }
+
+    private string GetServiceCta(string code) => code switch
+    {
+        "FOUNDERS_REVIEW" => "Разобрать структуру между основателями",
+        "CORPORATE_CLEANUP" => "Привести корпоративную структуру в порядок",
+        "IP_RIGHTS_REVIEW" => "Проверить права на продукт",
+        "TEAM_LEGAL_REVIEW" => "Проверить юридическую конструкцию команды",
+        "PRODUCT_LEGAL_REVIEW" => "Проверить юридическую модель продукта",
+        "DATA_AI_REVIEW" => "Разобрать модель работы с данными и ИИ",
+        "CONTRACTS_REVIEW" => "Проверить ключевые договоры",
+        "INVESTOR_READINESS" => "Подготовить компанию к проверке инвестором",
+        "DEAL_SUPPORT" => "Проверить и сопроводить инвестиционную сделку",
+        _ => "Провести полный юридический аудит компании"
+    };
+
+    private int GetSeverityOrder(string sev) => sev switch
+    {
+        "BLOCKER" => 0,
+        "CRITICAL" or "critical" => 1,
+        "HIGH" or "high" => 2,
+        "MEDIUM" or "medium" => 3,
+        _ => 4
+    };
+
+    private string GetConfidenceText(int confidence) => confidence switch
+    {
+        >= 80 => "Высокая определенность ответов.",
+        >= 60 => "Оценка достаточно надежна, но часть вопросов требует подтверждения.",
+        _ => "Оценка ограничена недостатком определенности ответов."
+    };
 
     private string GetLevel(int score) => score switch
     {

@@ -359,25 +359,22 @@
   }
 
   function sectionCard(s) {
-    const scoreVal = s.score === null ? '—' : s.score + '%';
-    const statusText = s.score === null ? 'Не применимо'
-      : s.score >= 75 ? 'Устойчиво'
-      : s.score >= 50 ? 'В зоне внимания'
-      : 'Критический риск';
-    const statusColor = s.score === null ? 'var(--ink-faint)'
-      : s.score >= 75 ? 'var(--positive)'
-      : s.score >= 50 ? 'var(--high)'
-      : 'var(--critical)';
-
-    return '<div class="sec-card">' +
-      '<div class="mini-gauge">' + gaugeSvg(s.score, 76) +
-        '<span class="gauge-value">' + scoreVal + '</span>' +
-      '</div>' +
-      '<div class="sec-info">' +
-        '<div class="sec-name">' + esc(s.title) + '</div>' +
-        '<div class="sec-status" style="color:' + statusColor + '">• ' + statusText + '</div>' +
-      '</div>' +
-      '</div>';
+    const isNa = s.status === 'N_A' || s.score === null || s.score === undefined;
+    const scoreVal = isNa ? 0 : s.score;
+    const scoreText = isNa ? '—' : (scoreVal + '%');
+    const color = isNa ? 'var(--ink-faint)' : scoreVal >= 75 ? 'var(--positive)' : scoreVal >= 50 ? 'var(--warning)' : 'var(--critical)';
+    const statusText = isNa ? '• Не применимо' : scoreVal >= 75 ? '• Устойчиво' : scoreVal >= 50 ? '• В зоне внимания' : '• Критический риск';
+    return (
+      '<div class="sec-card">' +
+        '<div class="mini-gauge">' + gaugeSvg(scoreVal, 76, color) +
+          '<span class="gauge-value" style="color:' + color + ';font-size:19px">' + scoreText + '</span>' +
+        '</div>' +
+        '<div class="sec-info">' +
+          '<h3>' + esc(s.title) + '</h3>' +
+          '<span class="status-badge" style="color:' + color + ';font-weight:600;font-size:12px">' + statusText + '</span>' +
+        '</div>' +
+      '</div>'
+    );
   }
 
   function riskCard(r, index, withCta) {
@@ -399,15 +396,17 @@
   }
 
   function heroBlock(r) {
-    const summary = 'На основании ' + r.answeredCount + ' ответов' +
-      (r.risks.length
-        ? ' мы выявили вопросы, требующие внимания:'
-        : ' существенных пробелов не выявлено — отдельные вопросы стоит проверить при следующем этапе роста.');
+    const summary = r.overall >= 80 ? 'Компания имеет относительно сильную юридическую основу.'
+      : r.overall >= 60 ? 'Основа сформирована частично. Некоторые вопросы требуют внимания.'
+      : r.overall >= 40 ? 'Диагностика выявила несколько значимых пробелов в юридической конструкции.'
+      : 'Юридическая основа бизнеса пока сформирована фрагментарно.';
     const chips = [];
     if (r.criticalCount) chips.push('<span class="chip-critical">' + r.criticalCount + ' критических</span>');
-    if (r.highCount) chips.push('<span class="chip-high">' + r.highCount + ' существенных</span>');
+    if (r.highCount) chips.push('<span class="chip-high">' + r.highCount + ' высоких</span>');
     if (r.mediumCount) chips.push('<span class="chip-medium">' + r.mediumCount + ' умеренных</span>');
-    if (r.strengths.length) chips.push('<span class="chip-positive">' + r.strengths.length + ' сильных областей</span>');
+    if (r.strengths && r.strengths.length) chips.push('<span class="chip-positive">' + r.strengths.length + ' сильных областей</span>');
+    const confVal = r.confidence || 85;
+    const confText = r.confidenceText || 'Высокая определенность ответов.';
     return (
       '<section class="score-hero">' +
         '<div class="score-label">Ваш Fenix Legal Score</div>' +
@@ -653,40 +652,15 @@
     track('full_report_viewed');
 
     const bySeverity = { critical: [], high: [], medium: [] };
-    r.risks.forEach(function (x) { (bySeverity[x.severity] || bySeverity.medium).push(x); });
+    r.risks.forEach(function (x) {
+      const s = (x.severity || '').toLowerCase();
+      if (s === 'critical' || s === 'blocker') bySeverity.critical.push(x);
+      else if (s === 'high') bySeverity.high.push(x);
+      else bySeverity.medium.push(x);
+    });
 
-    function block(title, items, hint) {
-      if (!items.length) return '';
-      return '<section class="risks-block"><h2>' + title + '</h2>' +
-        (hint ? '<p class="hint">' + hint + '</p>' : '') +
-        items.map(function (risk, i) { return riskCard(risk, i, true); }).join('') + '</section>';
-    }
-
-    const strengths = r.strengths.length
-      ? '<section class="risks-block"><h2>Сильные стороны</h2>' +
-        '<p class="hint">Области, где юридическая конструкция выглядит устойчиво по результатам ответов.</p>' +
-        '<div class="strong-list">' + r.strengths.map(function (s) { return '<span>' + esc(s) + '</span>'; }).join('') + '</div></section>'
-      : '';
-
-    const statusBadgeHtml = isPaid
-      ? '<div style="margin:20px 0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">' +
-          '<div class="paid-badge">✓ Оплаченный отчёт разблокирован</div>' +
-          '<button class="btn btn-secondary" id="download-pdf-btn" style="padding:10px 18px;font-size:14px">📄 Скачать PDF-отчёт</button>' +
-        '</div>'
-      : '';
-
-    const paywallBannerHtml = !isPaid
-      ? '<section class="paywall-banner">' +
-          '<h3>Разблокируйте полный отчёт и PDF ($20)</h3>' +
-          '<p>Автоматизированный аудит вашего стартапа всего за $20 (~9 900 ₸) — в 7.5 раз дешевле личной консультации ($150). Вы получите полный разбор всех 40+ рисков, пошаговый план и скачивание брендированного PDF-отчёта.</p>' +
-          '<div class="paywall-benefits">' +
-            '<div class="paywall-benefit-item"><span class="icon">✓</span> Детальная карта 40+ рисков</div>' +
-            '<div class="paywall-benefit-item"><span class="icon">✓</span> Выгрузка в PDF для инвесторов</div>' +
-            '<div class="paywall-benefit-item"><span class="icon">✓</span> Пошаговый план исправления</div>' +
-          '</div>' +
-          '<button class="btn" id="unlock-paywall-btn" style="padding:16px 36px;font-size:16px">Разблокировать отчёт за $20 (~9 900 ₸)</button>' +
-        '</section>'
-      : '';
+    const primaryCtaText = (r.consulting && r.consulting.primaryCta) ? r.consulting.primaryCta : 'Разобрать мои результаты с Fenix Law';
+    const primaryServiceCode = (r.consulting && r.consulting.primaryServiceCode) ? r.consulting.primaryServiceCode : '';
 
     const mainContent = statusBadgeHtml +
       heroBlock(r) +
@@ -696,10 +670,10 @@
       strengths +
       buildRoadmap(r) +
       '<section class="gate" style="margin-top:56px">' +
-        '<h2>Разберём конкретно вашу ситуацию</h2>' +
+        '<h2>Персональный юридический разбор Fenix Law</h2>' +
         '<p>Мы уже знаем основные результаты вашей диагностики. Не нужно заново объяснять историю компании: вместе с запросом будут переданы ваши ответы, выявленные риски и Legal Score.</p>' +
         '<div class="cta-row" style="margin-top:22px;display:flex;justify-content:center;align-items:center">' +
-          '<button class="btn risk-cta" data-code="" data-cta="Разобрать мои результаты">Разобрать мои результаты с Fenix Law</button>' +
+          '<button class="btn risk-cta" data-code="' + esc(primaryServiceCode) + '" data-cta="' + esc(primaryCtaText) + '">' + esc(primaryCtaText) + '</button>' +
         '</div>' +
       '</section>';
 

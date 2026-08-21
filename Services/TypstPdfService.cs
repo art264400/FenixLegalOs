@@ -95,7 +95,7 @@ public class TypstPdfService
         columns: (1fr, auto),
         align(left)[
           #text(size: 8.5pt, fill: rgb(""#59C2FF""), weight: ""bold"")[FENIX LAW]
-          #text(size: 8.5pt, fill: rgb(""#6C7A8E""))[ · Юридический отчет диагностики]
+          #text(size: 8.5pt, fill: rgb(""#6C7A8E""))[ · Юридический отчет диагностики v1.1]
         ],
         align(right)[
           #text(size: 8.5pt, fill: rgb(""#6C7A8E""))[Fenix Legal Score OS]
@@ -134,7 +134,7 @@ public class TypstPdfService
   [
     #text(size: 22pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[Fenix Law] \
     #v(-2pt)
-    #text(size: 9.5pt, weight: ""semibold"", fill: rgb(""#59C2FF""))[LEGAL TECH SMART SYSTEM · ЮРИДИЧЕСКАЯ ДИАГНОСТИКА]
+    #text(size: 9.5pt, weight: ""semibold"", fill: rgb(""#59C2FF""))[LEGAL TECH SMART SYSTEM · ЮРИДИЧЕСКАЯ ДИАГНОСТИКА v1.1]
   ],
   [
     #align(right)[
@@ -150,7 +150,7 @@ public class TypstPdfService
 #v(12pt)
 ");
 
-        // Hero Score Box
+        // Hero Score Box with Confidence Badge
         sb.AppendLine($@"
 #rect(
   width: 100%,
@@ -166,7 +166,9 @@ public class TypstPdfService
     [
       #text(size: 9pt, weight: ""bold"", fill: rgb(""#8E9BAE""))[LEGAL SCORE] \
       #v(2pt)
-      #text(size: 38pt, weight: ""bold"", fill: rgb(""#FF5964""))[{result.Overall}#text(size: 20pt, fill: rgb(""#8E9BAE""))[/100]]
+      #text(size: 38pt, weight: ""bold"", fill: rgb(""#FF5964""))[{result.Overall}#text(size: 20pt, fill: rgb(""#8E9BAE""))[/100]] \
+      #v(4pt)
+      #rect(fill: rgb(""#1C2B3A""), inset: (x: 6pt, y: 2pt), radius: 3pt)[#text(size: 7.5pt, weight: ""bold"", fill: rgb(""#59C2FF""))[Уверенность: {result.Confidence}%]]
     ],
     [
       #text(size: 16pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[{Sanitize(result.LevelTitle)}] \
@@ -200,15 +202,16 @@ public class TypstPdfService
             foreach (var s in result.Sections)
             {
                 int score = s.Score ?? 0;
-                string scoreColor = s.Score == null ? "#8E9BAE" : score >= 75 ? "#2ED573" : score >= 50 ? "#FF9F43" : "#FF5964";
-                string statusText = s.Score == null ? "Не применимо" : score >= 75 ? "Устойчиво" : score >= 50 ? "В зоне внимания" : "Критический риск";
-                string scoreLabel = s.Score == null ? "—" : $"{score}%";
+                bool isNa = s.Status == "N_A" || s.Score == null;
+                string scoreColor = isNa ? "#8E9BAE" : score >= 75 ? "#2ED573" : score >= 50 ? "#FF9F43" : "#FF5964";
+                string statusText = isNa ? "Не применимо" : score >= 75 ? "Устойчиво" : score >= 50 ? "В зоне внимания" : "Критический риск";
+                string scoreLabel = isNa ? "—" : $"{score}%";
 
                 sb.AppendLine($@"
   rect(width: 100%, fill: rgb(""#141B26""), stroke: 0.5pt + rgb(""#243042""), radius: 6pt, inset: 10pt)[
     #grid(columns: (1fr, auto), [ #text(weight: ""bold"")[{sectionIdx++}. {Sanitize(s.Title)}] ], [#text(fill: rgb(""{scoreColor}""), weight: ""bold"")[{scoreLabel}]])
     #v(4pt)
-    #rect(width: 100%, height: 4pt, fill: rgb(""#243042""), radius: 2pt)[#rect(width: {Math.Max(4, score)}%, height: 4pt, fill: rgb(""{scoreColor}""), radius: 2pt)]
+    #rect(width: 100%, height: 4pt, fill: rgb(""#243042""), radius: 2pt)[#rect(width: {Math.Max(4, isNa ? 0 : score)}%, height: 4pt, fill: rgb(""{scoreColor}""), radius: 2pt)]
     #v(2pt)
     #text(size: 8pt, fill: rgb(""#8E9BAE""))[Статус: {statusText}]
   ],");
@@ -258,8 +261,8 @@ public class TypstPdfService
             int idx = 1;
             foreach (var r in result.Risks)
             {
-                var borderColor = r.Severity == "critical" ? "#FF5964" : r.Severity == "high" ? "#FF9F43" : "#F5A623";
-                var tagBg = r.Severity == "critical" ? "#3D1A24" : r.Severity == "high" ? "#3D2B1A" : "#38321A";
+                var borderColor = r.Severity is "CRITICAL" or "critical" or "BLOCKER" ? "#FF5964" : r.Severity is "HIGH" or "high" ? "#FF9F43" : "#F5A623";
+                var tagBg = r.Severity is "CRITICAL" or "critical" or "BLOCKER" ? "#3D1A24" : r.Severity is "HIGH" or "high" ? "#3D2B1A" : "#38321A";
                 var tagText = r.Resolution switch
                 {
                     "lawyer_required" => "ТРЕБУЕТСЯ ЮРИСТ",
@@ -282,7 +285,7 @@ public class TypstPdfService
   )
   #v(6pt)
   #text(size: 9pt, fill: rgb(""#A0AEC0""))[*Что обнаружено:* {Sanitize(r.Finding)}] \
-  #text(size: 9pt, fill: rgb(""#A0AEC0""))[*Почему это критично:* {Sanitize(r.WhyItMatters)}] \
+  #text(size: 9pt, fill: rgb(""#A0AEC0""))[*Почему это важно:* {Sanitize(r.WhyItMatters)}] \
   #v(4pt)
   #text(size: 9.5pt, weight: ""medium"", fill: rgb(""#59C2FF""))[*Рекомендация по исправлению:* {Sanitize(r.Recommendation)}]
 ]
@@ -291,7 +294,7 @@ public class TypstPdfService
             }
         }
 
-        // Dynamic Roadmap Section based on actual risks
+        // Dynamic Roadmap Section based on actual risks priority
         sb.AppendLine(@"
 #v(16pt)
 #text(size: 14pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[Пошаговая дорожная карта устранения рисков (Roadmap)]
@@ -305,56 +308,56 @@ public class TypstPdfService
 )[
 ");
 
-        var criticalRisks = result.Risks?.Where(x => x.Severity == "critical").ToList() ?? new();
-        var highRisks = result.Risks?.Where(x => x.Severity == "high").ToList() ?? new();
-        var mediumRisks = result.Risks?.Where(x => x.Severity == "medium").ToList() ?? new();
+        var nowRisks = result.Risks?.Where(x => x.Priority == "NOW" || x.Severity is "CRITICAL" or "BLOCKER").ToList() ?? new();
+        var soonRisks = result.Risks?.Where(x => x.Priority == "30_DAYS" || (x.Severity == "HIGH" && x.Priority != "NOW")).ToList() ?? new();
+        var roundRisks = result.Risks?.Where(x => x.Priority == "BEFORE_ROUND" || (x.Severity == "MEDIUM" && x.Priority != "NOW" && x.Priority != "30_DAYS")).ToList() ?? new();
 
-        sb.AppendLine("  #text(weight: \"bold\", fill: rgb(\"#FF5964\"))[1. Первоочередные задачи (Сделать прямо сейчас)] \\");
+        sb.AppendLine("  #text(weight: \"bold\", fill: rgb(\"#FF5964\"))[1. Сделать прямо сейчас (Блокеры)] \\");
         sb.AppendLine("  #v(4pt)");
-        if (criticalRisks.Count > 0)
+        if (nowRisks.Count > 0)
         {
-            foreach (var cr in criticalRisks)
+            foreach (var cr in nowRisks)
             {
                 sb.AppendLine($"  - {Sanitize(cr.Recommendation)} \\");
             }
         }
         else
         {
-            sb.AppendLine("  - Закрепить уставные документы и правила фаундеров. \\");
+            sb.AppendLine("  - Оформить базовые уставные документы и распределение долей. \\");
         }
 
         sb.AppendLine("  #v(10pt)");
-        sb.AppendLine("  #text(weight: \"bold\", fill: rgb(\"#FF9F43\"))[2. В течение 30 дней (Закрепление основы)] \\");
+        sb.AppendLine("  #text(weight: \"bold\", fill: rgb(\"#FF9F43\"))[2. В течение 30 дней (Основа)] \\");
         sb.AppendLine("  #v(4pt)");
-        if (highRisks.Count > 0)
+        if (soonRisks.Count > 0)
         {
-            foreach (var hr in highRisks)
+            foreach (var hr in soonRisks)
             {
                 sb.AppendLine($"  - {Sanitize(hr.Recommendation)} \\");
             }
         }
         else
         {
-            sb.AppendLine("  - Проверить коммерческие договоры и оферты пользователей. \\");
+            sb.AppendLine("  - Разработать и разместить персонализированные Terms of Use и Privacy Policy. \\");
         }
 
         sb.AppendLine("  #v(10pt)");
         sb.AppendLine("  #text(weight: \"bold\", fill: rgb(\"#59C2FF\"))[3. Перед инвестиционным раундом (Data Room)] \\");
         sb.AppendLine("  #v(4pt)");
-        if (mediumRisks.Count > 0)
+        if (roundRisks.Count > 0)
         {
-            foreach (var mr in mediumRisks)
+            foreach (var mr in roundRisks)
             {
                 sb.AppendLine($"  - {Sanitize(mr.Recommendation)} \\");
             }
         }
-        sb.AppendLine("  - Сформировать юридический Data Room (Cap Table, ИП/ТОО/МФЦА структуры, лицензии). \\");
-        sb.AppendLine("  - Провести финальный Due Diligence с венчурным юристом. \\");
+        sb.AppendLine("  - Сформировать готовый Data Room для инвесторов. \\");
 
         sb.AppendLine("]\n");
 
-        // Expert Conclusion & Lawyer CTA
-        sb.AppendLine(@"
+        // Consulting CTA Box
+        var primaryCtaText = result.Consulting?.PrimaryCta ?? "Разбрать результаты с Fenix Law";
+        sb.AppendLine($@"
 #v(16pt)
 #rect(
   width: 100%,
@@ -367,16 +370,16 @@ public class TypstPdfService
     columns: (1fr, auto),
     gutter: 14pt,
     [
-      #text(size: 13pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[Персональный разбор от Fenix Law] \
+      #text(size: 13pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[Персональное юридическое сопровождение] \
       #v(4pt)
       #text(size: 9.5pt, fill: rgb(""#A0AEC0""))[
-        Венчурный юрист *Нариман Исанов* проведёт 60-минутную индивидуальную сессию по результатам вашей диагностики, поможет составить договоры фаундеров, уступить права на IT-продукт и подготовить стартап к инвестициям.
+        Венчурный юрист *Нариман Исанов* и команда Fenix Law проведут сессию по вашей диагностике, помогут устранить критические уязвимости и подготовить бизнес к сделкам.
       ]
     ],
     [
       #align(right + horizon)[
         #rect(fill: rgb(""#59C2FF""), radius: 6pt, inset: (x: 14pt, y: 8pt))[
-          #text(weight: ""bold"", fill: rgb(""#0B0F16""), size: 9.5pt)[Записаться на разбор]
+          #text(weight: ""bold"", fill: rgb(""#0B0F16""), size: 9.5pt)[{Sanitize(primaryCtaText)}]
         ]
       ]
     ]
