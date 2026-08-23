@@ -41,7 +41,14 @@ public class SessionRepository
     {
         using var conn = GetConn();
         var now = DateTime.UtcNow.ToString("o");
-        int rows = conn.Execute("UPDATE sessions SET answers = @answersJson, last_section_id = @lastSectionId, updated_at = @now WHERE id = @id", new { answersJson, lastSectionId, now, id });
+        int rows = conn.Execute(@"
+            INSERT INTO sessions (id, created_at, updated_at, answers, last_section_id)
+            VALUES (@id, @now, @now, @answersJson, @lastSectionId)
+            ON CONFLICT(id) DO UPDATE SET
+                answers = excluded.answers,
+                last_section_id = excluded.last_section_id,
+                updated_at = excluded.updated_at;
+        ", new { answersJson, lastSectionId, now, id });
         return rows > 0;
     }
 
@@ -51,9 +58,16 @@ public class SessionRepository
         var now = DateTime.UtcNow.ToString("o");
         var resultJson = JsonSerializer.Serialize(result);
         conn.Execute(@"
-            UPDATE sessions SET answers = @answersJson, result = @resultJson, completed_at = @now, updated_at = @now,
-                qb_version = @qb, engine_version = @eng, risk_version = @risk
-            WHERE id = @id
+            INSERT INTO sessions (id, created_at, updated_at, answers, result, completed_at, qb_version, engine_version, risk_version)
+            VALUES (@id, @now, @now, @answersJson, @resultJson, @now, @qb, @eng, @risk)
+            ON CONFLICT(id) DO UPDATE SET
+                answers = excluded.answers,
+                result = excluded.result,
+                completed_at = excluded.completed_at,
+                updated_at = excluded.updated_at,
+                qb_version = excluded.qb_version,
+                engine_version = excluded.engine_version,
+                risk_version = excluded.risk_version;
         ", new
         {
             answersJson, resultJson, now, id,
