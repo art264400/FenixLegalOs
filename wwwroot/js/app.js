@@ -340,6 +340,9 @@
           });
           state.answers[q.id] = map;
           saveState();
+        } else if (isMultiple && (!Array.isArray(state.answers[q.id]) || !state.answers[q.id].length)) {
+          state.answers[q.id] = [];
+          saveState();
         }
         advance();
       });
@@ -380,14 +383,6 @@
           setTimeout(advance, 220);
         }
       });
-    });
-
-    const nextBtn = document.getElementById('next-btn');
-    if (nextBtn) nextBtn.addEventListener('click', function () {
-      if (!Array.isArray(state.answers[q.id]) || !state.answers[q.id].length) {
-        state.answers[q.id] = [];
-      }
-      advance();
     });
   }
 
