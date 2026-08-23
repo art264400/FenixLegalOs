@@ -279,6 +279,63 @@ code { color: var(--accent); }
 .q-nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 32px; }
 .q-count { font-size: 13.5px; color: var(--ink-faint); font-weight: 500; }
 
+/* Equity Dynamic Inputs */
+.equity-input-group {
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  margin-bottom: 20px;
+}
+.equity-input-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.equity-input-row:last-child {
+  margin-bottom: 0;
+}
+.equity-input-row label {
+  font-weight: 500;
+  color: var(--ink);
+  font-size: 15px;
+}
+.equity-percent-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+.equity-percent-field {
+  width: 90px;
+  padding: 8px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 600;
+  text-align: right;
+  transition: border-color 0.2s ease;
+}
+.equity-percent-field:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+.equity-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
 /* Intro screen list */
 .intro-list { margin: 24px 0 32px; display: flex; flex-direction: column; gap: 10px; }
 .intro-list .row {

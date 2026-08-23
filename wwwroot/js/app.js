@@ -219,26 +219,65 @@
 
     const current = state.answers[q.id];
     const isMultiple = q.type === 'multiple';
+    const isEquityInputs = q.type === 'equity_inputs';
 
-    const optionsHtml = q.options.map(function (o) {
-      const selected = isMultiple
-        ? (Array.isArray(current) && current.indexOf(o.id) !== -1)
-        : current === o.id;
-      return '<button class="q-option' + (selected ? ' selected' : '') + '" data-opt="' + esc(o.id) + '">' + esc(o.label) + '</button>';
-    }).join('');
+    let contentHtml = '';
+
+    if (isEquityInputs) {
+      const fCountAns = state.answers['FND-C01'] || '2';
+      let count = 2;
+      if (fCountAns === '3') count = 3;
+      else if (fCountAns === '4plus') count = 4;
+
+      let eqMap = (typeof current === 'object' && current !== null) ? current : {};
+      let rowsHtml = '';
+      for (let i = 1; i <= count; i++) {
+        const key = 'founder_' + i;
+        const val = eqMap[key] !== undefined ? eqMap[key] : (current === 'equal_50_50' || !current ? Math.floor(100 / count) : '');
+        rowsHtml += '<div class="equity-input-row">' +
+          '<label>Основатель ' + i + '</label>' +
+          '<div class="equity-percent-wrap">' +
+            '<input type="number" class="equity-percent-field" data-founder="' + key + '" min="0" max="100" value="' + esc(val) + '" placeholder="0" />' +
+            '<span>%</span>' +
+          '</div>' +
+        '</div>';
+      }
+
+      const optionsHtml = q.options.map(function (o) {
+        const selected = current === o.id;
+        return '<button class="q-option' + (selected ? ' selected' : '') + '" data-opt="' + esc(o.id) + '">' + esc(o.label) + '</button>';
+      }).join('');
+
+      contentHtml = '<div class="equity-input-group">' +
+        rowsHtml +
+        '<div class="equity-status-bar">' +
+          '<span id="equity-sum-text">Сумма: 100%</span>' +
+          '<button type="button" class="btn-ghost" id="equity-equal-btn" style="font-size:12px; padding:4px 8px;">Разделить поровну</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="q-options" style="margin-top:16px;">' + optionsHtml + '</div>';
+    } else {
+      const optionsHtml = q.options.map(function (o) {
+        const selected = isMultiple
+          ? (Array.isArray(current) && current.indexOf(o.id) !== -1)
+          : current === o.id;
+        return '<button class="q-option' + (selected ? ' selected' : '') + '" data-opt="' + esc(o.id) + '">' + esc(o.label) + '</button>';
+      }).join('');
+      contentHtml = '<div class="q-options">' + optionsHtml + '</div>';
+    }
 
     render(
       '<section class="q-screen">' +
         '<div class="q-meta">Раздел ' + section.order + ' из ' + bank.sections.length + ' — ' + esc(section.title) + '</div>' +
         '<h1 class="q-title">' + esc(q.question) + '</h1>' +
-        '<div class="q-options">' + optionsHtml + '</div>' +
+        contentHtml +
         (q.explanation
           ? '<div class="q-why"><button id="why-btn" aria-expanded="false">Почему мы это спрашиваем?</button>' +
             '<div class="why-text" id="why-text" hidden>' + esc(q.explanation) + '</div></div>'
           : '') +
         '<div class="q-nav">' +
           (state.idx > 0 ? '<button class="btn-ghost" id="back-btn">← Назад</button>' : '') +
-          (isMultiple ? '<button class="btn" id="next-btn">Продолжить</button>' : '') +
+          (isMultiple || isEquityInputs ? '<button class="btn" id="next-btn">Продолжить</button>' : '') +
           '<span class="q-count">' + (state.idx + 1) + ' / ' + visible.length + '</span>' +
         '</div>' +
       '</section>'
@@ -255,6 +294,56 @@
 
     const backBtn = document.getElementById('back-btn');
     if (backBtn) backBtn.addEventListener('click', function () { state.idx -= 1; saveState(); screenQuestion(); });
+
+    if (isEquityInputs) {
+      function updateSum() {
+        let sum = 0;
+        const map = {};
+        app.querySelectorAll('.equity-percent-field').forEach(function (inp) {
+          const v = parseFloat(inp.value) || 0;
+          sum += v;
+          map[inp.getAttribute('data-founder')] = v;
+        });
+        const sumEl = document.getElementById('equity-sum-text');
+        if (sumEl) {
+          sumEl.textContent = 'Сумма: ' + sum + '%' + (sum === 100 ? ' (норма)' : ' (должна быть 100%)');
+          sumEl.style.color = sum === 100 ? '#4ade80' : '#f87171';
+        }
+        state.answers[q.id] = map;
+        saveState();
+      }
+
+      app.querySelectorAll('.equity-percent-field').forEach(function (inp) {
+        inp.addEventListener('input', updateSum);
+      });
+
+      const equalBtn = document.getElementById('equity-equal-btn');
+      if (equalBtn) {
+        equalBtn.addEventListener('click', function () {
+          const fields = app.querySelectorAll('.equity-percent-field');
+          const eqVal = Math.floor(100 / fields.length);
+          fields.forEach(function (inp, idx) {
+            inp.value = idx === fields.length - 1 ? (100 - eqVal * (fields.length - 1)) : eqVal;
+          });
+          updateSum();
+        });
+      }
+    }
+
+    const nextBtn = document.getElementById('next-btn');
+    if (nextBtn) {
+      nextBtn.addEventListener('click', function () {
+        if (isEquityInputs && (!state.answers[q.id] || typeof state.answers[q.id] !== 'object')) {
+          const map = {};
+          app.querySelectorAll('.equity-percent-field').forEach(function (inp) {
+            map[inp.getAttribute('data-founder')] = parseFloat(inp.value) || 0;
+          });
+          state.answers[q.id] = map;
+          saveState();
+        }
+        advance();
+      });
+    }
 
     function advance() {
       const prevSection = q.sectionId;

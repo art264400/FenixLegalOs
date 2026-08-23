@@ -35,14 +35,11 @@ public static class DataBank
 
         // 2. FND-C02 (Контекст: распределение долей)
         new() {
-            Id = "FND-C02", SectionId = "founders", Order = 2, Type = "single", ScoreMode = "context", Weight = 0,
+            Id = "FND-C02", SectionId = "founders", Order = 2, Type = "equity_inputs", ScoreMode = "context", Weight = 0,
             ShowIf = new() { new() { QuestionId = "FND-C01", Op = "neq", Value = "solo" } },
             Question = "Если доли уже согласованы, как они распределены между сооснователями?",
-            Explanation = "Конфигурация долей влияет на риск тупика (Deadlock при 50/50) и корпоративный контроль.",
+            Explanation = "Укажите процентную долю каждого основателя или выберите статус согласования.",
             Options = new() {
-                new("equal_50_50", "Поровну 50 / 50 (или строго равные доли между всеми)", 1.0),
-                new("majority_one", "Есть один выраженный мажоритарий (> 50%) и миноритарии", 1.0),
-                new("unequal_no_majority", "Несколько разных долей, но ни у кого нет контрольного пакета (> 50%)", 1.0),
                 new("not_agreed_yet", "Доли пока окончательно не распределены / в процессе обсуждения", 0.5),
                 new("unknown", "Не уверен(а)", 0.5)
             }
