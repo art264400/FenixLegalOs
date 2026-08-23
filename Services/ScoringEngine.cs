@@ -97,6 +97,10 @@ public class FactNormalizer
         f["founders.count"] = fndC01 switch { "solo" => 1, "2" => 2, "3" => 3, "4plus" => 4, _ => 1 };
         f["founders.inactiveExists"] = fndC01 == "inactive_exist" || GetAnswerStr(answers, "FND-C03") != "none";
 
+        var fndC02 = GetAnswerStr(answers, "FND-C02");
+        f["founders.equityDistribution"] = fndC02;
+        f["founders.isEqual5050"] = fndC02 == "equal_50_50";
+
         var fnd01 = GetAnswerStr(answers, "FND-01");
         f["founders.dispute"] = fnd01 == "active_conflict" || fnd01 == "formal_dispute";
 
