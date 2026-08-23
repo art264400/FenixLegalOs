@@ -230,15 +230,19 @@
       else if (fCountAns === '4plus') count = 4;
 
       let eqMap = (typeof current === 'object' && current !== null) ? current : {};
+      const mapKeys = Object.keys(eqMap).filter(function(k) { return k.startsWith('founder_'); });
+      if (mapKeys.length > count) count = mapKeys.length;
+
       let rowsHtml = '';
       for (let i = 1; i <= count; i++) {
         const key = 'founder_' + i;
         const val = eqMap[key] !== undefined ? eqMap[key] : (current === 'equal_50_50' || !current ? Math.floor(100 / count) : '');
-        rowsHtml += '<div class="equity-input-row">' +
+        rowsHtml += '<div class="equity-input-row" data-index="' + i + '">' +
           '<label>Основатель ' + i + '</label>' +
           '<div class="equity-percent-wrap">' +
             '<input type="number" class="equity-percent-field" data-founder="' + key + '" min="0" max="100" value="' + esc(val) + '" placeholder="0" />' +
             '<span>%</span>' +
+            (count > 2 ? '<button type="button" class="equity-del-btn" data-del="' + i + '" title="Удалить" style="background:none; border:none; color:#f87171; font-size:16px; cursor:pointer; padding:0 4px; line-height:1;">✕</button>' : '') +
           '</div>' +
         '</div>';
       }
@@ -249,7 +253,8 @@
       }).join('');
 
       contentHtml = '<div class="equity-input-group">' +
-        rowsHtml +
+        '<div id="equity-rows-container">' + rowsHtml + '</div>' +
+        '<button type="button" class="btn-ghost" id="equity-add-founder-btn" style="font-size:13px; margin:8px 0 14px; width:100%; border:1px dashed var(--line); padding:8px 12px; border-radius:var(--radius-sm); text-align:center;">+ Добавить сооснователя</button>' +
         '<div class="equity-status-bar">' +
           '<span id="equity-sum-text">Сумма: 100%</span>' +
           '<button type="button" class="btn-ghost" id="equity-equal-btn" style="font-size:12px; padding:4px 8px;">Разделить поровну</button>' +
@@ -313,9 +318,60 @@
         saveState();
       }
 
-      app.querySelectorAll('.equity-percent-field').forEach(function (inp) {
-        inp.addEventListener('input', updateSum);
-      });
+      function bindEquityEvents() {
+        app.querySelectorAll('.equity-percent-field').forEach(function (inp) {
+          inp.removeEventListener('input', updateSum);
+          inp.addEventListener('input', updateSum);
+        });
+        app.querySelectorAll('.equity-del-btn').forEach(function (btn) {
+          btn.onclick = function () {
+            const row = btn.closest('.equity-input-row');
+            if (row) {
+              row.remove();
+              const allRows = app.querySelectorAll('.equity-input-row');
+              allRows.forEach(function (r, i) {
+                const idx = i + 1;
+                r.setAttribute('data-index', String(idx));
+                const lbl = r.querySelector('label');
+                if (lbl) lbl.textContent = 'Основатель ' + idx;
+                const field = r.querySelector('.equity-percent-field');
+                if (field) field.setAttribute('data-founder', 'founder_' + idx);
+                const del = r.querySelector('.equity-del-btn');
+                if (del) {
+                  if (allRows.length <= 2) del.remove();
+                  else del.setAttribute('data-del', String(idx));
+                }
+              });
+              updateSum();
+            }
+          };
+        });
+      }
+
+      bindEquityEvents();
+
+      const addBtn = document.getElementById('equity-add-founder-btn');
+      if (addBtn) {
+        addBtn.addEventListener('click', function () {
+          const container = document.getElementById('equity-rows-container');
+          if (!container) return;
+          const rows = container.querySelectorAll('.equity-input-row');
+          const newIdx = rows.length + 1;
+          const key = 'founder_' + newIdx;
+          const div = document.createElement('div');
+          div.className = 'equity-input-row';
+          div.setAttribute('data-index', String(newIdx));
+          div.innerHTML = '<label>Основатель ' + newIdx + '</label>' +
+            '<div class="equity-percent-wrap">' +
+              '<input type="number" class="equity-percent-field" data-founder="' + key + '" min="0" max="100" value="0" placeholder="0" />' +
+              '<span>%</span>' +
+              '<button type="button" class="equity-del-btn" data-del="' + newIdx + '" title="Удалить" style="background:none; border:none; color:#f87171; font-size:16px; cursor:pointer; padding:0 4px; line-height:1;">✕</button>' +
+            '</div>';
+          container.appendChild(div);
+          bindEquityEvents();
+          updateSum();
+        });
+      }
 
       const equalBtn = document.getElementById('equity-equal-btn');
       if (equalBtn) {
