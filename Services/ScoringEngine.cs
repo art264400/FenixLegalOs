@@ -1,6 +1,7 @@
 using System.Text.Json;
 using FenixLegalOs.Data;
 using FenixLegalOs.Models;
+using FenixLegalOs.Repositories;
 
 namespace FenixLegalOs.Services;
 
@@ -141,19 +142,29 @@ public class FactNormalizer
 
 public class ScoringEngine
 {
+    private readonly QuestionRepository? _questionRepo;
+
+    public ScoringEngine(QuestionRepository? questionRepo = null)
+    {
+        _questionRepo = questionRepo;
+    }
+
     public ScoreResult ComputeResult(Dictionary<string, object> answers)
     {
         var factStore = FactNormalizer.NormalizeFacts(answers);
 
+        var allQuestions = _questionRepo != null ? _questionRepo.GetQuestions(enabledOnly: true) : DataBank.Questions.Where(q => q.Enabled).ToList();
+        var allSections = _questionRepo != null ? _questionRepo.GetSections(enabledOnly: true) : DataBank.Sections.ToList();
+        var allRisks = _questionRepo != null ? _questionRepo.GetRisks() : DataBank.Risks.ToList();
+
         // Filter visible questions according to showIf and skipIf
-        var visibleQs = DataBank.Questions
-            .Where(q => q.Enabled)
+        var visibleQs = allQuestions
             .Where(q => ConditionsEvaluator.IsVisible(q.ShowIf, answers, factStore))
             .Where(q => q.SkipIf == null || !ConditionsEvaluator.IsVisible(q.SkipIf, answers, factStore))
             .ToList();
 
         // 1. Calculate Section Scores & Confidence per section
-        var sections = DataBank.Sections.Select(s =>
+        var sections = allSections.Select(s =>
         {
             var sectionQs = visibleQs.Where(q => q.SectionId == s.Id).ToList();
             bool isModuleApplicable = IsModuleApplicable(s.Id, factStore, sectionQs);
@@ -218,7 +229,7 @@ public class ScoringEngine
             : 85;
 
         // 3. Merged & Suppressed Findings
-        var rawFindings = CollectRawFindings(visibleQs, answers);
+        var rawFindings = CollectRawFindings(visibleQs, answers, allRisks);
         var mergedFindings = MergeAndSuppressFindings(rawFindings, factStore);
 
         // 4. Investment Readiness Overlay
@@ -269,7 +280,7 @@ public class ScoringEngine
         return f.TryGetValue(key, out var val) && val is bool b && b;
     }
 
-    private List<RiskFinding> CollectRawFindings(List<DiagnosticQuestion> visibleQs, Dictionary<string, object> answers)
+    private List<RiskFinding> CollectRawFindings(List<DiagnosticQuestion> visibleQs, Dictionary<string, object> answers, List<RiskDefinition> allRisks)
     {
         var list = new List<RiskFinding>();
 
@@ -280,7 +291,7 @@ public class ScoringEngine
             var opt = q.Options.FirstOrDefault(o => o.Id == strVal);
             if (opt?.RiskCode == null) continue;
 
-            var def = DataBank.Risks.FirstOrDefault(r => r.Code == opt.RiskCode);
+            var def = allRisks.FirstOrDefault(r => r.Code == opt.RiskCode);
             if (def != null)
             {
                 list.Add(new RiskFinding

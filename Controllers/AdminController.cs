@@ -12,13 +12,15 @@ namespace FenixLegalOs.Controllers;
 public class AdminController : ControllerBase
 {
     private readonly LeadRepository _leads;
+    private readonly QuestionRepository _questionRepo;
     private const string AdminTokenCookieName = "fenix_admin";
     private static readonly HashSet<string> AdminTokens = new();
     private static readonly string AdminPassword = Environment.GetEnvironmentVariable("FENIX_ADMIN_PASSWORD") ?? "fenix2026";
 
-    public AdminController(LeadRepository leads)
+    public AdminController(LeadRepository leads, QuestionRepository questionRepo)
     {
         _leads = leads;
+        _questionRepo = questionRepo;
     }
 
     private bool IsAdmin()
@@ -156,13 +158,24 @@ public class AdminController : ControllerBase
     public IActionResult GetQuestionBank()
     {
         if (!IsAdmin()) return Unauthorized();
-        return Ok(new { version = DataBank.QuestionBankVersion, sections = DataBank.Sections, questions = DataBank.Questions });
+        var versions = _questionRepo.GetVersions();
+        return Ok(new
+        {
+            version = versions.GetValueOrDefault("question_bank", DataBank.QuestionBankVersion),
+            sections = _questionRepo.GetSections(enabledOnly: false),
+            questions = _questionRepo.GetQuestions(enabledOnly: false)
+        });
     }
 
     [HttpGet("risk-library")]
     public IActionResult GetRiskLibrary()
     {
         if (!IsAdmin()) return Unauthorized();
-        return Ok(new { version = DataBank.RiskLibraryVersion, risks = DataBank.Risks });
+        var versions = _questionRepo.GetVersions();
+        return Ok(new
+        {
+            version = versions.GetValueOrDefault("risk_library", DataBank.RiskLibraryVersion),
+            risks = _questionRepo.GetRisks()
+        });
     }
 }

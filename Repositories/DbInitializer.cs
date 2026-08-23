@@ -1,4 +1,6 @@
+using System.Text.Json;
 using Dapper;
+using FenixLegalOs.Data;
 using Microsoft.Data.Sqlite;
 
 namespace FenixLegalOs.Repositories;
@@ -97,9 +99,63 @@ public class DbInitializer
                 detail TEXT,
                 created_at TEXT NOT NULL
             );
+
+            -- Question Bank Tables
+            CREATE TABLE IF NOT EXISTS sections (
+                id TEXT PRIMARY KEY,
+                order_num INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                short_title TEXT NOT NULL,
+                weight INTEGER NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1
+            );
+
+            CREATE TABLE IF NOT EXISTS questions (
+                id TEXT PRIMARY KEY,
+                section_id TEXT NOT NULL,
+                dimension_id TEXT,
+                order_num INTEGER NOT NULL,
+                question TEXT NOT NULL,
+                explanation TEXT,
+                type TEXT NOT NULL DEFAULT 'single',
+                score_mode TEXT NOT NULL DEFAULT 'diagnostic',
+                weight REAL NOT NULL DEFAULT 1.0,
+                dimension_weight REAL NOT NULL DEFAULT 1.0,
+                within_dimension_weight REAL NOT NULL DEFAULT 1.0,
+                options_json TEXT,
+                tags_json TEXT,
+                show_if_json TEXT,
+                skip_if_json TEXT,
+                enabled INTEGER NOT NULL DEFAULT 1
+            );
+
+            CREATE TABLE IF NOT EXISTS risks (
+                code TEXT PRIMARY KEY,
+                root_cause_group TEXT NOT NULL DEFAULT 'GENERAL',
+                severity TEXT NOT NULL DEFAULT 'MEDIUM',
+                priority TEXT NOT NULL DEFAULT 'LATER',
+                section_id TEXT NOT NULL,
+                modules_json TEXT,
+                title TEXT NOT NULL,
+                finding TEXT NOT NULL,
+                why_it_matters TEXT NOT NULL,
+                recommendations_json TEXT,
+                recommendation TEXT NOT NULL,
+                lawyer_required INTEGER NOT NULL DEFAULT 0,
+                resolution TEXT NOT NULL DEFAULT 'self',
+                service_code TEXT,
+                suppress_codes_json TEXT,
+                cta TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS knowledge_versions (
+                key TEXT PRIMARY KEY,
+                version TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
         ");
 
-        // Safe migrations for extra columns
+        // Safe migrations
         TryAddColumn(conn, "sessions", "paid", "INTEGER NOT NULL DEFAULT 0");
         TryAddColumn(conn, "sessions", "paid_at", "TEXT");
         TryAddColumn(conn, "sessions", "payment_amount", "INTEGER");
@@ -109,6 +165,144 @@ public class DbInitializer
         TryAddColumn(conn, "leads", "paid_at", "TEXT");
         TryAddColumn(conn, "leads", "payment_amount", "INTEGER");
         TryAddColumn(conn, "leads", "payment_method", "TEXT");
+
+        // Seed or update Question Bank in DB
+        SeedQuestionBank(conn);
+    }
+
+    private void SeedQuestionBank(SqliteConnection conn)
+    {
+        // 1. Seed Sections
+        foreach (var s in DataBank.Sections)
+        {
+            conn.Execute(@"
+                INSERT INTO sections (id, order_num, title, short_title, weight, enabled)
+                VALUES (@Id, @Order, @Title, @ShortTitle, @Weight, 1)
+                ON CONFLICT(id) DO UPDATE SET
+                    order_num = excluded.order_num,
+                    title = excluded.title,
+                    short_title = excluded.short_title,
+                    weight = excluded.weight,
+                    enabled = 1;
+            ", s);
+        }
+
+        // 2. Seed Questions
+        foreach (var q in DataBank.Questions)
+        {
+            conn.Execute(@"
+                INSERT INTO questions (
+                    id, section_id, dimension_id, order_num, question, explanation,
+                    type, score_mode, weight, dimension_weight, within_dimension_weight,
+                    options_json, tags_json, show_if_json, skip_if_json, enabled
+                ) VALUES (
+                    @Id, @SectionId, @DimensionId, @Order, @Question, @Explanation,
+                    @Type, @ScoreMode, @Weight, @DimensionWeight, @WithinDimensionWeight,
+                    @OptionsJson, @TagsJson, @ShowIfJson, @SkipIfJson, @Enabled
+                )
+                ON CONFLICT(id) DO UPDATE SET
+                    section_id = excluded.section_id,
+                    dimension_id = excluded.dimension_id,
+                    order_num = excluded.order_num,
+                    question = excluded.question,
+                    explanation = excluded.explanation,
+                    type = excluded.type,
+                    score_mode = excluded.score_mode,
+                    weight = excluded.weight,
+                    dimension_weight = excluded.dimension_weight,
+                    within_dimension_weight = excluded.within_dimension_weight,
+                    options_json = excluded.options_json,
+                    tags_json = excluded.tags_json,
+                    show_if_json = excluded.show_if_json,
+                    skip_if_json = excluded.skip_if_json,
+                    enabled = excluded.enabled;
+            ", new
+            {
+                q.Id,
+                q.SectionId,
+                q.DimensionId,
+                Order = q.Order,
+                q.Question,
+                q.Explanation,
+                q.Type,
+                q.ScoreMode,
+                q.Weight,
+                q.DimensionWeight,
+                q.WithinDimensionWeight,
+                OptionsJson = q.Options != null ? JsonSerializer.Serialize(q.Options) : null,
+                TagsJson = q.Tags != null ? JsonSerializer.Serialize(q.Tags) : null,
+                ShowIfJson = q.ShowIf != null ? JsonSerializer.Serialize(q.ShowIf) : null,
+                SkipIfJson = q.SkipIf != null ? JsonSerializer.Serialize(q.SkipIf) : null,
+                Enabled = q.Enabled ? 1 : 0
+            });
+        }
+
+        // 3. Seed Risks
+        foreach (var r in DataBank.Risks)
+        {
+            conn.Execute(@"
+                INSERT INTO risks (
+                    code, root_cause_group, severity, priority, section_id, modules_json,
+                    title, finding, why_it_matters, recommendations_json, recommendation,
+                    lawyer_required, resolution, service_code, suppress_codes_json, cta
+                ) VALUES (
+                    @Code, @RootCauseGroup, @Severity, @Priority, @SectionId, @ModulesJson,
+                    @Title, @Finding, @WhyItMatters, @RecommendationsJson, @Recommendation,
+                    @LawyerRequired, @Resolution, @ServiceCode, @SuppressCodesJson, @Cta
+                )
+                ON CONFLICT(code) DO UPDATE SET
+                    root_cause_group = excluded.root_cause_group,
+                    severity = excluded.severity,
+                    priority = excluded.priority,
+                    section_id = excluded.section_id,
+                    modules_json = excluded.modules_json,
+                    title = excluded.title,
+                    finding = excluded.finding,
+                    why_it_matters = excluded.why_it_matters,
+                    recommendations_json = excluded.recommendations_json,
+                    recommendation = excluded.recommendation,
+                    lawyer_required = excluded.lawyer_required,
+                    resolution = excluded.resolution,
+                    service_code = excluded.service_code,
+                    suppress_codes_json = excluded.suppress_codes_json,
+                    cta = excluded.cta;
+            ", new
+            {
+                r.Code,
+                r.RootCauseGroup,
+                r.Severity,
+                r.Priority,
+                r.SectionId,
+                ModulesJson = JsonSerializer.Serialize(r.Modules),
+                r.Title,
+                r.Finding,
+                r.WhyItMatters,
+                RecommendationsJson = JsonSerializer.Serialize(r.Recommendations),
+                r.Recommendation,
+                LawyerRequired = r.LawyerRequired ? 1 : 0,
+                r.Resolution,
+                r.ServiceCode,
+                SuppressCodesJson = JsonSerializer.Serialize(r.SuppressCodes),
+                r.Cta
+            });
+        }
+
+        // 4. Record Versions
+        conn.Execute(@"
+            INSERT INTO knowledge_versions (key, version, updated_at)
+            VALUES ('question_bank', @qbVersion, @now),
+                   ('scoring_engine', @engineVersion, @now),
+                   ('risk_library', @riskVersion, @now)
+            ON CONFLICT(key) DO UPDATE SET
+                version = excluded.version,
+                updated_at = excluded.updated_at;
+        ", new
+        {
+            qbVersion = DataBank.QuestionBankVersion,
+            engineVersion = DataBank.ScoringEngineVersion,
+            riskVersion = DataBank.RiskLibraryVersion,
+            now = DateTime.UtcNow.ToString("o")
+        });
     }
 
     private void TryAddColumn(SqliteConnection conn, string table, string column, string type)

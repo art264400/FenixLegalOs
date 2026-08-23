@@ -9,6 +9,7 @@ builder.Services.AddControllers();
 
 // Register Services & Repositories
 builder.Services.AddSingleton<DbInitializer>();
+builder.Services.AddSingleton<QuestionRepository>();
 builder.Services.AddSingleton<SessionRepository>();
 builder.Services.AddSingleton<LeadRepository>();
 builder.Services.AddSingleton<ScoringEngine>();
