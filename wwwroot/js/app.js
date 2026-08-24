@@ -137,14 +137,14 @@
         '<div class="hero-domains">' +
           '<div class="label">Восемь областей диагностики</div>' +
           '<div class="domain-grid">' +
-            '<div>Founders<small>роли, доли, vesting, выход</small></div>' +
-            '<div>Corporate<small>структура и cap table</small></div>' +
-            '<div>IP<small>права на продукт и код</small></div>' +
-            '<div>Team<small>сотрудники и подрядчики</small></div>' +
-            '<div>Product<small>пользователи и условия</small></div>' +
-            '<div>Data &amp; AI<small>данные, privacy, AI-сервисы</small></div>' +
-            '<div>Contracts<small>B2B-договоры</small></div>' +
-            '<div>Investment<small>готовность к раунду</small></div>' +
+            '<div>Сооснователи<small>роли, доли, vesting, выход</small></div>' +
+            '<div>Корпоративная структура<small>структура и cap table</small></div>' +
+            '<div>Интеллектуальная собственность<small>права на продукт и код</small></div>' +
+            '<div>Команда и подрядчики<small>сотрудники и договоры</small></div>' +
+            '<div>Продукт и клиенты<small>пользователи и условия</small></div>' +
+            '<div>Данные и ИИ<small>privacy, ПДн, AI-сервисы</small></div>' +
+            '<div>Коммерческие договоры<small>B2B-клиенты и партнеры</small></div>' +
+            '<div>Инвестиционная готовность<small>готовность к раунду</small></div>' +
           '</div>' +
         '</div>' +
         '<div class="method">' +
