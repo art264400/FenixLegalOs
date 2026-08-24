@@ -38,7 +38,7 @@ public static class DataBank
             Id = "FND-C02", SectionId = "founders", Order = 2, Type = "equity_inputs", ScoreMode = "context", Weight = 0,
             ShowIf = new() { new() { QuestionId = "FND-C01", Op = "neq", Value = "solo" } },
             Question = "Если доли уже согласованы, как они распределены между сооснователями?",
-            Explanation = "Укажите процентную долю каждого основателя или выберите статус согласования.",
+            Explanation = "От количества сооснователей зависит сложность фиксирования взаимоотношений в команде",
             Options = new() {
                 new("not_agreed_yet", "Доли пока окончательно не распределены / в процессе обсуждения", 0.5),
                 new("unknown", "Не уверен(а)", 0.5)
