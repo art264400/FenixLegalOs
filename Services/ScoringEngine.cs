@@ -117,6 +117,14 @@ public class FactNormalizer
             _ => 0
         };
 
+        var corC02 = GetAnswerStr(answers, "COR-C02");
+        f["company.jurisdiction"] = corC02;
+
+        if (answers.TryGetValue("COR-C02A", out var vGroup))
+        {
+            f["company.groupEntities"] = vGroup;
+        }
+
         var cor04 = GetAnswerStr(answers, "COR-04");
         f["capital.historyChanges"] = cor04 is "complete" or "main_docs" or "partial" or "missing";
 

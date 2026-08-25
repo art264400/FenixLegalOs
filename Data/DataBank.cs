@@ -256,19 +256,32 @@ public static class DataBank
             }
         },
 
-        // 2. COR-C02 (Контекст: юрисдикция)
+        // 2. COR-C02 (Контекст: юрисдикция основной компании)
         new() {
             Id = "COR-C02", SectionId = "corporate", Order = 2, Type = "single", ScoreMode = "context", Weight = 0,
             ShowIf = new() { new() { QuestionId = "COR-C01", Op = "in", Value = "one,multiple" } },
-            Question = "В какой юрисдикции зарегистрирована основная компания проекта?",
+            Question = "Где зарегистрирована основная компания?",
+            Explanation = "Контекстный вопрос, определяет юрисдикцию и применяемую систему права.",
             Options = new() {
-                new("ru", "Россия (ООО / АО)", 1.0, ConfidenceClass: "known"),
-                new("kz_aifc", "Казахстан (МФЦА / AIFC / ТОО)", 1.0, ConfidenceClass: "known"),
-                new("ae", "ОАЭ (Free Zone / Mainland)", 1.0, ConfidenceClass: "known"),
-                new("us_delaware", "США (Delaware C-Corp / LLC)", 1.0, ConfidenceClass: "known"),
-                new("cy_eu", "Кипр / страны ЕС", 1.0, ConfidenceClass: "known"),
-                new("other", "Другая юрисдикция", 1.0, ConfidenceClass: "known"),
-                new("unknown", "Не уверен(а)", 0.5, ConfidenceClass: "unknown")
+                new("kz", "Казахстан", 1.0, ConfidenceClass: "known"),
+                new("aifc", "МФЦА", 1.0, ConfidenceClass: "known"),
+                new("english_law", "Делавэр, DIFC, ADGM или иные юрисдикции английского права", 1.0, ConfidenceClass: "known"),
+                new("other", "Другое", 1.0, ConfidenceClass: "known")
+            }
+        },
+
+        // 2A. COR-C02A (Контекст: состав группы / другие компании)
+        new() {
+            Id = "COR-C02A", SectionId = "corporate", Order = 3, Type = "multiple", ScoreMode = "context", Weight = 0,
+            ShowIf = new() { new() { QuestionId = "COR-C01", Op = "in", Value = "one,multiple" } },
+            Question = "Есть ли в структуре бизнеса другие компании?",
+            Explanation = "Помогает понять структуру владения активами и распределение функций между компаниями.",
+            Options = new() {
+                new("opco", "Есть операционная (-нные) компания", 1.0, ConfidenceClass: "known"),
+                new("holdco", "Есть холдинговая компания", 1.0, ConfidenceClass: "known"),
+                new("ipco", "Есть отдельная компания с интеллектуальной собственностью", 1.0, ConfidenceClass: "known"),
+                new("other_entities", "Иные компании", 1.0, ConfidenceClass: "known"),
+                new("none", "Нет других компаний (только одна основная)", 1.0, Exclusive: true, ConfidenceClass: "known")
             }
         },
 
