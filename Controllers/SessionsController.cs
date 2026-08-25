@@ -14,17 +14,20 @@ public class SessionsController : ControllerBase
     private readonly LeadRepository _leads;
     private readonly ScoringEngine _scoringEngine;
     private readonly TypstPdfService _pdfService;
+    private readonly AiReportService _aiReportService;
 
     public SessionsController(
         SessionRepository sessions,
         LeadRepository leads,
         ScoringEngine scoringEngine,
-        TypstPdfService pdfService)
+        TypstPdfService pdfService,
+        AiReportService aiReportService)
     {
         _sessions = sessions;
         _leads = leads;
         _scoringEngine = scoringEngine;
         _pdfService = pdfService;
+        _aiReportService = aiReportService;
     }
 
     [HttpPost]
@@ -139,5 +142,21 @@ public class SessionsController : ControllerBase
         _leads.AuditLog("system", "session_paid", $"{id} ({amount} KZT via {method})");
 
         return Ok(new { ok = true, paid = true, amount, method });
+    }
+
+    [HttpPost("{id}/ai-summary")]
+    public async Task<IActionResult> GenerateAiSummary(string id)
+    {
+        var session = _sessions.GetSession(id);
+        if (session == null || string.IsNullOrEmpty(session.ResultJson))
+            return NotFound(new { error = "session_not_found" });
+
+        var result = JsonSerializer.Deserialize<ScoreResult>(session.ResultJson);
+        if (result == null) return BadRequest(new { error = "invalid_result" });
+
+        var answersDict = JsonSerializer.Deserialize<Dictionary<string, object>>(session.AnswersJson) ?? new();
+        var summary = await _aiReportService.GenerateExecutiveSummaryAsync(answersDict, result);
+
+        return Ok(new { summary });
     }
 }

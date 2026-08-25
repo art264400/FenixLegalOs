@@ -578,6 +578,51 @@
     );
   }
 
+  function aiMemoBlock(sessionId) {
+    return (
+      '<section class="ai-memo-card" id="ai-memo-section">' +
+        '<div class="ai-memo-header">' +
+          '<div class="ai-memo-badge">✨ AI Legal Assistant</div>' +
+          '<h2>Персональное заключение венчурного юриста</h2>' +
+          '<p class="ai-memo-sub">Автоматический юридический разбор ситуации фаундеров и корпоративной структуры на основе ваших ответов (стандарт LLM Contract v1.1).</p>' +
+        '</div>' +
+        '<div class="ai-memo-body" id="ai-memo-content">' +
+          '<div class="ai-memo-loading">' +
+            '<div class="spinner"></div>' +
+            '<span>Формируем индивидуальное заключение для вашей структуры…</span>' +
+          '</div>' +
+        '</div>' +
+      '</section>'
+    );
+  }
+
+  async function loadAiMemo(sessionId) {
+    const el = document.getElementById('ai-memo-content');
+    if (!el || !sessionId) return;
+    try {
+      const res = await api('POST', '/api/sessions/' + sessionId + '/ai-summary');
+      if (res && res.summary) {
+        el.innerHTML = formatMarkdown(res.summary);
+      } else {
+        el.innerHTML = '<p class="hint">Заключение сформировано и доступно при персональной консультации.</p>';
+      }
+    } catch (err) {
+      el.innerHTML = '<p class="hint">Не удалось загрузить онлайн-заключение. Ознакомьтесь с подробной картой рисков ниже.</p>';
+    }
+  }
+
+  function formatMarkdown(md) {
+    if (!md) return '';
+    return md
+      .replace(/^### (.*$)/gim, '<h3 class="ai-h3">$1</h3>')
+      .replace(/^## (.*$)/gim, '<h2 class="ai-h2">$1</h2>')
+      .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
+      .replace(/^\* (.*$)/gim, '<li class="ai-li">$1</li>')
+      .replace(/^[0-9]+\. (.*$)/gim, '<li class="ai-oli">$1</li>')
+      .replace(/\n\n/gim, '</p><p class="ai-p">')
+      .replace(/\n/gim, '<br>');
+  }
+
   function screenResults() {
     if (!lastResult) { loadResultFromServer(state.sessionId, '#/results'); return; }
     const r = lastResult;
@@ -592,7 +637,9 @@
       : '';
 
     render(
-      heroBlock(r) + topHtml +
+      heroBlock(r) +
+      aiMemoBlock(state.sessionId) +
+      topHtml +
       '<section class="gate" id="gate">' +
         '<h2>Получить полный персональный отчёт и roadmap</h2>' +
         '<p>Мы отправим вам полный отчёт, чтобы вы могли вернуться к нему позже. Внутри — полная карта рисков, сильные стороны и последовательность действий.</p>' +
@@ -613,6 +660,7 @@
       '</div>'
     );
     animateGauges();
+    loadAiMemo(state.sessionId);
     track('report_gate_viewed');
 
     const stickyBtn = document.getElementById('sticky-pay-btn');
@@ -812,6 +860,7 @@
 
     const mainContent = statusBadgeHtml +
       heroBlock(r) +
+      aiMemoBlock(sessionId) +
       block('Критические вопросы', bySeverity.critical, 'Вопросы, которые могут влиять на контроль над компанией, принадлежность продукта или ближайшую сделку.') +
       block('Существенные вопросы', bySeverity.high, 'Пробелы, которые, вероятно, потребуется закрыть при росте или инвестиционном раунде.') +
       block('Умеренные вопросы', bySeverity.medium, 'Вопросы, требующие внимания в рабочем порядке.') +
@@ -829,6 +878,7 @@
       render(
         statusBadgeHtml +
         heroBlock(r) +
+        aiMemoBlock(sessionId) +
         paywallBannerHtml +
         '<div class="blurred-wrapper">' +
           '<div class="blurred-content">' +
@@ -848,6 +898,7 @@
     }
 
     animateGauges();
+    loadAiMemo(sessionId);
     bindRiskCtas();
 
     const unlockBtn = document.getElementById('unlock-paywall-btn');

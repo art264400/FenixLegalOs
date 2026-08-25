@@ -14,6 +14,7 @@ builder.Services.AddSingleton<SessionRepository>();
 builder.Services.AddSingleton<LeadRepository>();
 builder.Services.AddSingleton<ScoringEngine>();
 builder.Services.AddSingleton<TypstPdfService>();
+builder.Services.AddSingleton<AiReportService>();
 
 var app = builder.Build();
 
