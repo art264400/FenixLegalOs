@@ -593,14 +593,26 @@ code { color: var(--accent); }
   letter-spacing: -0.01em;
 }
 
+.ai-memo-body p.ai-p {
+  margin-bottom: 12px;
+}
+
+.ai-memo-body ul.ai-ul {
+  margin: 10px 0 16px 0;
+  padding-left: 20px;
+}
+
+.ai-memo-body ol.ai-ol {
+  margin: 10px 0 16px 0;
+  padding-left: 20px;
+}
+
 .ai-memo-body li.ai-li {
-  margin-left: 20px;
   margin-bottom: 8px;
   list-style-type: disc;
 }
 
 .ai-memo-body li.ai-oli {
-  margin-left: 20px;
   margin-bottom: 8px;
   list-style-type: decimal;
 }

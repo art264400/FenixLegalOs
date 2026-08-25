@@ -617,14 +617,63 @@
 
   function formatMarkdown(md) {
     if (!md) return '';
-    return md
-      .replace(/^### (.*$)/gim, '<h3 class="ai-h3">$1</h3>')
-      .replace(/^## (.*$)/gim, '<h2 class="ai-h2">$1</h2>')
-      .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
-      .replace(/^\* (.*$)/gim, '<li class="ai-li">$1</li>')
-      .replace(/^[0-9]+\. (.*$)/gim, '<li class="ai-oli">$1</li>')
-      .replace(/\n\n/gim, '</p><p class="ai-p">')
-      .replace(/\n/gim, '<br>');
+    const lines = md.split('\n');
+    let out = [];
+    let inUl = false;
+    let inOl = false;
+
+    for (let i = 0; i < lines.length; i++) {
+      let line = lines[i].trim();
+      if (!line) {
+        if (inUl) { out.push('</ul>'); inUl = false; }
+        if (inOl) { out.push('</ol>'); inOl = false; }
+        continue;
+      }
+
+      if (line.startsWith('### ')) {
+        if (inUl) { out.push('</ul>'); inUl = false; }
+        if (inOl) { out.push('</ol>'); inOl = false; }
+        out.push('<h3 class="ai-h3">' + esc(line.substring(4)) + '</h3>');
+        continue;
+      }
+
+      if (line.startsWith('## ')) {
+        if (inUl) { out.push('</ul>'); inUl = false; }
+        if (inOl) { out.push('</ol>'); inOl = false; }
+        out.push('<h2 class="ai-h2">' + esc(line.substring(3)) + '</h2>');
+        continue;
+      }
+
+      if (line.startsWith('* ') || line.startsWith('- ')) {
+        if (inOl) { out.push('</ol>'); inOl = false; }
+        if (!inUl) { out.push('<ul class="ai-ul">'); inUl = true; }
+        let text = line.substring(2);
+        text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        out.push('<li class="ai-li">' + text + '</li>');
+        continue;
+      }
+
+      const numMatch = line.match(/^(\d+)\.\s+(.*)$/);
+      if (numMatch) {
+        if (inUl) { out.push('</ul>'); inUl = false; }
+        if (!inOl) { out.push('<ol class="ai-ol">'); inOl = true; }
+        let text = numMatch[2];
+        text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        out.push('<li class="ai-oli">' + text + '</li>');
+        continue;
+      }
+
+      if (inUl) { out.push('</ul>'); inUl = false; }
+      if (inOl) { out.push('</ol>'); inOl = false; }
+
+      let text = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      out.push('<p class="ai-p">' + text + '</p>');
+    }
+
+    if (inUl) out.push('</ul>');
+    if (inOl) out.push('</ol>');
+
+    return out.join('');
   }
 
   function screenResults() {
