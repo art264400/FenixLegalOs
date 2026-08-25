@@ -287,7 +287,7 @@ public static class DataBank
 
         // 3. COR-01 (Диагностика: соответствие владения)
         new() {
-            Id = "COR-01", SectionId = "corporate", DimensionId = "ownership_accuracy", Order = 3, Type = "single", ScoreMode = "diagnostic", Weight = 20, DimensionWeight = 20, WithinDimensionWeight = 100,
+            Id = "COR-01", SectionId = "corporate", DimensionId = "ownership_accuracy", Order = 4, Type = "single", ScoreMode = "diagnostic", Weight = 20, DimensionWeight = 20, WithinDimensionWeight = 100,
             ShowIf = new() { new() { QuestionId = "COR-C01", Op = "in", Value = "one,multiple" } },
             Question = "Соответствует ли зарегистрированное в реестре владение тому, как вы фактически понимаете доли сооснователей?",
             Options = new() {
@@ -302,7 +302,7 @@ public static class DataBank
 
         // 4. COR-02 (Диагностика: Cap table)
         new() {
-            Id = "COR-02", SectionId = "corporate", DimensionId = "cap_table", Order = 4, Type = "single", ScoreMode = "diagnostic", Weight = 15, DimensionWeight = 15, WithinDimensionWeight = 100,
+            Id = "COR-02", SectionId = "corporate", DimensionId = "cap_table", Order = 5, Type = "single", ScoreMode = "diagnostic", Weight = 15, DimensionWeight = 15, WithinDimensionWeight = 100,
             ShowIf = new() { new() { QuestionId = "COR-C01", Op = "in", Value = "one,multiple" } },
             Question = "Насколько достоверно можно определить, кому принадлежит и может принадлежать капитал компании (Cap table)?",
             Options = new() {
@@ -317,7 +317,7 @@ public static class DataBank
 
         // 5. COR-03 (Диагностика: обещания капитала / опционы)
         new() {
-            Id = "COR-03", SectionId = "corporate", DimensionId = "equity_commitments", Order = 5, Type = "single", ScoreMode = "diagnostic", Weight = 10, DimensionWeight = 10, WithinDimensionWeight = 100,
+            Id = "COR-03", SectionId = "corporate", DimensionId = "equity_commitments", Order = 6, Type = "single", ScoreMode = "diagnostic", Weight = 10, DimensionWeight = 10, WithinDimensionWeight = 100,
             ShowIf = new() { new() { QuestionId = "COR-C01", Op = "in", Value = "one,multiple" } },
             Question = "Есть ли обещанные доли, акции или опционы (команде, адвайзерам, инвесторам), не отраженные в структуре?",
             Options = new() {
@@ -332,7 +332,7 @@ public static class DataBank
 
         // 6. COR-04 (Диагностика: история изменений)
         new() {
-            Id = "COR-04", SectionId = "corporate", DimensionId = "corporate_history", Order = 6, Type = "single", ScoreMode = "diagnostic", Weight = 15, DimensionWeight = 15, WithinDimensionWeight = 70,
+            Id = "COR-04", SectionId = "corporate", DimensionId = "corporate_history", Order = 7, Type = "single", ScoreMode = "diagnostic", Weight = 15, DimensionWeight = 15, WithinDimensionWeight = 70,
             ShowIf = new() { new() { QuestionId = "COR-C01", Op = "in", Value = "one,multiple" } },
             Question = "Происходили ли в истории компании изменения состава участников, долей или выпусков акций?",
             Options = new() {
@@ -347,7 +347,7 @@ public static class DataBank
 
         // 7. COR-04A (Диагностика: непрерывность истории изменений)
         new() {
-            Id = "COR-04A", SectionId = "corporate", DimensionId = "corporate_history", Order = 7, Type = "single", ScoreMode = "diagnostic", Weight = 15, DimensionWeight = 15, WithinDimensionWeight = 30,
+            Id = "COR-04A", SectionId = "corporate", DimensionId = "corporate_history", Order = 8, Type = "single", ScoreMode = "diagnostic", Weight = 15, DimensionWeight = 15, WithinDimensionWeight = 30,
             ShowIf = new() { new() { QuestionId = "COR-04", Op = "in", Value = "complete,main_docs,partial,missing" } },
             Question = "Можно ли по имеющимся документам непрерывно восстановить последовательность всех прошлых изменений капитала?",
             Options = new() {
@@ -360,7 +360,7 @@ public static class DataBank
 
         // 8. COR-05 (Диагностика: корпоративные решения / Approvals)
         new() {
-            Id = "COR-05", SectionId = "corporate", DimensionId = "corporate_approvals", Order = 8, Type = "single", ScoreMode = "diagnostic", Weight = 12, DimensionWeight = 12, WithinDimensionWeight = 100,
+            Id = "COR-05", SectionId = "corporate", DimensionId = "corporate_approvals", Order = 9, Type = "single", ScoreMode = "diagnostic", Weight = 12, DimensionWeight = 12, WithinDimensionWeight = 100,
             ShowIf = new() { new() { QuestionId = "COR-C01", Op = "in", Value = "one,multiple" } },
             Question = "Оформлялись ли корпоративные решения (протоколы собраний, согласия) по существенным действиям компании?",
             Options = new() {
@@ -375,7 +375,7 @@ public static class DataBank
 
         // 9. COR-06 (Диагностика: полномочия и подписание сделок)
         new() {
-            Id = "COR-06", SectionId = "corporate", DimensionId = "authority", Order = 9, Type = "single", ScoreMode = "diagnostic", Weight = 10, DimensionWeight = 10, WithinDimensionWeight = 100,
+            Id = "COR-06", SectionId = "corporate", DimensionId = "authority", Order = 10, Type = "single", ScoreMode = "diagnostic", Weight = 10, DimensionWeight = 10, WithinDimensionWeight = 100,
             ShowIf = new() { new() { QuestionId = "COR-C01", Op = "in", Value = "one,multiple" } },
             Question = "Четко ли определено, кто юридически имеет право подписывать договоры и принимать финансовые обязательства от имени компании?",
             Options = new() {
@@ -389,7 +389,7 @@ public static class DataBank
 
         // 10. COR-07 (Диагностика: принадлежность активов / структура группы)
         new() {
-            Id = "COR-07", SectionId = "corporate", DimensionId = "entity_alignment", Order = 10, Type = "single", ScoreMode = "diagnostic", Weight = 13, DimensionWeight = 13, WithinDimensionWeight = 100,
+            Id = "COR-07", SectionId = "corporate", DimensionId = "entity_alignment", Order = 11, Type = "single", ScoreMode = "diagnostic", Weight = 13, DimensionWeight = 13, WithinDimensionWeight = 100,
             ShowIf = new() { new() { QuestionId = "COR-C01", Op = "in", Value = "one,multiple" } },
             Question = "Оформлены ли основные активы, контракты и выручка на операционную компанию, и понятны ли роли компаний в группе?",
             Options = new() {
@@ -404,7 +404,7 @@ public static class DataBank
 
         // 11. COR-08 (Диагностика: сохранность корпоративных документов)
         new() {
-            Id = "COR-08", SectionId = "corporate", DimensionId = "records", Order = 11, Type = "single", ScoreMode = "diagnostic", Weight = 5, DimensionWeight = 5, WithinDimensionWeight = 100,
+            Id = "COR-08", SectionId = "corporate", DimensionId = "records", Order = 12, Type = "single", ScoreMode = "diagnostic", Weight = 5, DimensionWeight = 5, WithinDimensionWeight = 100,
             ShowIf = new() { new() { QuestionId = "COR-C01", Op = "in", Value = "one,multiple" } },
             Question = "Можно ли оперативно собрать полный комплект основных корпоративных документов компании (устав, решения, договоры)?",
             Options = new() {
@@ -418,7 +418,7 @@ public static class DataBank
 
         // 12. COR-T01 (Триггер: скрытый бенефициар / контроль)
         new() {
-            Id = "COR-T01", SectionId = "corporate", Order = 12, Type = "single", ScoreMode = "trigger", Weight = 0,
+            Id = "COR-T01", SectionId = "corporate", Order = 13, Type = "single", ScoreMode = "trigger", Weight = 0,
             ShowIf = new() { new() { QuestionId = "COR-C01", Op = "in", Value = "one,multiple" } },
             Question = "Есть ли в проекте лицо с фактическим экономическим интересом или контролем, которое не указано в официальных документах?",
             Options = new() {

@@ -37,8 +37,13 @@ public class QuestionRepository
         using var conn = new SqliteConnection(_connectionString);
         conn.Open();
         string sql = enabledOnly
-            ? "SELECT * FROM questions WHERE enabled = 1 ORDER BY order_num ASC"
-            : "SELECT * FROM questions ORDER BY order_num ASC";
+            ? @"SELECT q.* FROM questions q 
+                JOIN sections s ON q.section_id = s.id 
+                WHERE q.enabled = 1 
+                ORDER BY s.order_num ASC, q.order_num ASC"
+            : @"SELECT q.* FROM questions q 
+                JOIN sections s ON q.section_id = s.id 
+                ORDER BY s.order_num ASC, q.order_num ASC";
 
         var rows = conn.Query(sql);
         var list = new List<DiagnosticQuestion>();

@@ -163,14 +163,16 @@
       '</section>'
     );
     document.getElementById('start-btn').addEventListener('click', async function () {
-      if (!state.sessionId) {
-        try {
-          const created = await api('POST', '/api/sessions');
-          state.sessionId = created.id;
-          saveState();
-        } catch (e) { /* offline-tolerant */ }
+      try {
+        const created = await api('POST', '/api/sessions');
+        state.sessionId = created.id;
+      } catch (e) {
+        state.sessionId = 'local_' + Date.now();
       }
+      state.answers = {};
       state.idx = 0;
+      lastResult = null;
+      unlocked = false;
       saveState();
       location.hash = '#/diagnostic';
     });
@@ -193,14 +195,16 @@
       '</section>'
     );
     document.getElementById('continue-btn').addEventListener('click', async function () {
-      if (!state.sessionId) {
-        try {
-          const created = await api('POST', '/api/sessions');
-          state.sessionId = created.id;
-          saveState();
-        } catch (e) { /* offline-tolerant: продолжаем локально */ }
+      try {
+        const created = await api('POST', '/api/sessions');
+        state.sessionId = created.id;
+      } catch (e) {
+        state.sessionId = 'local_' + Date.now();
       }
+      state.answers = {};
       state.idx = 0;
+      lastResult = null;
+      unlocked = false;
       saveState();
       location.hash = '#/diagnostic';
     });
