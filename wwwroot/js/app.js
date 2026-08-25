@@ -646,17 +646,19 @@
       if (line.startsWith('* ') || line.startsWith('- ')) {
         if (inOl) { out.push('</ol>'); inOl = false; }
         if (!inUl) { out.push('<ul class="ai-ul">'); inUl = true; }
-        let text = line.substring(2);
+        let text = line.substring(2).trim();
+        text = text.replace(/^(\d+(\.\d+)*\.\s*)+/, ''); // Strip redundant numbers like 1. 1.
         text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
         out.push('<li class="ai-li">' + text + '</li>');
         continue;
       }
 
-      const numMatch = line.match(/^(\d+)\.\s+(.*)$/);
+      const numMatch = line.match(/^(\d+(\.\d+)*\.\s*)+(.*)$/);
       if (numMatch) {
         if (inUl) { out.push('</ul>'); inUl = false; }
         if (!inOl) { out.push('<ol class="ai-ol">'); inOl = true; }
-        let text = numMatch[2];
+        let text = numMatch[3].trim();
+        text = text.replace(/^(\d+(\.\d+)*\.\s*)+/, ''); // Strip any extra nested numbers
         text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
         out.push('<li class="ai-oli">' + text + '</li>');
         continue;
