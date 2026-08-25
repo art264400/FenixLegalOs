@@ -569,7 +569,6 @@
           '<div class="score-side">' +
             '<div class="score-level">' + esc(r.levelTitle) + '</div>' +
             '<p class="score-sub">' + esc(r.levelText) + '</p>' +
-            '<p class="score-sub">' + esc(summary) + '</p>' +
             '<div class="count-chips">' + chips.join('') + '</div>' +
           '</div>' +
         '</div>' +
