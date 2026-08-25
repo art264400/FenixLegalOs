@@ -682,17 +682,9 @@
     setProgress(1);
     track('score_viewed', { overall: r.overall });
 
-    const top3 = r.risks.slice(0, 3);
-    const topHtml = top3.length
-      ? '<section class="risks-block"><h2>Что требует внимания в первую очередь</h2>' +
-        '<p class="hint">Три самых значимых вопроса по результатам диагностики.</p>' +
-        top3.map(function (risk, i) { return riskCard(risk, i, false); }).join('') + '</section>'
-      : '';
-
     render(
       heroBlock(r) +
       aiMemoBlock(state.sessionId) +
-      topHtml +
       '<section class="gate" id="gate">' +
         '<h2>Получить полный персональный отчёт и roadmap</h2>' +
         '<p>Мы отправим вам полный отчёт, чтобы вы могли вернуться к нему позже. Внутри — полная карта рисков, сильные стороны и последовательность действий.</p>' +
