@@ -71,8 +71,16 @@
       case 'answered': return a !== undefined && a !== null && a !== '' && !(Array.isArray(a) && !a.length);
       case 'eq': return a === rule.value;
       case 'neq': return a !== undefined && a !== rule.value;
-      case 'in': return typeof a === 'string' && rule.value.indexOf(a) !== -1;
-      case 'notIn': return typeof a === 'string' && rule.value.indexOf(a) === -1;
+      case 'in':
+        if (typeof a !== 'string') return false;
+        if (Array.isArray(rule.value)) return rule.value.indexOf(a) !== -1;
+        if (typeof rule.value === 'string') return rule.value.split(',').map(function (s) { return s.trim(); }).indexOf(a) !== -1;
+        return false;
+      case 'notIn':
+        if (typeof a !== 'string') return true;
+        if (Array.isArray(rule.value)) return rule.value.indexOf(a) === -1;
+        if (typeof rule.value === 'string') return rule.value.split(',').map(function (s) { return s.trim(); }).indexOf(a) === -1;
+        return true;
       case 'includes': return Array.isArray(a) && a.indexOf(rule.value) !== -1;
       default: return false;
     }

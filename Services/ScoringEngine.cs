@@ -56,13 +56,26 @@ public class ConditionsEvaluator
 
     private static bool RuleValueContains(object? ruleVal, string val)
     {
-        if (ruleVal is JsonElement je && je.ValueKind == JsonValueKind.Array)
+        if (ruleVal is JsonElement je)
         {
-            foreach (var item in je.EnumerateArray())
+            if (je.ValueKind == JsonValueKind.Array)
             {
-                if (item.ToString().Equals(val, StringComparison.OrdinalIgnoreCase)) return true;
+                foreach (var item in je.EnumerateArray())
+                {
+                    if (item.ToString().Equals(val, StringComparison.OrdinalIgnoreCase)) return true;
+                }
+                return false;
             }
-            return false;
+            if (je.ValueKind == JsonValueKind.String)
+            {
+                var str = je.GetString() ?? "";
+                if (str.Contains(','))
+                {
+                    return str.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                        .Any(x => x.Equals(val, StringComparison.OrdinalIgnoreCase));
+                }
+                return str.Equals(val, StringComparison.OrdinalIgnoreCase);
+            }
         }
         if (ruleVal is List<string> list)
         {
@@ -70,6 +83,11 @@ public class ConditionsEvaluator
         }
         if (ruleVal is string s)
         {
+            if (s.Contains(','))
+            {
+                return s.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                    .Any(x => x.Equals(val, StringComparison.OrdinalIgnoreCase));
+            }
             return s.Equals(val, StringComparison.OrdinalIgnoreCase);
         }
         return false;
@@ -83,14 +101,24 @@ public class FactNormalizer
         var store = new SharedFactStore();
         var f = store.Facts;
 
-        // Company Facts
+        // Company & Corporate Facts
         var corC01 = GetAnswerStr(answers, "COR-C01");
         f["company.entityStatus"] = corC01 switch
         {
-            "one" or "several" => "incorporated",
-            "process" => "in_progress",
-            _ => "none"
+            "one" or "multiple" or "several" => "incorporated",
+            "registering" or "process" => "registering",
+            "none" => "not_incorporated",
+            _ => "unknown"
         };
+        f["company.entityCount"] = corC01 switch
+        {
+            "one" => 1,
+            "multiple" or "several" => "multiple",
+            _ => 0
+        };
+
+        var cor04 = GetAnswerStr(answers, "COR-04");
+        f["capital.historyChanges"] = cor04 is "complete" or "main_docs" or "partial" or "missing";
 
         // Founders Facts
         var fndC01 = GetAnswerStr(answers, "FND-C01");
@@ -271,6 +299,7 @@ public class ScoringEngine
         var f = facts.Facts;
         return sectionId switch
         {
+            "corporate" => (string?)f.GetValueOrDefault("company.entityStatus") == "incorporated",
             "team" => GetBoolFact(f, "team.hasNonFounderTeam"),
             "data" => GetBoolFact(f, "data.personalDataProcessed") || GetBoolFact(f, "ai.used"),
             "contracts" => GetBoolFact(f, "contracts.b2bRelevant"),
