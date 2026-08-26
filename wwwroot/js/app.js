@@ -131,34 +131,71 @@
       '<section class="hero">' +
         '<div class="hero-flex">' +
           '<div class="hero-copy">' +
-            '<h1>Насколько юридически готова ваша технологическая компания к росту?</h1>' +
-            '<p class="sub">Пройдите профессиональную диагностику продукта, фаундеров, IP, данных, команды и инвестиционной готовности. Получите персональный Legal Score и увидите, какие юридические вопросы требуют внимания сейчас, а какие могут стать проблемой при росте или инвестиционном раунде.</p>' +
+            '<div class="hero-badge">Smart Legal Screening · by Fenix Law</div>' +
+            '<h1>Что такое FENIX SLS?</h1>' +
+            '<p class="sub">Первичная юридическая диагностика для технологических компаний. Ответьте на понятные вопросы и получите персональный <strong>Legal Score</strong>, приоритизированный <strong>Action Plan</strong> и карту юридических рисков компании до прихода инвестора.</p>' +
           '</div>' +
-          '<img class="hero-logo" src="/img/logo.png" alt="Fenix Law">' +
+          '<img class="hero-logo" src="/img/logo.png" alt="FENIX SLS">' +
+        '</div>' +
+        '<div class="hero-pillars">' +
+          '<div class="pillar-card">' +
+            '<strong style="color:var(--ink)">Увидеть реальные риски</strong>' +
+            '<span>до прихода инвестора и Due Diligence</span>' +
+          '</div>' +
+          '<div class="pillar-card">' +
+            '<strong style="color:var(--gold)">Понять приоритеты</strong>' +
+            '<span>что критично устранить прямо сейчас</span>' +
+          '</div>' +
+          '<div class="pillar-card">' +
+            '<strong style="color:var(--positive)">Подготовиться к росту</strong>' +
+            '<span>и безопасным венчурным сделкам</span>' +
+          '</div>' +
         '</div>' +
         '<div class="cta-row">' +
-          '<button class="btn" id="start-btn">Начать диагностику</button>' +
+          '<button class="btn" id="start-btn">Пройти диагностику (10 мин)</button>' +
         '</div>' +
         '<div class="trust-row">' +
-          '<span>Бесплатно</span><span>Около 10 минут</span><span>Не требует подготовки документов</span>' +
+          '<span>✓ Бесплатно</span><span>✓ 10 минут</span><span>✓ Без загрузки документов</span><span>✓ На базе практики Fenix Law</span>' +
+        '</div>' +
+        '<div class="flow-section">' +
+          '<div class="flow-title">Как работает FENIX SLS</div>' +
+          '<div class="flow-grid">' +
+            '<div class="flow-step">' +
+              '<div class="step-tag">ШАГ 01</div>' +
+              '<h3>Ваши ответы</h3>' +
+              '<p>10 минут без юристов и сложных терминов</p>' +
+            '</div>' +
+            '<div class="flow-arrow">→</div>' +
+            '<div class="flow-step active">' +
+              '<div class="step-tag" style="color:var(--gold)">ШАГ 02 · АЛГОРИТМ</div>' +
+              '<h3>Синтез связей</h3>' +
+              '<p>SLS анализирует всю юридическую конструкцию компании</p>' +
+            '</div>' +
+            '<div class="flow-arrow">→</div>' +
+            '<div class="flow-step">' +
+              '<div class="step-tag" style="color:var(--positive)">ШАГ 03</div>' +
+              '<h3>Legal Roadmap</h3>' +
+              '<p>Legal Score, карта рисков и пошаговый план</p>' +
+            '</div>' +
+          '</div>' +
         '</div>' +
         '<div class="hero-domains">' +
-          '<div class="label">Восемь областей диагностики</div>' +
+          '<div class="label">Проверка 8 ключевых зон бизнеса</div>' +
           '<div class="domain-grid">' +
-            '<div>Сооснователи<small>роли, доли, vesting, выход</small></div>' +
-            '<div>Корпоративная структура<small>структура и cap table</small></div>' +
-            '<div>Интеллектуальная собственность<small>права на продукт и код</small></div>' +
-            '<div>Команда<small>сотрудники и подрядчики</small></div>' +
-            '<div>Продукт и клиенты<small>пользователи и условия</small></div>' +
-            '<div>Данные и ИИ<small>privacy, ПДн, AI-сервисы</small></div>' +
-            '<div>Коммерческие договоры<small>B2B-клиенты и партнеры</small></div>' +
-            '<div>Инвестиционная готовность<small>готовность к раунду</small></div>' +
+            '<div><div class="d-num">01</div><div class="d-title">Основатели</div><small>доли · роли · решения · вестинг</small></div>' +
+            '<div><div class="d-num">02</div><div class="d-title">Корпоративная структура</div><small>владение · полномочия · структура</small></div>' +
+            '<div><div class="d-num">03</div><div class="d-title">Интеллектуальная собственность</div><small>код · разработки · бренд · права</small></div>' +
+            '<div><div class="d-num">04</div><div class="d-title">Команда</div><small>сотрудники · подрядчики · доступы</small></div>' +
+            '<div><div class="d-num">05</div><div class="d-title">Продукт и пользователи</div><small>оферта · оплаты · ответственность</small></div>' +
+            '<div><div class="d-num">06</div><div class="d-title">Данные и ИИ</div><small>персональные данные · сбор · модели ИИ</small></div>' +
+            '<div><div class="d-num">07</div><div class="d-title">Договоры</div><small>клиенты · партнеры · обязательства</small></div>' +
+            '<div><div class="d-num">08</div><div class="d-title">Инвестиционная готовность</div><small>раунд · SAFE / КИС · проверка</small></div>' +
           '</div>' +
         '</div>' +
         '<div class="method">' +
-          '<h2>Сначала диагноз. Потом документы.</h2>' +
-          '<p>Fenix Law не просто готовит юридические документы. Сначала мы понимаем продукт, бизнес-модель, отношения между фаундерами, движение денег, IP и будущий рост компании — и затем выстраиваем юридическую архитектуру бизнеса.</p>' +
-          '<p>Система поможет определить потенциальные юридические пробелы и понять, какие действия целесообразны дальше. Часть вопросов вы сможете закрыть самостоятельно; для остальных увидите, с чего начать.</p>' +
+          '<h2>Юридическая экспертиза, превращенная в систему</h2>' +
+          '<p>Методология и алгоритм <strong>FENIX SLS</strong> созданы на базе реальной практики бутиковой юридической фирмы <strong>FENIX LAW</strong>, которая специализируется на технологических компаниях, венчурных сделках и структурировании бизнеса.</p>' +
+          '<p>Система анализирует не просто отдельные ответы, а выявляет критические юридические конфигурации (например, риск тупика при 50/50 без deadlock-механизмов) раньше, чем их увидит инвестор или возникнет спор.</p>' +
         '</div>' +
       '</section>'
     );
