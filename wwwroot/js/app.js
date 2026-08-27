@@ -254,6 +254,51 @@
             '<img class="trust-firm-logo" src="/img/fenix_law_crest.png" alt="Fenix Law">' +
           '</div>' +
         '</div>' +
+        '<div class="pricing-section">' +
+          '<div class="pricing-header">' +
+            '<div class="pricing-label">Стоимость</div>' +
+            '<h2>Выберите формат диагностики</h2>' +
+          '</div>' +
+          '<div class="pricing-grid">' +
+            '<div class="pricing-card">' +
+              '<div class="pricing-card-top">' +
+                '<div class="pricing-plan">FENIX SLS</div>' +
+                '<div class="pricing-price">29 900 <span>₸</span></div>' +
+                '<div class="pricing-sub">Один скрининг компании</div>' +
+              '</div>' +
+              '<ul class="pricing-features">' +
+                '<li>Проверка 8 ключевых зон</li>' +
+                '<li>Оценка юридической готовности</li>' +
+                '<li>Персональная карта рисков</li>' +
+                '<li>Сильные и слабые стороны</li>' +
+                '<li>Приоритетный план действий</li>' +
+                '<li>Готовность к инвестициям</li>' +
+                '<li>Персональный итоговый отчёт</li>' +
+              '</ul>' +
+              '<div class="pricing-cta">' +
+                '<button class="btn btn-secondary pricing-btn" id="start-btn-2">Проверить компанию</button>' +
+                '<div class="pricing-note">Около 10 минут · Без загрузки документов</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="pricing-card pricing-card--accent">' +
+              '<div class="pricing-badge">⭐ Рекомендуем для раунда</div>' +
+              '<div class="pricing-card-top">' +
+                '<div class="pricing-plan">FENIX SLS + разбор с юристом</div>' +
+                '<div class="pricing-price">79 900 <span>₸</span></div>' +
+                '<div class="pricing-sub">Все из FENIX SLS + 45 минут разбора результатов с Fenix Law</div>' +
+              '</div>' +
+              '<ul class="pricing-features">' +
+                '<li>Разбор критических зон</li>' +
+                '<li>Ответы на вопросы фаундеров</li>' +
+                '<li>Приоритеты исправления</li>' +
+                '<li>Что можно закрыть самостоятельно, а где нужен юрист</li>' +
+              '</ul>' +
+              '<div class="pricing-cta">' +
+                '<button class="btn pricing-btn" id="start-btn-3">Проверить компанию</button>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
       '</section>'
     );
     document.getElementById('start-btn').addEventListener('click', async function () {
@@ -271,6 +316,27 @@
       saveState();
       location.hash = '#/diagnostic';
     });
+
+    async function startDiagnostic() {
+      try {
+        const created = await api('POST', '/api/sessions');
+        state.sessionId = created.id;
+      } catch (e) {
+        state.sessionId = 'local_' + Date.now();
+      }
+      state.answers = {};
+      state.idx = 0;
+      lastResult = null;
+      unlocked = false;
+      isPaid = false;
+      saveState();
+      location.hash = '#/diagnostic';
+    }
+
+    const btn2 = document.getElementById('start-btn-2');
+    if (btn2) btn2.addEventListener('click', startDiagnostic);
+    const btn3 = document.getElementById('start-btn-3');
+    if (btn3) btn3.addEventListener('click', startDiagnostic);
   }
 
   function screenIntro() {
