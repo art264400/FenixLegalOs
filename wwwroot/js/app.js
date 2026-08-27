@@ -708,12 +708,27 @@
             arr = arr.indexOf(optId) !== -1 ? [] : [optId];
           } else {
             const i = arr.indexOf(optId);
-            if (i === -1) { arr.push(optId); arr = arr.filter(function (id) { const oo = q.options.find(function (o) { return o.id === id; }); return !(oo && oo.exclusive); }); }
-            else arr.splice(i, 1);
+            if (i === -1) {
+              arr.push(optId);
+              arr = arr.filter(function (id) {
+                const oo = q.options.find(function (o) { return o.id === id; });
+                return !(oo && oo.exclusive);
+              });
+            } else {
+              arr.splice(i, 1);
+            }
           }
           state.answers[q.id] = arr;
           saveState();
-          screenQuestion();
+
+          app.querySelectorAll('.q-option').forEach(function (otherBtn) {
+            const otherId = otherBtn.getAttribute('data-opt');
+            if (arr.indexOf(otherId) !== -1) {
+              otherBtn.classList.add('selected');
+            } else {
+              otherBtn.classList.remove('selected');
+            }
+          });
         } else {
           state.answers[q.id] = optId;
           saveState();
