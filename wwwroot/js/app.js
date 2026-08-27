@@ -6,6 +6,20 @@
   const modalRoot = document.getElementById('modal-root');
   const progressEl = document.getElementById('progress');
 
+  // Глобальная функция плавного скролла по id (используется из футера)
+  window.scrollToSection = function (id) {
+    if (location.hash !== '#/' && location.hash !== '') {
+      location.hash = '#/';
+      setTimeout(function () {
+        var el = document.getElementById(id);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 200);
+    } else {
+      var el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
   // ---------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------
@@ -153,7 +167,7 @@
     setProgress(0);
     track('landing_viewed');
     render(
-      '<section class="hero">' +
+      '<section class="hero" id="about">' +
         '<div class="hero-flex">' +
           '<div class="hero-copy">' +
             '<div class="hero-badge">Smart Legal Screening · by Fenix Law</div>' +
@@ -182,7 +196,7 @@
         '<div class="trust-row">' +
           '<span>✓ Бесплатно</span><span>✓ Около 15 минут</span><span>✓ Без загрузки документов</span><span>✓ Методология Fenix Law</span>' +
         '</div>' +
-        '<div class="flow-section">' +
+        '<div class="flow-section" id="how-it-works">' +
           '<div class="flow-title">Как работает FENIX SLS</div>' +
           '<div class="flow-grid">' +
             '<div class="flow-step">' +
@@ -204,7 +218,7 @@
             '</div>' +
           '</div>' +
         '</div>' +
-        '<div class="hero-domains">' +
+        '<div class="hero-domains" id="what-we-check">' +
           '<div class="label">Проверка 8 ключевых зон бизнеса</div>' +
           '<div class="domain-grid">' +
             '<div><div class="d-num">01</div><div class="d-title">Основатели</div><small>доли · роли · решения · вестинг</small></div>' +
@@ -254,7 +268,7 @@
             '<img class="trust-firm-logo" src="/img/fenix_law_crest.png" alt="Fenix Law">' +
           '</div>' +
         '</div>' +
-        '<div class="pricing-section">' +
+        '<div class="pricing-section" id="pricing">' +
           '<div class="pricing-header">' +
             '<div class="pricing-label">Стоимость</div>' +
             '<h2>Выберите формат диагностики</h2>' +
@@ -263,7 +277,7 @@
             '<div class="pricing-card">' +
               '<div class="pricing-card-top">' +
                 '<div class="pricing-plan">FENIX SLS</div>' +
-                '<div class="pricing-price">29 900 <span>₸</span></div>' +
+                '<div class="pricing-price" id="landing-price-1">29 900 <span>₸</span></div>' +
                 '<div class="pricing-sub">Один скрининг компании</div>' +
               '</div>' +
               '<ul class="pricing-features">' +
@@ -284,7 +298,7 @@
               '<div class="pricing-badge">⭐ Рекомендуем для раунда</div>' +
               '<div class="pricing-card-top">' +
                 '<div class="pricing-plan">FENIX SLS + разбор с юристом</div>' +
-                '<div class="pricing-price">79 900 <span>₸</span></div>' +
+                '<div class="pricing-price" id="landing-price-2">79 900 <span>₸</span></div>' +
                 '<div class="pricing-sub">Все из FENIX SLS + 45 минут разбора результатов с Fenix Law</div>' +
               '</div>' +
               '<ul class="pricing-features">' +
@@ -337,6 +351,19 @@
     if (btn2) btn2.addEventListener('click', startDiagnostic);
     const btn3 = document.getElementById('start-btn-3');
     if (btn3) btn3.addEventListener('click', startDiagnostic);
+
+    // Обновляем цены из БД
+    fetchPricing().then(function () {
+      const p1 = document.getElementById('landing-price-1');
+      const p2 = document.getElementById('landing-price-2');
+      if (p1 && currentPricing.priceKzt) {
+        p1.innerHTML = currentPricing.priceKzt.toLocaleString('ru') + ' <span>₸</span>';
+      }
+      // Цена второго тарифа — если есть отдельное поле, иначе умножаем примерно
+      if (p2 && currentPricing.consultationPriceKzt) {
+        p2.innerHTML = currentPricing.consultationPriceKzt.toLocaleString('ru') + ' <span>₸</span>';
+      }
+    });
   }
 
   function screenIntro() {
