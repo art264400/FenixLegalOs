@@ -307,6 +307,21 @@ public class ScoringEngine
             var sectionQs = visibleQs.Where(q => q.SectionId == s.Id).ToList();
             bool isModuleApplicable = IsModuleApplicable(s.Id, factStore, sectionQs);
 
+            // Special case for Solo Founder
+            if (s.Id == "founders" && (int?)factStore.Facts.GetValueOrDefault("founders.count") == 1)
+            {
+                // Solo founder has clean co-founder structure (no partner deadlock/vesting risks)
+                return new SectionScore
+                {
+                    SectionId = s.Id,
+                    Title = s.Title,
+                    Score = 100,
+                    Weight = s.Weight,
+                    Status = "APPLICABLE",
+                    Confidence = 100
+                };
+            }
+
             if (!isModuleApplicable)
             {
                 return new SectionScore
@@ -405,11 +420,12 @@ public class ScoringEngine
         var f = facts.Facts;
         return sectionId switch
         {
-            "corporate" => (string?)f.GetValueOrDefault("company.entityStatus") == "incorporated",
+            "founders" => true,
+            "corporate" => (string?)f.GetValueOrDefault("company.entityStatus") is "single" or "multiple" or "incorporated" or "registering",
             "team" => GetBoolFact(f, "team.hasNonFounderTeam"),
             "data" => GetBoolFact(f, "data.personalDataProcessed") || GetBoolFact(f, "ai.used"),
             "contracts" => GetBoolFact(f, "contracts.b2bRelevant"),
-            "investment" => (string)f["investment.timing"]! != "none" || GetBoolFact(f, "investment.priorInvestment"),
+            "investment" => (string?)f.GetValueOrDefault("investment.timing") != "none" || GetBoolFact(f, "investment.priorInvestment"),
             _ => sectionQs.Count > 0
         };
     }

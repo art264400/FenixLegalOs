@@ -81,9 +81,41 @@ public class ScoringEngineTests
         // Assert
         Assert.NotNull(result);
         Assert.True(result.Overall >= 0);
-        // For solo founder, co-founder deadlock risks should NOT be triggered
-        var hasCoFounderDeadlock = result.Risks.Any(r => r.Code == "R_FOUNDERS_EQUITY_UNFIXED" && r.Severity == "CRITICAL");
-        Assert.False(hasCoFounderDeadlock, "Solo founder should not trigger co-founder equity conflict risk");
+        var foundersSec = result.Sections.FirstOrDefault(s => s.SectionId == "founders");
+        Assert.NotNull(foundersSec);
+        Assert.Equal("APPLICABLE", foundersSec.Status);
+        Assert.Equal(100, foundersSec.Score);
+    }
+
+    [Fact]
+    public void Solo_Founder_With_Multiple_Entities_Should_Score_Correctly()
+    {
+        var answers = new Dictionary<string, object>
+        {
+            ["FND-C01"] = "solo",
+            ["COR-C01"] = "multiple",
+            ["COR-C02A"] = "kz",
+            ["COR-C02B"] = "3",
+            ["COR-01"] = "dispute",
+            ["COR-02"] = "none",
+            ["COR-03"] = "unclear_terms",
+            ["COR-04"] = "missing",
+            ["COR-04A"] = "yes",
+            ["COR-05"] = "systematic",
+            ["COR-06"] = "clear_limits",
+            ["COR-08"] = "organized",
+            ["COR-07_GROUP"] = "minor_exceptions",
+            ["COR-T01"] = "none"
+        };
+
+        var result = _engine.ComputeResult(answers);
+
+        Assert.NotNull(result);
+        Assert.True(result.Overall > 0, $"Expected Overall > 0, got {result.Overall}");
+        var corpSec = result.Sections.FirstOrDefault(s => s.SectionId == "corporate");
+        Assert.NotNull(corpSec);
+        Assert.Equal("APPLICABLE", corpSec.Status);
+        Assert.NotNull(corpSec.Score);
     }
 
     [Fact]
