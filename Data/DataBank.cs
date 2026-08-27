@@ -285,7 +285,7 @@ public static class DataBank
 
         // 2. COR-C02A (Контекст: юрисдикция основной компании)
         new() {
-            Id = "COR-C02A", SectionId = "corporate", Order = 2, Type = "jurisdiction_select", ScoreMode = "context", Weight = 0,
+            Id = "COR-C02A", SectionId = "corporate", Order = 2, Type = "single", ScoreMode = "context", Weight = 0,
             ShowIf = new() { new() { QuestionId = "COR-C01", Op = "in", Value = "one,multiple,registering" } },
             Question = "Где зарегистрирована основная компания?",
             Explanation = "Контекстный вопрос. Помогает определить систему права (Казахстан, английское право МФЦА, США, ОАЭ, Великобритания или др.).",

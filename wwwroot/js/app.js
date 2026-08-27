@@ -297,7 +297,6 @@
     const isMultiple = q.type === 'multiple';
     const isEquityInputs = q.type === 'equity_inputs';
     const isEntityBuilder = q.type === 'entity_builder' || q.id === 'COR-C02C';
-    const isJurisdictionSelect = q.type === 'jurisdiction_select' || q.id === 'COR-C02A';
 
     let contentHtml = '';
 
@@ -339,28 +338,6 @@
         '</div>' +
       '</div>' +
       '<div class="q-options" style="margin-top:16px;">' + optionsHtml + '</div>';
-    } else if (isJurisdictionSelect) {
-      const jurList = [
-        { id: 'kz', label: 'Казахстан' },
-        { id: 'aifc', label: 'МФЦА (AIFC)' },
-        { id: 'us', label: 'США (Delaware)' },
-        { id: 'uae', label: 'ОАЭ' },
-        { id: 'uk', label: 'Великобритания' },
-        { id: 'other', label: 'Другая страна' },
-        { id: 'unknown', label: 'Не уверен' }
-      ];
-      const selectedJur = (typeof current === 'object' && current !== null) ? current.jurisdiction : current;
-      const jurBtns = jurList.map(function (j) {
-        const sel = selectedJur === j.id;
-        return '<button type="button" class="jur-btn' + (sel ? ' selected' : '') + '" data-jur="' + j.id + '">' + esc(j.label) + '</button>';
-      }).join('');
-
-      contentHtml = '<div class="jur-builder-wrap">' +
-        '<div class="jur-card">' +
-          '<div class="jur-card-title">Выберите юрисдикцию основной компании:</div>' +
-          '<div class="jur-grid" id="main-jur-grid">' + jurBtns + '</div>' +
-        '</div>' +
-      '</div>';
     } else if (isEntityBuilder) {
       const countCode = state.answers['COR-C02B'] || '2';
       let entityCount = countCode === '3' ? 2 : countCode === '4plus' ? 3 : 1;
@@ -436,7 +413,7 @@
           : '') +
         '<div class="q-nav">' +
           (state.idx > 0 ? '<button class="btn-ghost" id="back-btn">← Назад</button>' : '') +
-          (isMultiple || isEquityInputs || isJurisdictionSelect || isEntityBuilder ? '<button class="btn" id="next-btn">Продолжить</button>' : '') +
+          (isMultiple || isEquityInputs || isEntityBuilder ? '<button class="btn" id="next-btn">Продолжить</button>' : '') +
           '<span class="q-count">' + (state.idx + 1) + ' / ' + visible.length + '</span>' +
         '</div>' +
       '</section>'
@@ -538,19 +515,6 @@
           updateSum();
         });
       }
-    }
-
-    if (isJurisdictionSelect) {
-      app.querySelectorAll('#main-jur-grid .jur-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          app.querySelectorAll('#main-jur-grid .jur-btn').forEach(function (b) { b.classList.remove('selected'); });
-          btn.classList.add('selected');
-          const jur = btn.getAttribute('data-jur');
-          state.answers[q.id] = jur;
-          saveState();
-          setTimeout(advance, 220);
-        });
-      });
     }
 
     if (isEntityBuilder) {
@@ -660,10 +624,6 @@
             map[inp.getAttribute('data-founder')] = parseFloat(inp.value) || 0;
           });
           state.answers[q.id] = map;
-          saveState();
-        } else if (isJurisdictionSelect && !state.answers[q.id]) {
-          const selBtn = app.querySelector('#main-jur-grid .jur-btn.selected');
-          state.answers[q.id] = selBtn ? selBtn.getAttribute('data-jur') : 'kz';
           saveState();
         } else if (isEntityBuilder) {
           const arr = [];
