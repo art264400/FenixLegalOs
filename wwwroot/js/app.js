@@ -1250,15 +1250,11 @@
 
     const mainContent =
       heroBlock(r) +
-      '<div style="text-align:center;margin:24px 0">' +
+      '<div style="text-align:center;margin:28px 0">' +
         '<button class="btn" id="download-pdf-btn" style="padding:14px 28px;font-size:15px">📥 Скачать официальный PDF-отчёт</button>' +
       '</div>' +
       aiMemoBlock(sessionId) +
-      block('Критические вопросы', bySeverity.critical, 'Вопросы, которые могут влиять на контроль над компанией, принадлежность продукта или ближайшую сделку.') +
-      block('Существенные вопросы', bySeverity.high, 'Пробелы, которые, вероятно, потребуется закрыть при росте или инвестиционном раунде.') +
-      block('Умеренные вопросы', bySeverity.medium, 'Вопросы, требующие внимания в рабочем порядке.') +
       strengths +
-      buildRoadmap(r) +
       '<section class="gate" style="margin-top:56px">' +
         '<h2>Персональный юридический разбор Fenix Law</h2>' +
         '<p>Мы уже знаем основные результаты вашей диагностики. Не нужно заново объяснять историю компании: вместе с запросом будут переданы ваши ответы, выявленные риски и Legal Score.</p>' +
