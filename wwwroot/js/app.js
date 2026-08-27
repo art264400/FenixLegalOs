@@ -235,6 +235,7 @@
       state.idx = 0;
       lastResult = null;
       unlocked = false;
+      isPaid = false;
       saveState();
       location.hash = '#/diagnostic';
     });
@@ -267,6 +268,7 @@
       state.idx = 0;
       lastResult = null;
       unlocked = false;
+      isPaid = false;
       saveState();
       location.hash = '#/diagnostic';
     });
@@ -741,6 +743,7 @@
       const data = await api('POST', '/api/sessions/' + state.sessionId + '/complete', { answers: state.answers });
       lastResult = data.result;
       unlocked = false;
+      isPaid = false;
       if (location.hash === '#/results') {
         screenResults();
       } else {
@@ -1224,6 +1227,7 @@
   function screenFullReport(sessionId) {
     if (!lastResult) { loadResultFromServer(sessionId, '#/report/' + sessionId); return; }
     if (!isPaid) {
+      location.hash = '#/results';
       screenResults();
       return;
     }
