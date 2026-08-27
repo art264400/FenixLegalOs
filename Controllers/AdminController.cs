@@ -272,7 +272,40 @@ public class AdminController : ControllerBase
                     ["COR-06"] = "clear_limits",
                     ["COR-07_GROUP"] = "aligned",
                     ["COR-08"] = "organized",
-                    ["COR-T01"] = "none"
+                    ["COR-T01"] = "none",
+                    ["IP-01"] = "ready",
+                    ["IP-02"] = JsonSerializer.SerializeToElement(new[] { "code", "app", "web", "brand", "domain" }),
+                    ["IP-03"] = JsonSerializer.SerializeToElement(new[] { "founders", "contractors" }),
+                    ["IP-04"] = "all",
+                    ["IP-05"] = "assigned",
+                    ["IP-07"] = "all",
+                    ["IP-10"] = "no",
+                    ["IP-11"] = "no",
+                    ["IP-12"] = "no",
+                    ["IP-13"] = "company",
+                    ["IP-14"] = "company",
+                    ["IP-15"] = "clear"
+                }
+            },
+            new
+            {
+                id = "preset_ip_dispute",
+                title = "Критический IP-разрыв (спор с бывшим автором и нет прав)",
+                description = "Продукт работает на рынке, но нет документов о принадлежности компании, а с ушедшим ключевым разработчиком возник открытый спор.",
+                badge = "🔴 IP Critical",
+                answers = new Dictionary<string, object>
+                {
+                    ["FND-C01"] = "2",
+                    ["COR-C01"] = "one",
+                    ["IP-01"] = "ready",
+                    ["IP-02"] = JsonSerializer.SerializeToElement(new[] { "code", "database" }),
+                    ["IP-03"] = JsonSerializer.SerializeToElement(new[] { "founders", "former" }),
+                    ["IP-04"] = "none",
+                    ["IP-05"] = "agreed",
+                    ["IP-08"] = "dispute",
+                    ["IP-10"] = "not_reviewed",
+                    ["IP-10A"] = "yes",
+                    ["IP-13"] = "worker"
                 }
             }
         };

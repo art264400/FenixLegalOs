@@ -24,22 +24,68 @@ public class ConditionsEvaluator
         if (string.IsNullOrEmpty(rule.QuestionId)) return true;
 
         // Check if QuestionId refers to a FactStore key
-        if (factStore != null && rule.QuestionId.Contains('.'))
+        if (factStore != null && (rule.QuestionId.Contains('.') || factStore.Facts.ContainsKey(rule.QuestionId)))
         {
-            if (factStore.Facts.TryGetValue(rule.QuestionId, out var factVal) && factVal != null)
+            if (factStore.Facts.TryGetValue(rule.QuestionId, out var factVal))
             {
-                return EvaluateOp(rule.Op, factVal.ToString() ?? "", rule.Value);
+                if (factVal is bool b && bool.TryParse(rule.Value?.ToString(), out var targetBool))
+                {
+                    return rule.Op switch
+                    {
+                        "eq" or null => b == targetBool,
+                        "neq" => b != targetBool,
+                        _ => b == targetBool
+                    };
+                }
+                if (factVal is IEnumerable<string> strList)
+                {
+                    var targetStr = rule.Value?.ToString() ?? "";
+                    return rule.Op switch
+                    {
+                        "contains" or "eq" or "in" => strList.Any(x => x.Equals(targetStr, StringComparison.OrdinalIgnoreCase)),
+                        "notContains" or "neq" => !strList.Any(x => x.Equals(targetStr, StringComparison.OrdinalIgnoreCase)),
+                        _ => true
+                    };
+                }
+                if (factVal != null)
+                {
+                    return EvaluateOp(rule.Op, factVal.ToString() ?? "", rule.Value, factVal);
+                }
             }
         }
 
         if (!answers.TryGetValue(rule.QuestionId, out var rawVal) || rawVal == null)
-            return rule.Op == "neq" || rule.Op == "notIn";
+            return rule.Op == "neq" || rule.Op == "notIn" || rule.Op == "notContains";
+
+        if (rawVal is JsonElement je && je.ValueKind == JsonValueKind.Array)
+        {
+            var arrVals = new List<string>();
+            foreach (var el in je.EnumerateArray()) arrVals.Add(el.ToString());
+            var targetStr = rule.Value?.ToString() ?? "";
+            return rule.Op switch
+            {
+                "contains" or "eq" or "in" => arrVals.Any(x => x.Equals(targetStr, StringComparison.OrdinalIgnoreCase)),
+                "notContains" or "neq" => !arrVals.Any(x => x.Equals(targetStr, StringComparison.OrdinalIgnoreCase)),
+                _ => true
+            };
+        }
+
+        if (rawVal is IEnumerable<string> listVal)
+        {
+            var targetStr = rule.Value?.ToString() ?? "";
+            return rule.Op switch
+            {
+                "contains" or "eq" or "in" => listVal.Any(x => x.Equals(targetStr, StringComparison.OrdinalIgnoreCase)),
+                "notContains" or "neq" => !listVal.Any(x => x.Equals(targetStr, StringComparison.OrdinalIgnoreCase)),
+                _ => true
+            };
+        }
 
         var valStr = rawVal.ToString() ?? "";
-        return EvaluateOp(rule.Op, valStr, rule.Value);
+        return EvaluateOp(rule.Op, valStr, rule.Value, rawVal);
     }
 
-    private static bool EvaluateOp(string? op, string valStr, object? ruleValue)
+    private static bool EvaluateOp(string? op, string valStr, object? ruleValue, object? rawVal = null)
     {
         return op switch
         {
@@ -47,6 +93,8 @@ public class ConditionsEvaluator
             "neq" => !valStr.Equals(ruleValue?.ToString(), StringComparison.OrdinalIgnoreCase),
             "in" => RuleValueContains(ruleValue, valStr),
             "notIn" => !RuleValueContains(ruleValue, valStr),
+            "contains" => valStr.Split(',', StringSplitOptions.TrimEntries).Any(x => x.Equals(ruleValue?.ToString(), StringComparison.OrdinalIgnoreCase)),
+            "notContains" => !valStr.Split(',', StringSplitOptions.TrimEntries).Any(x => x.Equals(ruleValue?.ToString(), StringComparison.OrdinalIgnoreCase)),
             "answered" => !string.IsNullOrEmpty(valStr),
             "gte" => double.TryParse(valStr, out var v1) && double.TryParse(ruleValue?.ToString(), out var v2) && v1 >= v2,
             "lte" => double.TryParse(valStr, out var v3) && double.TryParse(ruleValue?.ToString(), out var v4) && v3 <= v4,
@@ -207,6 +255,57 @@ public class FactNormalizer
         var fnd01 = GetAnswerStr(answers, "FND-01");
         f["founders.dispute"] = fnd01 == "active_conflict" || fnd01 == "formal_dispute";
 
+        // IP Facts
+        var ip01 = GetAnswerStr(answers, "IP-01");
+        bool coreProductExists = ip01 != "idea" && !string.IsNullOrEmpty(ip01);
+        f["ip.coreProductExists"] = coreProductExists;
+        f["product.stage"] = ip01 switch
+        {
+            "idea" => "idea",
+            "prototype" => "prototype",
+            "ready" => "live_or_ready",
+            "multiple" => "multiple_products",
+            _ => "idea"
+        };
+
+        var ipAssets = GetAnswerList(answers, "IP-02");
+        f["ip.assets"] = ipAssets;
+
+        var ipCreators = GetAnswerList(answers, "IP-03");
+        f["ip.creators"] = ipCreators;
+
+        f["ip.overallRightsEvidence"] = GetAnswerStr(answers, "IP-04");
+        f["ip.founderRights"] = GetAnswerStr(answers, "IP-05");
+        f["ip.employeeRights"] = GetAnswerStr(answers, "IP-06");
+        f["ip.contractorRights"] = GetAnswerStr(answers, "IP-07");
+        f["ip.formerCreatorStatus"] = GetAnswerStr(answers, "IP-08");
+        f["ip.studioRights"] = GetAnswerStr(answers, "IP-09");
+        f["ip.externalEmployerCreation"] = GetAnswerStr(answers, "IP-10");
+
+        var ip10A = GetAnswerStr(answers, "IP-10A");
+        f["ip.employerResourcesUsed"] = ip10A switch
+        {
+            "yes" => true,
+            "no" => false,
+            "possible" => "possible",
+            "unknown" => "unknown",
+            _ => null
+        };
+
+        var ip11 = GetAnswerStr(answers, "IP-11");
+        f["ip.thirdPartyComponentsUsed"] = ip11 switch
+        {
+            "yes" or "likely" => true,
+            "no" => false,
+            _ => "unknown"
+        };
+        f["ip.thirdPartyTermsReview"] = GetAnswerStr(answers, "IP-11A");
+        f["ip.externalDependency"] = GetAnswerStr(answers, "IP-12");
+        f["ip.criticalAccountsControl"] = GetAnswerStr(answers, "IP-13");
+        f["ip.brandDomainControl"] = GetAnswerStr(answers, "IP-14");
+        f["ip.brandRegistration"] = GetAnswerStr(answers, "IP-14") == "brand_not_registered" ? "not_registered" : "registered";
+        f["ip.contentProvenance"] = GetAnswerStr(answers, "IP-15");
+
         // Team Facts
         var teamC01 = GetAnswerStr(answers, "TEAM-C01");
         f["team.hasNonFounderTeam"] = teamC01 != "founders_only" && !string.IsNullOrEmpty(teamC01);
@@ -275,6 +374,24 @@ public class FactNormalizer
     private static string GetAnswerStr(Dictionary<string, object> answers, string key)
     {
         return answers.TryGetValue(key, out var val) && val != null ? val.ToString() ?? "" : "";
+    }
+
+    private static List<string> GetAnswerList(Dictionary<string, object> answers, string key)
+    {
+        if (!answers.TryGetValue(key, out var val) || val == null) return new();
+        if (val is JsonElement je && je.ValueKind == JsonValueKind.Array)
+        {
+            var res = new List<string>();
+            foreach (var item in je.EnumerateArray()) res.Add(item.ToString());
+            return res;
+        }
+        if (val is IEnumerable<string> strEnum) return strEnum.ToList();
+        if (val is string s)
+        {
+            if (s.Contains(',')) return s.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList();
+            return new List<string> { s };
+        }
+        return new();
     }
 }
 
@@ -422,6 +539,7 @@ public class ScoringEngine
         {
             "founders" => true,
             "corporate" => (string?)f.GetValueOrDefault("company.entityStatus") is "single" or "multiple" or "incorporated" or "registering",
+            "ip" => true,
             "team" => GetBoolFact(f, "team.hasNonFounderTeam"),
             "data" => GetBoolFact(f, "data.personalDataProcessed") || GetBoolFact(f, "ai.used"),
             "contracts" => GetBoolFact(f, "contracts.b2bRelevant"),
@@ -453,7 +571,7 @@ public class ScoringEngine
                 {
                     Code = def.Code,
                     RootCauseGroup = def.RootCauseGroup,
-                    Severity = def.Severity,
+                    Severity = opt.Severity ?? def.Severity,
                     Priority = def.Priority,
                     SectionId = def.SectionId,
                     Title = def.Title,
@@ -482,33 +600,120 @@ public class ScoringEngine
             var def = allRisks.FirstOrDefault(r => r.Code == "COR_NO_ENTITY_FOR_ACTIVITY");
             if (def != null && !list.Any(f => f.Code == def.Code))
             {
-                list.Add(new RiskFinding
-                {
-                    Code = def.Code,
-                    RootCauseGroup = def.RootCauseGroup,
-                    Severity = def.Severity,
-                    Priority = def.Priority,
-                    SectionId = def.SectionId,
-                    Title = def.Title,
-                    Finding = def.Finding,
-                    WhyItMatters = def.WhyItMatters,
-                    Recommendation = def.Recommendation.Length > 0 ? def.Recommendation : (def.Recommendations.FirstOrDefault() ?? ""),
-                    Recommendations = def.Recommendations.Count > 0 ? def.Recommendations : new List<string> { def.Recommendation },
-                    Basis = new List<RiskFindingBasis> { new() { QuestionId = "COR-C01", AnswerId = "none" } },
-                    LawyerRequired = def.LawyerRequired,
-                    Resolution = def.Resolution,
-                    ServiceCode = def.ServiceCode,
-                    Cta = def.Cta
-                });
+                AddFinding(list, def, "COR-C01", "none", "HIGH");
+            }
+        }
+
+        // §27.2 Rule: IP_PRODUCT_RIGHTS_UNCONFIRMED
+        // Condition: ip.coreProductExists == true AND company.entityStatus in [incorporated, single, multiple] AND ip.overallRightsEvidence in [none, informal]
+        bool coreProductExists = GetBoolFact(facts.Facts, "ip.coreProductExists");
+        var overallRights = (string?)facts.Facts.GetValueOrDefault("ip.overallRightsEvidence");
+        if (coreProductExists && entityStatus is "single" or "multiple" or "incorporated" && overallRights is "none" or "informal")
+        {
+            var def = allRisks.FirstOrDefault(r => r.Code == "IP_PRODUCT_RIGHTS_UNCONFIRMED");
+            if (def != null)
+            {
+                var existing = list.FirstOrDefault(f => f.Code == def.Code);
+                if (existing != null) existing.Severity = "CRITICAL";
+                else AddFinding(list, def, "IP-04", overallRights ?? "none", "CRITICAL");
+            }
+        }
+
+        // §27.2 Rule: IP_FORMER_DEVELOPER_GAP
+        // Condition: ip.formerCreatorStatus in [unresolved, dispute] OR (team.formerPeopleExist == true AND ip.contractorRights in [payment_only, no_contract, unclear_clause])
+        var formerStatus = (string?)facts.Facts.GetValueOrDefault("ip.formerCreatorStatus");
+        var contractorRights = (string?)facts.Facts.GetValueOrDefault("ip.contractorRights");
+        var ipCreators = facts.Facts.GetValueOrDefault("ip.creators") as List<string>;
+        bool formerPeopleExist = GetBoolFact(facts.Facts, "team.formerPeopleExist") || (ipCreators != null && ipCreators.Contains("former"));
+        if (formerStatus is "unresolved" or "dispute" || (formerPeopleExist && contractorRights is "payment_only" or "no_contract" or "unclear_clause"))
+        {
+            var def = allRisks.FirstOrDefault(r => r.Code == "IP_FORMER_DEVELOPER_GAP");
+            if (def != null)
+            {
+                var existing = list.FirstOrDefault(f => f.Code == def.Code);
+                if (existing != null) existing.Severity = "CRITICAL";
+                else AddFinding(list, def, "IP-08", formerStatus ?? "unresolved", "CRITICAL");
+            }
+        }
+
+        // §27.2 Rule: IP_EMPLOYER_RISK
+        // Condition: ip.externalEmployerCreation in [not_reviewed, unknown] AND ip.employerResourcesUsed in [true, possible, unknown]
+        var extEmployer = (string?)facts.Facts.GetValueOrDefault("ip.externalEmployerCreation");
+        var resUsed = facts.Facts.GetValueOrDefault("ip.employerResourcesUsed");
+        if (extEmployer is "not_reviewed" or "unknown" && (resUsed is true or "possible" or "unknown"))
+        {
+            var def = allRisks.FirstOrDefault(r => r.Code == "IP_EMPLOYER_RISK");
+            if (def != null)
+            {
+                string sev = resUsed is true ? "CRITICAL" : "HIGH";
+                var existing = list.FirstOrDefault(f => f.Code == def.Code);
+                if (existing != null) existing.Severity = sev;
+                else AddFinding(list, def, "IP-10A", resUsed?.ToString() ?? "possible", sev);
+            }
+        }
+
+        // §27.2 Rule: IP_ACCESS_CONTROL
+        // Condition: ip.criticalAccountsControl in [worker, one_founder] AND (founders.activeDispute == true OR team.formerPersonConflict == true OR personDeparting == true)
+        var accControl = (string?)facts.Facts.GetValueOrDefault("ip.criticalAccountsControl");
+        bool founderDispute = GetBoolFact(facts.Facts, "founders.dispute") || GetBoolFact(facts.Facts, "founders.activeDispute");
+        bool teamConflict = GetBoolFact(facts.Facts, "team.formerPersonConflict");
+        if (accControl is "worker" or "one_founder" && (founderDispute || teamConflict))
+        {
+            var def = allRisks.FirstOrDefault(r => r.Code == "IP_ACCESS_CONTROL");
+            if (def != null)
+            {
+                var existing = list.FirstOrDefault(f => f.Code == def.Code);
+                if (existing != null) existing.Severity = "CRITICAL";
+                else AddFinding(list, def, "IP-13", accControl ?? "worker", "CRITICAL");
             }
         }
 
         return list;
     }
 
+    private void AddFinding(List<RiskFinding> list, RiskDefinition def, string qId, string ansId, string severity)
+    {
+        list.Add(new RiskFinding
+        {
+            Code = def.Code,
+            RootCauseGroup = def.RootCauseGroup,
+            Severity = severity,
+            Priority = def.Priority,
+            SectionId = def.SectionId,
+            Title = def.Title,
+            Finding = def.Finding,
+            WhyItMatters = def.WhyItMatters,
+            Recommendation = def.Recommendation.Length > 0 ? def.Recommendation : (def.Recommendations.FirstOrDefault() ?? ""),
+            Recommendations = def.Recommendations.Count > 0 ? def.Recommendations : new List<string> { def.Recommendation },
+            Basis = new List<RiskFindingBasis> { new() { QuestionId = qId, AnswerId = ansId } },
+            LawyerRequired = def.LawyerRequired,
+            Resolution = def.Resolution,
+            ServiceCode = def.ServiceCode,
+            Cta = def.Cta
+        });
+    }
+
     private List<RiskFinding> MergeAndSuppressFindings(List<RiskFinding> rawFindings, SharedFactStore facts)
     {
-        var grouped = rawFindings.GroupBy(f => f.RootCauseGroup).ToList();
+        var suppressedCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // Canonical Cross-Finding Suppressions (§25)
+        if (rawFindings.Any(f => f.Code == "IP_PRODUCT_RIGHTS_UNCONFIRMED"))
+        {
+            suppressedCodes.Add("IP_FOUNDER_RIGHTS_NOT_TRANSFERRED");
+            suppressedCodes.Add("IP_CONTRACTOR_RIGHTS_GAP");
+            suppressedCodes.Add("IP_STUDIO_RIGHTS_GAP");
+        }
+
+        if (rawFindings.Any(f => f.Code == "IP_FORMER_DEVELOPER_GAP"))
+        {
+            suppressedCodes.Add("IP_CONTRACTOR_RIGHTS_GAP");
+            suppressedCodes.Add("TEAM_FORMER_ACCESS_RISK");
+        }
+
+        var activeFindings = rawFindings.Where(f => !suppressedCodes.Contains(f.Code)).ToList();
+
+        var grouped = activeFindings.GroupBy(f => f.RootCauseGroup).ToList();
         var merged = new List<RiskFinding>();
 
         foreach (var group in grouped)

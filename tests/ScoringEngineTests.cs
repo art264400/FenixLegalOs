@@ -256,4 +256,196 @@ public class ScoringEngineTests
         Assert.Contains("МФЦА", narrative);
         Assert.Contains("2 компаний", narrative);
     }
+
+    [Fact]
+    public void IP_Happy_Path_Fully_Protected_Should_Score_100()
+    {
+        // Arrange: Fully compliant IP setup with assigned rights, clean domain and company accounts
+        var answers = new Dictionary<string, object>
+        {
+            ["FND-C01"] = "2",
+            ["FND-C04"] = "signed",
+            ["FND-01"] = "none",
+            ["FND-02"] = "written",
+            ["FND-03"] = "full",
+            ["FND-04"] = "registered",
+            ["FND-05"] = "vesting",
+            ["FND-05A"] = "yes",
+            ["FND-06"] = "written",
+            ["FND-07"] = "mechanism",
+            ["FND-08"] = "written",
+            ["COR-C01"] = "aifc",
+            ["COR-02"] = "registered",
+            ["COR-03"] = "signed",
+            ["COR-04"] = "complete",
+            ["COR-04A"] = "yes",
+            ["COR-05"] = "systematic",
+            ["COR-06"] = "clear_limits",
+            ["COR-07_AIFC"] = "clean",
+            ["COR-08"] = "organized",
+            ["COR-T01"] = "none",
+
+            // IP Module Answers
+            ["IP-01"] = "ready",
+            ["IP-02"] = new List<string> { "code", "app", "web", "brand", "domain" },
+            ["IP-03"] = new List<string> { "founders", "contractors" },
+            ["IP-04"] = "all",       // overall_rights: 1.0
+            ["IP-05"] = "assigned",  // founder_rights: 1.0
+            ["IP-07"] = "all",       // external_creators: 1.0
+            ["IP-10"] = "no",        // external_employer: 1.0
+            ["IP-11"] = "no",        // 3rd party context
+            ["IP-12"] = "no",        // external dependency: 1.0
+            ["IP-13"] = "company",   // technical control: 1.0
+            ["IP-14"] = "company",   // brand & domain: 1.0
+            ["IP-15"] = "clear"      // content provenance: 1.0
+        };
+
+        // Act
+        var result = _engine.ComputeResult(answers);
+
+        // Assert
+        Assert.NotNull(result);
+        var ipSec = result.Sections.FirstOrDefault(s => s.SectionId == "ip");
+        Assert.NotNull(ipSec);
+        Assert.Equal("APPLICABLE", ipSec.Status);
+        Assert.Equal(100, ipSec.Score);
+        Assert.DoesNotContain(result.Risks, r => r.SectionId == "ip" && r.Severity is "CRITICAL" or "HIGH");
+    }
+
+    [Fact]
+    public void IP_Unconfirmed_Product_Rights_Should_Trigger_Critical_And_Suppress_Gaps()
+    {
+        // Arrange: Incorporated entity, ready product, but no documents confirming ownership (IP-04 = none)
+        var answers = new Dictionary<string, object>
+        {
+            ["FND-C01"] = "2",
+            ["COR-C01"] = "one",
+            ["IP-01"] = "ready",
+            ["IP-02"] = new List<string> { "code" },
+            ["IP-03"] = new List<string> { "founders", "contractors", "studio" },
+            ["IP-04"] = "none",              // Trigger IP_PRODUCT_RIGHTS_UNCONFIRMED (CRITICAL)
+            ["IP-05"] = "agreed",            // IP_FOUNDER_RIGHTS_NOT_TRANSFERRED (should be suppressed)
+            ["IP-07"] = "unclear_clause",    // IP_CONTRACTOR_RIGHTS_GAP (should be suppressed)
+            ["IP-09"] = "unknown_chain"      // IP_STUDIO_RIGHTS_GAP (should be suppressed)
+        };
+
+        // Act
+        var result = _engine.ComputeResult(answers);
+
+        // Assert
+        Assert.NotNull(result);
+        var criticalRisk = result.Risks.FirstOrDefault(r => r.Code == "IP_PRODUCT_RIGHTS_UNCONFIRMED");
+        Assert.NotNull(criticalRisk);
+        Assert.Equal("CRITICAL", criticalRisk.Severity);
+        Assert.Equal("IP_OWNERSHIP", criticalRisk.RootCauseGroup);
+
+        // Verify Canonical Suppressions
+        Assert.DoesNotContain(result.Risks, r => r.Code == "IP_FOUNDER_RIGHTS_NOT_TRANSFERRED");
+        Assert.DoesNotContain(result.Risks, r => r.Code == "IP_CONTRACTOR_RIGHTS_GAP");
+        Assert.DoesNotContain(result.Risks, r => r.Code == "IP_STUDIO_RIGHTS_GAP");
+    }
+
+    [Fact]
+    public void IP_Former_Developer_Dispute_Should_Trigger_Critical_Risk()
+    {
+        // Arrange: Former developer with open dispute
+        var answers = new Dictionary<string, object>
+        {
+            ["FND-C01"] = "solo",
+            ["COR-C01"] = "one",
+            ["IP-01"] = "ready",
+            ["IP-03"] = new List<string> { "founders", "former" },
+            ["IP-04"] = "main",
+            ["IP-08"] = "dispute" // Trigger IP_FORMER_DEVELOPER_GAP (CRITICAL)
+        };
+
+        // Act
+        var result = _engine.ComputeResult(answers);
+
+        // Assert
+        Assert.NotNull(result);
+        var formerRisk = result.Risks.FirstOrDefault(r => r.Code == "IP_FORMER_DEVELOPER_GAP");
+        Assert.NotNull(formerRisk);
+        Assert.Equal("CRITICAL", formerRisk.Severity);
+        Assert.Equal("KEY_DEVELOPER", formerRisk.RootCauseGroup);
+    }
+
+    [Fact]
+    public void IP_Moonlighting_With_Employer_Resources_Should_Trigger_Critical_Employer_Risk()
+    {
+        // Arrange: Founder created product while employed and used employer resources
+        var answers = new Dictionary<string, object>
+        {
+            ["FND-C01"] = "solo",
+            ["COR-C01"] = "one",
+            ["IP-01"] = "ready",
+            ["IP-03"] = new List<string> { "founders" },
+            ["IP-04"] = "all",
+            ["IP-10"] = "not_reviewed",
+            ["IP-10A"] = "yes" // Resources used -> CRITICAL
+        };
+
+        // Act
+        var result = _engine.ComputeResult(answers);
+
+        // Assert
+        Assert.NotNull(result);
+        var employerRisk = result.Risks.FirstOrDefault(r => r.Code == "IP_EMPLOYER_RISK");
+        Assert.NotNull(employerRisk);
+        Assert.Equal("CRITICAL", employerRisk.Severity);
+        Assert.Equal("IP_EMPLOYER", employerRisk.RootCauseGroup);
+    }
+
+    [Fact]
+    public void IP_Idea_Stage_Should_Handle_Light_Path_Gracefully()
+    {
+        // Arrange: Pure idea stage (IP-01 = idea)
+        var answers = new Dictionary<string, object>
+        {
+            ["FND-C01"] = "solo",
+            ["COR-C01"] = "none",
+            ["IP-01"] = "idea"
+        };
+
+        // Act
+        var result = _engine.ComputeResult(answers);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.DoesNotContain(result.Risks, r => r.SectionId == "ip" && r.Severity is "CRITICAL" or "HIGH");
+    }
+
+    [Fact]
+    public void IP_Brand_Not_Registered_Should_Not_Penalize_Score_And_Create_Info_Risk()
+    {
+        // Arrange: Everything clean, but brand is not registered yet
+        var answers = new Dictionary<string, object>
+        {
+            ["FND-C01"] = "solo",
+            ["COR-C01"] = "one",
+            ["IP-01"] = "ready",
+            ["IP-02"] = new List<string> { "code", "brand" },
+            ["IP-03"] = new List<string> { "founders" },
+            ["IP-04"] = "all",
+            ["IP-05"] = "assigned",
+            ["IP-10"] = "no",
+            ["IP-11"] = "no",
+            ["IP-12"] = "no",
+            ["IP-13"] = "company",
+            ["IP-14"] = "brand_not_registered", // Brand not registered
+            ["IP-15"] = "clear"
+        };
+
+        // Act
+        var result = _engine.ComputeResult(answers);
+
+        // Assert
+        Assert.NotNull(result);
+        var ipSec = result.Sections.FirstOrDefault(s => s.SectionId == "ip");
+        Assert.NotNull(ipSec);
+        Assert.Equal(100, ipSec.Score); // Brand not registered does not penalize score
+        var brandInfo = result.Risks.FirstOrDefault(r => r.Code == "IP_BRAND_REGISTRATION_INFO");
+        Assert.NotNull(brandInfo);
+        Assert.Equal("INFO", brandInfo.Severity);
+    }
 }

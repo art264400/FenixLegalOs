@@ -66,11 +66,20 @@
       if (rule.any && !rule.any.some(function (r) { return evalRule(r, answers); })) return false;
       return true;
     }
-    const a = answers[rule.questionId];
+    let a = answers[rule.questionId];
+
+    // Client-side fact resolutions
+    if (rule.questionId === 'ip.coreProductExists') {
+      const pStage = answers['IP-01'];
+      a = pStage !== undefined && pStage !== null && pStage !== 'idea' ? 'true' : 'false';
+    } else if (rule.questionId === 'ip.creators') {
+      a = answers['IP-03'];
+    }
+
     switch (rule.op) {
       case 'answered': return a !== undefined && a !== null && a !== '' && !(Array.isArray(a) && !a.length);
-      case 'eq': return a === rule.value;
-      case 'neq': return a !== undefined && a !== rule.value;
+      case 'eq': return String(a).toLowerCase() === String(rule.value).toLowerCase();
+      case 'neq': return a !== undefined && String(a).toLowerCase() !== String(rule.value).toLowerCase();
       case 'in':
         if (typeof a !== 'string') return false;
         if (Array.isArray(rule.value)) return rule.value.indexOf(a) !== -1;
@@ -81,7 +90,15 @@
         if (Array.isArray(rule.value)) return rule.value.indexOf(a) === -1;
         if (typeof rule.value === 'string') return rule.value.split(',').map(function (s) { return s.trim(); }).indexOf(a) === -1;
         return true;
-      case 'includes': return Array.isArray(a) && a.indexOf(rule.value) !== -1;
+      case 'includes':
+      case 'contains':
+        if (Array.isArray(a)) return a.some(function (x) { return String(x).toLowerCase() === String(rule.value).toLowerCase(); });
+        if (typeof a === 'string') return a.split(',').map(function (s) { return s.trim().toLowerCase(); }).indexOf(String(rule.value).toLowerCase()) !== -1;
+        return false;
+      case 'notContains':
+        if (Array.isArray(a)) return !a.some(function (x) { return String(x).toLowerCase() === String(rule.value).toLowerCase(); });
+        if (typeof a === 'string') return a.split(',').map(function (s) { return s.trim().toLowerCase(); }).indexOf(String(rule.value).toLowerCase()) === -1;
+        return true;
       default: return false;
     }
   }

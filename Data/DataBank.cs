@@ -11,7 +11,8 @@ public static class DataBank
     public static readonly List<DiagnosticSection> Sections = new()
     {
         new("founders", 1, "Сооснователи", "Founders", 18),
-        new("corporate", 2, "Корпоративная структура", "Corporate", 12)
+        new("corporate", 2, "Корпоративная структура", "Corporate", 12),
+        new("ip", 3, "Интеллектуальная собственность", "IP", 18)
     };
 
     public static readonly List<DiagnosticQuestion> Questions = new()
@@ -461,6 +462,274 @@ public static class DataBank
                 new("informal", "Есть неформальная понятийная договоренность о скрытом контроле / доле", 0.0, Severity: "CRITICAL", RiskCode: "COR_HIDDEN_CONTROL", ConfidenceClass: "known"),
                 new("unknown", "Не уверен(а)", 0.3, ConfidenceClass: "unknown")
             }
+        },
+
+        // =====================================================================
+        // БЛОК 3. ИНТЕЛЛЕКТУАЛЬНАЯ СОБСТВЕННОСТЬ И ПРАВА НА ПРОДУКТ (IP) v1.1
+        // =====================================================================
+
+        // 1. IP-01 (Контекст: стадия продукта)
+        new() {
+            Id = "IP-01", SectionId = "ip", Order = 1, Type = "single", ScoreMode = "context", Weight = 0,
+            Question = "Есть ли уже созданный продукт или его часть?",
+            Explanation = "Позволяет определить стадию разработки: на стадии идеи диагностика прав на продукт проходит по облегченному сценарию.",
+            Options = new() {
+                new("idea", "Пока есть только идея", 1.0, ConfidenceClass: "known"),
+                new("prototype", "Есть прототип или тестовая версия", 1.0, ConfidenceClass: "known"),
+                new("ready", "Есть готовый продукт", 1.0, ConfidenceClass: "known"),
+                new("multiple", "Есть несколько продуктов", 1.0, ConfidenceClass: "known")
+            }
+        },
+
+        // 2. IP-02 (Контекст: карта ключевых IP-активов)
+        new() {
+            Id = "IP-02", SectionId = "ip", Order = 2, Type = "multiple", ScoreMode = "context", Weight = 0,
+            Question = "Что важно для работы продукта?",
+            Explanation = "Формирует карту нематериальных активов проекта (код, приложения, базы данных, бренды).",
+            Options = new() {
+                new("code", "Программный код", 1.0, ConfidenceClass: "known"),
+                new("app", "Мобильное приложение", 1.0, ConfidenceClass: "known"),
+                new("web", "Сайт или веб-платформа", 1.0, ConfidenceClass: "known"),
+                new("design", "Дизайн и интерфейс", 1.0, ConfidenceClass: "known"),
+                new("database", "База данных", 1.0, ConfidenceClass: "known"),
+                new("own_data", "Собственные данные или подборки данных", 1.0, ConfidenceClass: "known"),
+                new("content", "Тексты, видео, изображения или другой контент", 1.0, ConfidenceClass: "known"),
+                new("brand", "Название и бренд", 1.0, ConfidenceClass: "known"),
+                new("domain", "Домен", 1.0, ConfidenceClass: "known"),
+                new("technology", "Собственная технология или техническое решение", 1.0, ConfidenceClass: "known"),
+                new("other", "Другое", 1.0, ConfidenceClass: "known")
+            }
+        },
+
+        // 3. IP-03 (Контекст: создатели и авторы продукта)
+        new() {
+            Id = "IP-03", SectionId = "ip", Order = 3, Type = "multiple", ScoreMode = "context", Weight = 0,
+            ShowIf = new() { new() { QuestionId = "ip.coreProductExists", Op = "eq", Value = "true" } },
+            Question = "Кто участвовал в создании продукта?",
+            Explanation = "Определяет цепочки создания продукта для адаптивного ветвления вопросов о правах.",
+            Options = new() {
+                new("founders", "Я или другие основатели", 1.0, ConfidenceClass: "known"),
+                new("employees", "Штатные сотрудники", 1.0, ConfidenceClass: "known"),
+                new("contractors", "Фрилансеры или частные разработчики", 1.0, ConfidenceClass: "known"),
+                new("studio", "Внешняя студия или компания-разработчик", 1.0, ConfidenceClass: "known"),
+                new("former", "Бывшие сотрудники или подрядчики", 1.0, ConfidenceClass: "known"),
+                new("acquired", "Купили готовую разработку у другого лица или компании", 1.0, ConfidenceClass: "known"),
+                new("third_party", "Использовали готовые сторонние решения", 1.0, ConfidenceClass: "known"),
+                new("unknown", "Не уверен", 0.5, ConfidenceClass: "unknown")
+            }
+        },
+
+        // 4. IP-04 (Диагностика: права на продукт в целом)
+        new() {
+            Id = "IP-04", SectionId = "ip", DimensionId = "overall_rights", Order = 4, Type = "single", ScoreMode = "diagnostic", Weight = 22, DimensionWeight = 22, WithinDimensionWeight = 100,
+            ShowIf = new() { new() { QuestionId = "ip.coreProductExists", Op = "eq", Value = "true" } },
+            Question = "Есть ли документы, из которых понятно, что созданный продукт принадлежит компании?",
+            Explanation = "Инвестор и Due Diligence проверяют наличие правовой цепочки перехода прав на ключевой продукт.",
+            Options = new() {
+                new("all", "Документы есть по всему ключевому продукту", 1.0, ConfidenceClass: "known"),
+                new("main", "По основной части продукта документы есть", 0.75, ConfidenceClass: "known"),
+                new("some", "Документы есть только по отдельным частям", 0.45, Severity: "MEDIUM", RiskCode: "IP_PRODUCT_RIGHTS_UNCONFIRMED", ConfidenceClass: "partial"),
+                new("informal", "Договорились, но специально не оформляли", 0.20, Severity: "HIGH", RiskCode: "IP_PRODUCT_RIGHTS_UNCONFIRMED", ConfidenceClass: "known"),
+                new("none", "Подтверждающих документов практически нет", 0.0, Severity: "CRITICAL", RiskCode: "IP_PRODUCT_RIGHTS_UNCONFIRMED", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.15, Severity: "HIGH", RiskCode: "IP_PRODUCT_RIGHTS_UNCONFIRMED", ConfidenceClass: "unknown")
+            }
+        },
+
+        // 5. IP-05 (Диагностика: вклад основателей)
+        new() {
+            Id = "IP-05", SectionId = "ip", DimensionId = "founder_rights", Order = 5, Type = "single", ScoreMode = "diagnostic", Weight = 12, DimensionWeight = 12, WithinDimensionWeight = 100,
+            ShowIf = new() { new() { QuestionId = "ip.creators", Op = "contains", Value = "founders" } },
+            Question = "Если продукт создавали основатели, оформляли ли передачу созданного компании?",
+            Explanation = "Код и архитектура, созданные основателями до или во время работы компании, требуют официальной передачи (IP Assignment).",
+            Options = new() {
+                new("assigned", "Да, это оформлено документами (договор передачи / акт)", 1.0, ConfidenceClass: "known"),
+                new("covered", "Предусмотрено в соглашении между основателями", 0.90, ConfidenceClass: "known"),
+                new("partial", "Оформлена только часть прав", 0.50, Severity: "MEDIUM", RiskCode: "IP_FOUNDER_RIGHTS_NOT_TRANSFERRED", ConfidenceClass: "partial"),
+                new("agreed", "Договорились передать, но пока не оформили", 0.35, Severity: "HIGH", RiskCode: "IP_FOUNDER_RIGHTS_NOT_TRANSFERRED", ConfidenceClass: "known"),
+                new("founder_owned", "Нет, созданное пока остается оформлено на основателей", 0.10, Severity: "HIGH", RiskCode: "IP_FOUNDER_RIGHTS_NOT_TRANSFERRED", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.15, Severity: "HIGH", RiskCode: "IP_FOUNDER_RIGHTS_NOT_TRANSFERRED", ConfidenceClass: "unknown")
+            }
+        },
+
+        // 6. IP-06 (Диагностика: служебные произведения сотрудников)
+        new() {
+            Id = "IP-06", SectionId = "ip", DimensionId = "employee_rights", Order = 6, Type = "single", ScoreMode = "diagnostic", Weight = 10, DimensionWeight = 10, WithinDimensionWeight = 100,
+            ShowIf = new() { new() { QuestionId = "ip.creators", Op = "contains", Value = "employees" } },
+            Question = "Есть ли документы, регулирующие права на то, что сотрудники создают в работе?",
+            Explanation = "Служебные произведения переходят компании только при наличии трудового договора, должностных инструкций и служебных заданий/актов.",
+            Options = new() {
+                new("all", "Да, по всем сотрудникам (трудовые договоры + положения об IP)", 1.0, ConfidenceClass: "known"),
+                new("key_gaps", "По ключевым сотрудникам да, по некоторым есть пробелы", 0.70, ConfidenceClass: "known"),
+                new("not_reviewed", "Договоры есть, но этот вопрос специально не проверяли", 0.50, Severity: "MEDIUM", RiskCode: "IP_CONTRACTOR_RIGHTS_GAP", ConfidenceClass: "partial"),
+                new("missing_some", "По части разработчиков или сотрудников таких документов нет", 0.20, Severity: "HIGH", RiskCode: "IP_CONTRACTOR_RIGHTS_GAP", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.15, Severity: "MEDIUM", RiskCode: "IP_CONTRACTOR_RIGHTS_GAP", ConfidenceClass: "unknown")
+            }
+        },
+
+        // 7. IP-07 (Диагностика: права на результат внешних разработчиков)
+        new() {
+            Id = "IP-07", SectionId = "ip", DimensionId = "external_creators", Order = 7, Type = "single", ScoreMode = "diagnostic", Weight = 10, DimensionWeight = 20, WithinDimensionWeight = 50,
+            ShowIf = new() { new() { QuestionId = "ip.creators", Op = "contains", Value = "contractors" } },
+            Question = "С внешними разработчиками есть документы, из которых понятно, кому принадлежит результат?",
+            Explanation = "Оплата счета или инвойса не передает исключительные права автоматически. Нужен договор авторского заказа / услуг с явной передачей прав.",
+            Options = new() {
+                new("all", "Да, по всем ключевым подрядчикам оформлены договоры и акты передачи прав", 1.0, ConfidenceClass: "known"),
+                new("most", "По большинству есть, но по отдельным людям есть пробелы", 0.70, ConfidenceClass: "known"),
+                new("unclear_clause", "Договоры есть, но в них неясно, кому принадлежит созданный результат", 0.35, Severity: "HIGH", RiskCode: "IP_CONTRACTOR_RIGHTS_GAP", ConfidenceClass: "partial"),
+                new("payment_only", "Есть только счета, акты или подтверждение оплаты без передачи прав", 0.20, Severity: "HIGH", RiskCode: "IP_CONTRACTOR_RIGHTS_GAP", ConfidenceClass: "known"),
+                new("no_contract", "Письменных договоров не было", 0.0, Severity: "HIGH", RiskCode: "IP_CONTRACTOR_RIGHTS_GAP", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.15, Severity: "HIGH", RiskCode: "IP_CONTRACTOR_RIGHTS_GAP", ConfidenceClass: "unknown")
+            }
+        },
+
+        // 8. IP-08 (Диагностика: права ушедших авторов)
+        new() {
+            Id = "IP-08", SectionId = "ip", DimensionId = "external_creators", Order = 8, Type = "single", ScoreMode = "diagnostic", Weight = 6, DimensionWeight = 20, WithinDimensionWeight = 30,
+            ShowIf = new() { new() { QuestionId = "ip.creators", Op = "contains", Value = "former" } },
+            Question = "Есть ли среди создателей важной части продукта те, кто уже не работает?",
+            Explanation = "Если ключевой разработчик ушел без подписанных актов передачи прав, после ухода закрыть такой разрыв значительно сложнее.",
+            Options = new() {
+                new("none", "Нет, все продолжают работать", 1.0, ConfidenceClass: "known"),
+                new("complete", "Да, но все необходимые документы и акты подписаны", 1.0, ConfidenceClass: "known"),
+                new("partial", "Да, и по отдельным ушедшим людям документы неполные", 0.50, Severity: "HIGH", RiskCode: "IP_FORMER_DEVELOPER_GAP", ConfidenceClass: "partial"),
+                new("unresolved", "Да, и с кем-то вопрос о правах вообще не оформлялся", 0.10, Severity: "CRITICAL", RiskCode: "IP_FORMER_DEVELOPER_GAP", ConfidenceClass: "known"),
+                new("dispute", "Есть открытый спор или претензии", 0.0, Severity: "CRITICAL", RiskCode: "IP_FORMER_DEVELOPER_GAP", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.15, Severity: "HIGH", RiskCode: "IP_FORMER_DEVELOPER_GAP", ConfidenceClass: "unknown")
+            }
+        },
+
+        // 9. IP-09 (Диагностика: разработка внешней студией)
+        new() {
+            Id = "IP-09", SectionId = "ip", DimensionId = "external_creators", Order = 9, Type = "single", ScoreMode = "diagnostic", Weight = 4, DimensionWeight = 20, WithinDimensionWeight = 20,
+            ShowIf = new() { new() { QuestionId = "ip.creators", Op = "contains", Value = "studio" } },
+            Question = "Если продукт делала внешняя компания, понятно ли, кто создавал код и переданы ли вам права на весь результат?",
+            Explanation = "Студия могла привлекать субподрядчиков без прав на сублицензирование. Требуются прямые гарантии отчуждения исключительных прав.",
+            Options = new() {
+                new("confirmed", "Да, это понятно и подтверждено договором и актами", 1.0, ConfidenceClass: "known"),
+                new("agency_only", "Договор со студией есть, но кто выполнял работы, не проверяли", 0.70, Severity: "MEDIUM", RiskCode: "IP_STUDIO_RIGHTS_GAP", ConfidenceClass: "known"),
+                new("subcontractors_unchecked", "Привлекались субподрядчики, документы на них не проверяли", 0.40, Severity: "HIGH", RiskCode: "IP_STUDIO_RIGHTS_GAP", ConfidenceClass: "partial"),
+                new("unknown_chain", "Не знаем, кто фактически писал код", 0.15, Severity: "HIGH", RiskCode: "IP_STUDIO_RIGHTS_GAP", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.20, Severity: "MEDIUM", RiskCode: "IP_STUDIO_RIGHTS_GAP", ConfidenceClass: "unknown")
+            }
+        },
+
+        // 10. IP-10 (Диагностика: работа основателя у стороннего работодателя)
+        new() {
+            Id = "IP-10", SectionId = "ip", DimensionId = "external_employer", Order = 10, Type = "single", ScoreMode = "diagnostic", Weight = 3, DimensionWeight = 8, WithinDimensionWeight = 40,
+            ShowIf = new() { new() { QuestionId = "ip.creators", Op = "contains", Value = "founders" } },
+            Question = "Создавал ли основатель продукт, одновременно работая в другой компании?",
+            Explanation = "Если продукт создавался в период работы по найму в IT-сфере, прежний работодатель может заявить права на служебное произведение.",
+            Options = new() {
+                new("no", "Нет, создавал только вне найма", 1.0, ConfidenceClass: "known"),
+                new("unrelated", "Да, но это никак не связано со сферой работодателя", 0.90, ConfidenceClass: "known"),
+                new("lawyer_checked", "Да, и этот вопрос проверяли с юристом (есть согласие работодателя)", 1.0, ConfidenceClass: "known"),
+                new("not_reviewed", "Да, но отдельно этот вопрос не проверяли", 0.35, Severity: "HIGH", RiskCode: "IP_EMPLOYER_RISK", ConfidenceClass: "partial"),
+                new("unknown", "Не уверен(а)", 0.20, Severity: "HIGH", RiskCode: "IP_EMPLOYER_RISK", ConfidenceClass: "unknown")
+            }
+        },
+
+        // 11. IP-10A (Диагностика: ресурсы стороннего работодателя)
+        new() {
+            Id = "IP-10A", SectionId = "ip", DimensionId = "external_employer", Order = 11, Type = "single", ScoreMode = "diagnostic", Weight = 5, DimensionWeight = 8, WithinDimensionWeight = 60,
+            ShowIf = new() { new() { QuestionId = "IP-10", Op = "in", Value = "unrelated,lawyer_checked,not_reviewed,unknown" } },
+            Question = "Использовались ли рабочее время, оборудование, данные или ресурсы той компании?",
+            Explanation = "Использование корпоративного ноутбука или репозитория работодателя — главный триггер судебных споров о принадлежности кода (Moonlighting claim).",
+            Options = new() {
+                new("no", "Нет, использовались строго личные ресурсы и нерабочее время", 1.0, ConfidenceClass: "known"),
+                new("possible", "Возможно (рабочий ноутбук, офисный интернет или репозитории)", 0.45, Severity: "HIGH", RiskCode: "IP_EMPLOYER_RISK", ConfidenceClass: "partial"),
+                new("yes", "Да, использовались ресурсы работодателя", 0.10, Severity: "CRITICAL", RiskCode: "IP_EMPLOYER_RISK", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.20, Severity: "HIGH", RiskCode: "IP_EMPLOYER_RISK", ConfidenceClass: "unknown")
+            }
+        },
+
+        // 12. IP-11 (Контекст: готовый код и Open Source)
+        new() {
+            Id = "IP-11", SectionId = "ip", Order = 12, Type = "single", ScoreMode = "context", Weight = 0,
+            ShowIf = new() { new() { QuestionId = "ip.coreProductExists", Op = "eq", Value = "true" } },
+            Question = "Использовали ли разработчики готовый код, библиотеки или сторонние компоненты?",
+            Explanation = "Помогает оценить лицензионную чистоту используемых библиотек и зависимостей.",
+            Options = new() {
+                new("no", "Нет, только полностью собственный код", 1.0, ConfidenceClass: "known"),
+                new("yes", "Да, используются Open Source библиотеки и фреймворки", 1.0, ConfidenceClass: "known"),
+                new("likely", "Скорее всего да, но не знаю подробностей", 0.8, ConfidenceClass: "partial"),
+                new("unknown", "Не уверен", 0.5, ConfidenceClass: "unknown")
+            }
+        },
+
+        // 13. IP-11A (Диагностика: лицензионный аудит сторонних компонентов)
+        new() {
+            Id = "IP-11A", SectionId = "ip", DimensionId = "third_party_dependencies", Order = 13, Type = "single", ScoreMode = "diagnostic", Weight = 5, DimensionWeight = 10, WithinDimensionWeight = 50,
+            ShowIf = new() { new() { QuestionId = "IP-11", Op = "in", Value = "yes,likely,unknown" } },
+            Question = "Проверяли ли, на каких условиях можно использовать готовые компоненты?",
+            Explanation = "Вирусные лицензии (GPL/AGPL) могут обязать компанию раскрыть весь исходный коммерческий код в публичный доступ.",
+            Options = new() {
+                new("yes", "Да, это системно проверяется (нет вирусных GPL/AGPL-лицензий)", 1.0, ConfidenceClass: "known"),
+                new("main", "Проверяли только основные компоненты", 0.75, ConfidenceClass: "known"),
+                new("developers_only", "Разработчики сами следят, отдельно мы это не проверяли", 0.50, Severity: "MEDIUM", RiskCode: "IP_THIRD_PARTY_COMPONENTS", ConfidenceClass: "partial"),
+                new("no", "Нет, аудит лицензий не проводился", 0.20, Severity: "MEDIUM", RiskCode: "IP_THIRD_PARTY_COMPONENTS", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.20, Severity: "MEDIUM", RiskCode: "IP_THIRD_PARTY_COMPONENTS", ConfidenceClass: "unknown")
+            }
+        },
+
+        // 14. IP-12 (Диагностика: внешняя критическая зависимость)
+        new() {
+            Id = "IP-12", SectionId = "ip", DimensionId = "third_party_dependencies", Order = 14, Type = "single", ScoreMode = "diagnostic", Weight = 5, DimensionWeight = 10, WithinDimensionWeight = 50,
+            ShowIf = new() { new() { QuestionId = "ip.coreProductExists", Op = "eq", Value = "true" } },
+            Question = "Есть ли внешняя технология или сервис, без которого продукт не сможет нормально работать?",
+            Explanation = "Зависимость от проприетарного API (OpenAI, Stripe, Google Maps) создает риски непрерывности бизнеса при блокировке или смене тарифов.",
+            Options = new() {
+                new("no", "Нет существенной зависимости (легко заменить)", 1.0, ConfidenceClass: "known"),
+                new("known", "Есть, и условия использования понятны и защищены договором", 1.0, ConfidenceClass: "known"),
+                new("unchecked", "Есть, но ограничения и риски блокировки не проверяли", 0.55, Severity: "MEDIUM", RiskCode: "IP_EXTERNAL_DEPENDENCY", ConfidenceClass: "partial"),
+                new("critical", "Значительная часть продукта зависит от такого решения (риск вендор-лока)", 0.25, Severity: "HIGH", RiskCode: "IP_EXTERNAL_DEPENDENCY", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.30, Severity: "MEDIUM", RiskCode: "IP_EXTERNAL_DEPENDENCY", ConfidenceClass: "unknown")
+            }
+        },
+
+        // 15. IP-13 (Диагностика: контроль технических активов)
+        new() {
+            Id = "IP-13", SectionId = "ip", DimensionId = "technical_control", Order = 15, Type = "single", ScoreMode = "diagnostic", Weight = 8, DimensionWeight = 8, WithinDimensionWeight = 100,
+            ShowIf = new() { new() { QuestionId = "ip.coreProductExists", Op = "eq", Value = "true" } },
+            Question = "На чьи аккаунты оформлены важные сервисы и доступы продукта (GitHub, AWS, Google Cloud, App Store)?",
+            Explanation = "Оформление репозиториев и серверов на личные почты сотрудников создает риск потери доступа к продукту при конфликте или уходе.",
+            Options = new() {
+                new("company", "Все критические аккаунты оформлены строго на корпоративную почту компании", 1.0, ConfidenceClass: "known"),
+                new("mixed", "Часть на компанию, часть на личные почты основателей", 0.70, ConfidenceClass: "known"),
+                new("one_founder", "Большинство ключевых аккаунтов оформлено на одного основателя", 0.40, Severity: "MEDIUM", RiskCode: "IP_ACCESS_CONTROL", ConfidenceClass: "known"),
+                new("worker", "Часть важных сервисов оформлена на личный аккаунт сотрудника или подрядчика", 0.15, Severity: "HIGH", RiskCode: "IP_ACCESS_CONTROL", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.25, Severity: "HIGH", RiskCode: "IP_ACCESS_CONTROL", ConfidenceClass: "unknown")
+            }
+        },
+
+        // 16. IP-14 (Диагностика: домен и бренд)
+        new() {
+            Id = "IP-14", SectionId = "ip", DimensionId = "brand_domain", Order = 16, Type = "single", ScoreMode = "diagnostic", Weight = 4, DimensionWeight = 4, WithinDimensionWeight = 100,
+            ShowIf = new() { new() { QuestionId = "ip.coreProductExists", Op = "eq", Value = "true" } },
+            Question = "На кого оформлены основной домен и бренд?",
+            Explanation = "Доменное имя и товарный знак должны принадлежать компании, чтобы исключить риски шантажа или потери трафика.",
+            Options = new() {
+                new("company", "Основной домен и оформленные права на бренд находятся у компании", 1.0, ConfidenceClass: "known"),
+                new("mixed", "Часть на компанию, часть на основателей", 0.65, ConfidenceClass: "known"),
+                new("founder", "Основной домен оформлен на физическое лицо — основателя", 0.40, Severity: "MEDIUM", RiskCode: "IP_DOMAIN_BRAND_CONTROL", ConfidenceClass: "known"),
+                new("worker", "Домен зарегистрирован на сотрудника или подрядчика", 0.15, Severity: "HIGH", RiskCode: "IP_DOMAIN_BRAND_CONTROL", ConfidenceClass: "known"),
+                new("brand_not_registered", "Бренд пока отдельно не регистрировали", 1.0, Severity: "INFO", RiskCode: "IP_BRAND_REGISTRATION_INFO", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.20, Severity: "MEDIUM", RiskCode: "IP_DOMAIN_BRAND_CONTROL", ConfidenceClass: "unknown")
+            }
+        },
+
+        // 17. IP-15 (Диагностика: происхождение данных и контента)
+        new() {
+            Id = "IP-15", SectionId = "ip", DimensionId = "content_provenance", Order = 17, Type = "single", ScoreMode = "diagnostic", Weight = 6, DimensionWeight = 6, WithinDimensionWeight = 100,
+            ShowIf = new() { new() { QuestionId = "ip.coreProductExists", Op = "eq", Value = "true" } },
+            Question = "Если данные или контент важны для продукта, понятно ли происхождение и право их использования?",
+            Explanation = "Парсинг чужих баз данных или использование нелицензионных медиафайлов создает прямые риски судебных исков о нарушении авторских прав.",
+            Options = new() {
+                new("clear", "Да, происхождение и лицензии на все данные полностью понятны", 1.0, ConfidenceClass: "known"),
+                new("mostly", "По основной части да, есть незначительные открытые вопросы", 0.75, ConfidenceClass: "known"),
+                new("some_unknown", "По некоторым материалам/датасетам уверенности нет", 0.50, Severity: "MEDIUM", RiskCode: "IP_CONTENT_RIGHTS", ConfidenceClass: "partial"),
+                new("external_unchecked", "Значительная часть получена парсингом/извне без проверки условий", 0.25, Severity: "HIGH", RiskCode: "IP_CONTENT_RIGHTS", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.20, Severity: "HIGH", RiskCode: "IP_CONTENT_RIGHTS", ConfidenceClass: "unknown")
+            }
         }
     };
 
@@ -824,6 +1093,249 @@ public static class DataBank
             LawyerRequired = true,
             Resolution = "lawyer_required",
             ServiceCode = "CORPORATE_CLEANUP"
+        },
+
+        // =====================================================================
+        // РЕЕСТР РИСКОВ БЛОКА «ИНТЕЛЛЕКТУАЛЬНАЯ СОБСТВЕННОСТЬ» (IP) v1.1
+        // =====================================================================
+        new() {
+            Code = "IP_PRODUCT_RIGHTS_UNCONFIRMED",
+            RootCauseGroup = "IP_OWNERSHIP",
+            Severity = "CRITICAL",
+            Priority = "NOW",
+            SectionId = "ip",
+            Modules = new() { "ip" },
+            Title = "Принадлежность ключевого продукта компании не подтверждена",
+            Finding = "Компания уже использует созданный продукт, но нет достаточного документального подтверждения прав компании на его ключевые элементы.",
+            WhyItMatters = "Если права на основной технологический актив нельзя подтвердить, это ставит под угрозу коммерциализацию, лицензирование и привлекательность для инвесторов.",
+            Recommendation = "Составить перечень ключевых элементов продукта, собрать договоры отчуждения прав и закрыть выявленные разрывы.",
+            Recommendations = new() {
+                "Составить перечень ключевых элементов продукта и их авторов.",
+                "Собрать договоры и документы, подтверждающие переход прав на компанию.",
+                "Оформить передачу недостающих прав отдельными соглашениями."
+            },
+            LawyerRequired = true,
+            Resolution = "lawyer_required",
+            ServiceCode = "IP_RIGHTS_REVIEW"
+        },
+        new() {
+            Code = "IP_FOUNDER_RIGHTS_NOT_TRANSFERRED",
+            RootCauseGroup = "IP_OWNERSHIP",
+            Severity = "HIGH",
+            Priority = "NOW",
+            SectionId = "ip",
+            Modules = new() { "ip" },
+            Title = "Права на часть продукта остаются связанными с основателем",
+            Finding = "Один или несколько founders создавали продукт, но передача необходимых прав компании оформлена не полностью.",
+            WhyItMatters = "При уходе, конфликте или раунде инвестор может потребовать подтверждения, вправе ли сама компания свободно распоряжаться кодом.",
+            Recommendation = "Оформить передачу прав (IP Assignment) от основателей на компанию.",
+            Recommendations = new() {
+                "Определить, какие результаты были созданы основателями.",
+                "Проверить действующие договоры и корпоративные документы.",
+                "Оформить передачу недостающих прав компании."
+            },
+            LawyerRequired = false,
+            Resolution = "check_with_lawyer",
+            ServiceCode = "IP_RIGHTS_REVIEW"
+        },
+        new() {
+            Code = "IP_CONTRACTOR_RIGHTS_GAP",
+            RootCauseGroup = "KEY_DEVELOPER",
+            Severity = "HIGH",
+            Priority = "NOW",
+            SectionId = "ip",
+            Modules = new() { "ip" },
+            Title = "Права на результат внешнего разработчика подтверждены не полностью",
+            Finding = "Внешний специалист участвовал в создании продукта, но существующие документы не позволяют уверенно подтвердить принадлежность компании всего созданного результата.",
+            WhyItMatters = "Факт оплаты работ сам по себе не означает автоматического перехода исключительных прав на код.",
+            Recommendation = "Подписать акты приема-передачи с явным указанием отчуждения исключительных прав.",
+            Recommendations = new() {
+                "Определить вклад конкретного разработчика.",
+                "Проверить договор, акты и переписку о правах.",
+                "Оформить подтверждение передачи исключительных прав."
+            },
+            LawyerRequired = false,
+            Resolution = "check_with_lawyer",
+            ServiceCode = "IP_RIGHTS_REVIEW"
+        },
+        new() {
+            Code = "IP_FORMER_DEVELOPER_GAP",
+            RootCauseGroup = "KEY_DEVELOPER",
+            Severity = "CRITICAL",
+            Priority = "NOW",
+            SectionId = "ip",
+            Modules = new() { "ip" },
+            Title = "Права на часть продукта, созданную бывшим разработчиком, требуют первоочередной проверки",
+            Finding = "Бывший сотрудник или подрядчик участвовал в создании важной части продукта, а документы о правах неполны, отсутствуют или оспариваются.",
+            WhyItMatters = "После прекращения отношений закрыть такой разрыв сложнее; бывший разработчик может потребовать компенсацию или заблокировать сделку.",
+            Recommendation = "Собрать договоры, акты и подтверждения передачи прав, а также убедиться в отзыве всех технических доступов.",
+            Recommendations = new() {
+                "Определить весь вклад бывшего разработчика.",
+                "Собрать договоры, акты и подтверждения передачи прав.",
+                "Параллельно проверить, закрыты ли его технические доступы."
+            },
+            LawyerRequired = true,
+            Resolution = "lawyer_required",
+            ServiceCode = "IP_RIGHTS_REVIEW"
+        },
+        new() {
+            Code = "IP_STUDIO_RIGHTS_GAP",
+            RootCauseGroup = "IP_OWNERSHIP",
+            Severity = "HIGH",
+            Priority = "NOW",
+            SectionId = "ip",
+            Modules = new() { "ip" },
+            Title = "Цепочка прав через внешнюю студию подтверждена не полностью",
+            Finding = "Договор с внешней студией существует, но не полностью понятно, кто фактически создавал продукт и могла ли студия передать права на весь результат.",
+            WhyItMatters = "Если студия привлекала сторонних субподрядчиков без прав на сублицензирование, права компании на конечный продукт уязвимы.",
+            Recommendation = "Запросить гарантии студии об отсутствии сторонних претензий и подтвердить цепочку передачи прав от авторов.",
+            Recommendations = new() {
+                "Уточнить состав исполнителей студии.",
+                "Проверить договорные гарантии и передачу прав.",
+                "Закрыть существенные пробелы по ключевым результатам."
+            },
+            LawyerRequired = false,
+            Resolution = "check_with_lawyer",
+            ServiceCode = "IP_RIGHTS_REVIEW"
+        },
+        new() {
+            Code = "IP_EMPLOYER_RISK",
+            RootCauseGroup = "IP_EMPLOYER",
+            Severity = "HIGH",
+            Priority = "NOW",
+            SectionId = "ip",
+            Modules = new() { "ip" },
+            Title = "Создание продукта пересекается с работой основателя у другого работодателя",
+            Finding = "Основатель создавал продукт в период работы в другой компании, а использование рабочего времени, оборудования, данных или иных ресурсов не исключено либо отдельно не проверялось.",
+            WhyItMatters = "Прежний работодатель может заявить права на служебное произведение или потребовать долю в стартапе (Moonlighting dispute).",
+            Recommendation = "Провести правовой аудит трудового договора основателя и при необходимости получить письменное подтверждение об отсутствии претензий.",
+            Recommendations = new() {
+                "Проверить трудовые и иные обязательства основателя перед работодателем.",
+                "Определить, когда и с использованием каких ресурсов создавались ключевые результаты.",
+                "При необходимости получить подтверждение отсутствия претензий (Release letter)."
+            },
+            LawyerRequired = true,
+            Resolution = "lawyer_required",
+            ServiceCode = "IP_RIGHTS_REVIEW"
+        },
+        new() {
+            Code = "IP_THIRD_PARTY_COMPONENTS",
+            RootCauseGroup = "IP_DEPENDENCIES",
+            Severity = "MEDIUM",
+            Priority = "30_DAYS",
+            SectionId = "ip",
+            Modules = new() { "ip" },
+            Title = "Условия использования готовых сторонних компонентов проверены не полностью",
+            Finding = "Продукт использует код, библиотеки или другие компоненты, созданные не компанией, а условия их использования контролируются частично либо не проверялись.",
+            WhyItMatters = "Отдельные лицензии (GPL, AGPL) могут налагать ограничения на распространение, закрытость кода или коммерческую модель.",
+            Recommendation = "Провести аудит используемых Open Source библиотек на совместимость с коммерческой лицензией продукта.",
+            Recommendations = new() {
+                "Составить перечень ключевых сторонних компонентов.",
+                "Определить применимые условия использования (MIT, Apache, GPL).",
+                "Проверить компоненты, критичные для коммерческой модели продукта."
+            },
+            LawyerRequired = false,
+            Resolution = "check_with_lawyer",
+            ServiceCode = "IP_RIGHTS_REVIEW"
+        },
+        new() {
+            Code = "IP_EXTERNAL_DEPENDENCY",
+            RootCauseGroup = "IP_DEPENDENCIES",
+            Severity = "HIGH",
+            Priority = "NOW",
+            SectionId = "ip",
+            Modules = new() { "ip" },
+            Title = "Ключевая функция продукта зависит от внешней технологии",
+            Finding = "Значимая часть работы продукта зависит от сторонней технологии или сервиса, при этом ограничения такой зависимости проверены не полностью.",
+            WhyItMatters = "Изменение условий, прекращение доступа или ограничение API может нарушить непрерывность сервиса и обязательства перед клиентами.",
+            Recommendation = "Оценить технический и договорный запасной сценарий для критических внешних API.",
+            Recommendations = new() {
+                "Определить критичные внешние зависимости.",
+                "Проверить условия использования и прекращения доступа.",
+                "Оценить технический и договорный запасной сценарий."
+            },
+            LawyerRequired = false,
+            Resolution = "check_with_lawyer",
+            ServiceCode = "IP_RIGHTS_REVIEW"
+        },
+        new() {
+            Code = "IP_ACCESS_CONTROL",
+            RootCauseGroup = "KEY_DEVELOPER",
+            Severity = "HIGH",
+            Priority = "NOW",
+            SectionId = "ip",
+            Modules = new() { "ip" },
+            Title = "Критически важные технические активы находятся под личным контролем",
+            Finding = "Часть ключевых сервисов, репозиториев, доменов или иных технических активов оформлена на конкретного founder, сотрудника или подрядчика.",
+            WhyItMatters = "При уходе или конфликте компания может потерять фактический доступ к инфраструктуре, даже если юридически считает себя владельцем.",
+            Recommendation = "Перевести все учетные записи и репозитории на корпоративные аккаунты с двухфакторной аутентификацией и резервными правами доступа.",
+            Recommendations = new() {
+                "Определить перечень критических аккаунтов.",
+                "Создать корпоративный контроль и резервные доступы.",
+                "Связать изменение доступов с процедурой ухода людей."
+            },
+            LawyerRequired = false,
+            Resolution = "check_with_lawyer",
+            ServiceCode = "IP_RIGHTS_REVIEW"
+        },
+        new() {
+            Code = "IP_DOMAIN_BRAND_CONTROL",
+            RootCauseGroup = "IP_CONTROL",
+            Severity = "MEDIUM",
+            Priority = "30_DAYS",
+            SectionId = "ip",
+            Modules = new() { "ip" },
+            Title = "Домен или оформленные права на бренд находятся вне компании",
+            Finding = "Основной домен или часть прав на бренд зарегистрированы на founder, сотрудника либо подрядчика, а не на операционную компанию.",
+            WhyItMatters = "Такой актив может оказаться зависимым от отношений с конкретным человеком и потребовать отдельной процедуры передачи.",
+            Recommendation = "Перенести домен на корпоративный аккаунт компании.",
+            Recommendations = new() {
+                "Проверить текущих владельцев домена и оформленных прав.",
+                "Определить целевого владельца (компания).",
+                "Оформить передачу и корпоративный контроль."
+            },
+            LawyerRequired = false,
+            Resolution = "check_with_lawyer",
+            ServiceCode = "IP_RIGHTS_REVIEW"
+        },
+        new() {
+            Code = "IP_CONTENT_RIGHTS",
+            RootCauseGroup = "IP_CONTENT",
+            Severity = "HIGH",
+            Priority = "NOW",
+            SectionId = "ip",
+            Modules = new() { "ip" },
+            Title = "Происхождение части данных или контента как актива не подтверждено",
+            Finding = "Значимая часть базы данных, изображений, видео, текстов или других материалов получена из внешних источников, а право использовать их в текущей модели проверено не полностью.",
+            WhyItMatters = "Ограничения на использование внешних датасетов или контента могут повлечь претензии правообладателей и блокировку продукта.",
+            Recommendation = "Проверить лицензии на используемые датасеты и медиаконтент.",
+            Recommendations = new() {
+                "Определить источники ключевых материалов.",
+                "Проверить разрешения и условия использования.",
+                "Заменить или оформить права на проблемные элементы."
+            },
+            LawyerRequired = false,
+            Resolution = "check_with_lawyer",
+            ServiceCode = "IP_RIGHTS_REVIEW"
+        },
+        new() {
+            Code = "IP_BRAND_REGISTRATION_INFO",
+            RootCauseGroup = "IP_CONTROL",
+            Severity = "INFO",
+            Priority = "LATER",
+            SectionId = "ip",
+            Modules = new() { "ip" },
+            Title = "Бренд пока не оформлен как отдельный зарегистрированный актив",
+            Finding = "Компания использует название или бренд, но отдельная регистрация товарного знака пока не проводилась.",
+            WhyItMatters = "Это нормально на ранней стадии; вопрос становится более значимым по мере роста узнаваемости и выхода на новые рынки.",
+            Recommendation = "Оценить необходимость и доступность регистрации товарного знака на целевых рынках.",
+            Recommendations = new() {
+                "Проверить, насколько бренд уже значим для бизнеса.",
+                "Оценить доступность и необходимость регистрации на ключевых рынках."
+            },
+            LawyerRequired = false,
+            Resolution = "self_service",
+            ServiceCode = "IP_RIGHTS_REVIEW"
         }
     };
 }
