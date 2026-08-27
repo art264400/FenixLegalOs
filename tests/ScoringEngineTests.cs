@@ -117,4 +117,71 @@ public class ScoringEngineTests
         Assert.True(result.Overall >= 75, $"Expected overall score >= 75, got {result.Overall}");
         Assert.Equal(0, result.CriticalCount);
     }
+
+    [Fact]
+    public void Single_Company_Builds_Single_Narrative_And_Calculates_COR07()
+    {
+        // Arrange
+        var answers = new Dictionary<string, object>
+        {
+            ["FND-C01"] = "solo",
+            ["COR-C01"] = "one",
+            ["COR-C02A"] = "kz",
+            ["COR-01"] = "match",
+            ["COR-02"] = "complete",
+            ["COR-07"] = "aligned"
+        };
+
+        // Act
+        var result = _engine.ComputeResult(answers);
+        var facts = FactNormalizer.NormalizeFacts(answers).Facts;
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(1, facts["company.entityCount"]);
+        Assert.Equal(false, facts["company.groupStructure"]);
+        Assert.Equal("kz", facts["company.primaryJurisdiction"]);
+        
+        var narrative = facts["company.structureNarrative"]?.ToString() ?? "";
+        Assert.Contains("Казахстан", narrative);
+        Assert.Contains("одну компанию", narrative);
+    }
+
+    [Fact]
+    public void Group_Structure_Builds_Detailed_Narrative_With_Roles()
+    {
+        // Arrange
+        var answers = new Dictionary<string, object>
+        {
+            ["FND-C01"] = "2",
+            ["COR-C01"] = "multiple",
+            ["COR-C02A"] = "aifc",
+            ["COR-C02B"] = "2",
+            ["COR-C02C"] = new List<Dictionary<string, object>>
+            {
+                new()
+                {
+                    ["jurisdiction"] = "kz",
+                    ["roles"] = new List<string> { "clients", "payments" }
+                }
+            },
+            ["COR-01"] = "match",
+            ["COR-02"] = "complete",
+            ["COR-07_GROUP"] = "aligned"
+        };
+
+        // Act
+        var result = _engine.ComputeResult(answers);
+        var facts = FactNormalizer.NormalizeFacts(answers).Facts;
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(2, facts["company.entityCount"]);
+        Assert.Equal(true, facts["company.groupStructure"]);
+        Assert.Equal("aifc", facts["company.primaryJurisdiction"]);
+
+        var narrative = facts["company.structureNarrative"]?.ToString() ?? "";
+        Assert.Contains("МФЦА", narrative);
+        Assert.Contains("2 компаний", narrative);
+    }
 }

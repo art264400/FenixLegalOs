@@ -256,32 +256,51 @@ public static class DataBank
             }
         },
 
-        // 2. COR-C02 (Контекст: юрисдикция основной компании)
+        // 2. COR-C02A (Контекст: юрисдикция основной компании)
         new() {
-            Id = "COR-C02", SectionId = "corporate", Order = 2, Type = "single", ScoreMode = "context", Weight = 0,
-            ShowIf = new() { new() { QuestionId = "COR-C01", Op = "in", Value = "one,multiple" } },
+            Id = "COR-C02A", SectionId = "corporate", Order = 2, Type = "jurisdiction_select", ScoreMode = "context", Weight = 0,
+            ShowIf = new() { new() { QuestionId = "COR-C01", Op = "in", Value = "one,multiple,registering" } },
             Question = "Где зарегистрирована основная компания?",
-            Explanation = "Контекстный вопрос, определяет юрисдикцию и применяемую систему права.",
+            Explanation = "Контекстный вопрос. Помогает определить систему права (Казахстан, английское право МФЦА, США, ОАЭ, Великобритания или др.).",
             Options = new() {
                 new("kz", "Казахстан", 1.0, ConfidenceClass: "known"),
-                new("aifc", "МФЦА", 1.0, ConfidenceClass: "known"),
-                new("english_law", "Делавэр, DIFC, ADGM или иные юрисдикции английского права", 1.0, ConfidenceClass: "known"),
-                new("other", "Другое", 1.0, ConfidenceClass: "known")
+                new("aifc", "МФЦА (AIFC)", 1.0, ConfidenceClass: "known"),
+                new("us", "США (Delaware / др.)", 1.0, ConfidenceClass: "known"),
+                new("uae", "ОАЭ", 1.0, ConfidenceClass: "known"),
+                new("uk", "Великобритания", 1.0, ConfidenceClass: "known"),
+                new("other", "Другая страна", 1.0, ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 1.0, ConfidenceClass: "unknown")
             }
         },
 
-        // 2A. COR-C02A (Контекст: состав группы / другие компании)
+        // 2B. COR-C02B (Контекст: количество компаний при группе)
         new() {
-            Id = "COR-C02A", SectionId = "corporate", Order = 3, Type = "multiple", ScoreMode = "context", Weight = 0,
-            ShowIf = new() { new() { QuestionId = "COR-C01", Op = "in", Value = "one,multiple" } },
-            Question = "Есть ли в структуре бизнеса другие компании?",
-            Explanation = "Помогает понять структуру владения активами и распределение функций между компаниями.",
+            Id = "COR-C02B", SectionId = "corporate", Order = 3, Type = "single", ScoreMode = "context", Weight = 0,
+            ShowIf = new() { new() { QuestionId = "COR-C01", Op = "in", Value = "multiple,several" } },
+            Question = "Сколько компаний сейчас используется в бизнесе?",
+            Explanation = "Определяет количество юридических лиц в структуре бизнеса.",
             Options = new() {
-                new("opco", "Есть операционная (-нные) компания", 1.0, ConfidenceClass: "known"),
-                new("holdco", "Есть холдинговая компания", 1.0, ConfidenceClass: "known"),
-                new("ipco", "Есть отдельная компания с интеллектуальной собственностью", 1.0, ConfidenceClass: "known"),
-                new("other_entities", "Иные компании", 1.0, ConfidenceClass: "known"),
-                new("none", "Нет других компаний (только одна основная)", 1.0, Exclusive: true, ConfidenceClass: "known")
+                new("2", "2 компании", 1.0, ConfidenceClass: "known"),
+                new("3", "3 компании", 1.0, ConfidenceClass: "known"),
+                new("4plus", "4 и более компаний", 1.0, ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 1.0, ConfidenceClass: "unknown")
+            }
+        },
+
+        // 2C. COR-C02C (Контекст: юрисдикции и роли остальных компаний группы)
+        new() {
+            Id = "COR-C02C", SectionId = "corporate", Order = 4, Type = "entity_builder", ScoreMode = "context", Weight = 0,
+            ShowIf = new() { new() { QuestionId = "COR-C01", Op = "in", Value = "multiple,several" } },
+            Question = "Где зарегистрированы остальные компании и для чего они используются?",
+            Explanation = "Укажите страну регистрации и ключевые функции (холдинг, клиенты/платежи, IP, найм).",
+            Options = new() {
+                new("holding", "Владение долями других компаний (холдинг)", 1.0, ConfidenceClass: "known"),
+                new("clients", "Работа с клиентами / заключение договоров", 1.0, ConfidenceClass: "known"),
+                new("payments", "Получение платежей и выручки", 1.0, ConfidenceClass: "known"),
+                new("ip_assets", "Владение продуктом или важными активами", 1.0, ConfidenceClass: "known"),
+                new("hiring", "Найм команды и разработчиков", 1.0, ConfidenceClass: "known"),
+                new("other", "Другое", 1.0, ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 1.0, ConfidenceClass: "unknown")
             }
         },
 
@@ -387,17 +406,31 @@ public static class DataBank
             }
         },
 
-        // 10. COR-07 (Диагностика: принадлежность активов / структура группы)
+        // 10A. COR-07 (Для одной компании: оформление активов и отношений)
         new() {
             Id = "COR-07", SectionId = "corporate", DimensionId = "entity_alignment", Order = 11, Type = "single", ScoreMode = "diagnostic", Weight = 13, DimensionWeight = 13, WithinDimensionWeight = 100,
-            ShowIf = new() { new() { QuestionId = "COR-C01", Op = "in", Value = "one,multiple" } },
-            Question = "Оформлены ли основные активы, контракты и выручка на операционную компанию, и понятны ли роли компаний в группе?",
+            ShowIf = new() { new() { QuestionId = "COR-C01", Op = "in", Value = "one,registering" } },
+            Question = "Основные активы и отношения бизнеса оформлены на эту компанию?",
+            Explanation = "Проверяет, чтобы ключевые права на продукт, договоры с клиентами и выручка не оставались на личных счетах или сторонних лицах.",
             Options = new() {
-                new("aligned", "Основные активы и отношения находятся в операционной компании; роли компаний группы четко разделены", 1.0, ConfidenceClass: "known"),
-                new("minor_exceptions", "Есть отдельные исторические исключения или небольшие пересечения", 0.75, ConfidenceClass: "known"),
-                new("material_outside", "Существенная часть деятельности, прав или активов оформлена на основателей или сторонние лица", 0.3, Severity: "HIGH", RiskCode: "COR_ENTITY_MISMATCH", ConfidenceClass: "known"),
-                new("group_overlap", "Функции нескольких компаний группы заметно пересекаются и распределены неясно", 0.3, Severity: "HIGH", RiskCode: "COR_ENTITY_MISMATCH", ConfidenceClass: "partial"),
-                new("historical_no_logic", "Структура сложилась исторически и хаотично, без четкой юридической логики", 0.2, Severity: "HIGH", RiskCode: "COR_ENTITY_MISMATCH", ConfidenceClass: "known"),
+                new("aligned", "Да, ключевые активы, договоры с клиентами и выручка оформлены на эту компанию", 1.0, ConfidenceClass: "known"),
+                new("minor_exceptions", "В целом да, но есть отдельные договоры или платежи через основателей", 0.75, ConfidenceClass: "known"),
+                new("material_outside", "Существенная часть договоров, прав на код или оплат проходит через физлиц / сторонние лица", 0.3, Severity: "HIGH", RiskCode: "COR_ENTITY_MISMATCH", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.15, ConfidenceClass: "unknown")
+            }
+        },
+
+        // 10B. COR-07_GROUP (Для группы компаний: распределение ролей в структуре)
+        new() {
+            Id = "COR-07_GROUP", SectionId = "corporate", DimensionId = "entity_alignment", Order = 12, Type = "single", ScoreMode = "diagnostic", Weight = 13, DimensionWeight = 13, WithinDimensionWeight = 100,
+            ShowIf = new() { new() { QuestionId = "COR-C01", Op = "in", Value = "multiple,several" } },
+            Question = "Понятно ли, какую роль выполняет каждая компания в структуре бизнеса?",
+            Explanation = "Проверяет, насколько последовательно разделены функции холдинга, операционной компании и владельца IP.",
+            Options = new() {
+                new("aligned", "Да, роли компаний четко разделены и понятны (холдинг, продажи, IP)", 1.0, ConfidenceClass: "known"),
+                new("minor_exceptions", "В целом разделены, но бывают временные смешанные переводы или договоры", 0.75, ConfidenceClass: "known"),
+                new("group_overlap", "Функции компаний заметно пересекаются, нет четкого разграничения оплат и договоров", 0.3, Severity: "HIGH", RiskCode: "COR_ENTITY_MISMATCH", ConfidenceClass: "partial"),
+                new("historical_no_logic", "Структура сложилась хаотично, без четкой юридической логики", 0.2, Severity: "HIGH", RiskCode: "COR_ENTITY_MISMATCH", ConfidenceClass: "known"),
                 new("unknown", "Не уверен(а)", 0.15, ConfidenceClass: "unknown")
             }
         },

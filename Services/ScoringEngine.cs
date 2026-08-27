@@ -105,25 +105,92 @@ public class FactNormalizer
         var corC01 = GetAnswerStr(answers, "COR-C01");
         f["company.entityStatus"] = corC01 switch
         {
-            "one" or "multiple" or "several" => "incorporated",
+            "one" => "single",
+            "multiple" or "several" => "multiple",
             "registering" or "process" => "registering",
             "none" => "not_incorporated",
             _ => "unknown"
         };
-        f["company.entityCount"] = corC01 switch
+
+        var isMultiple = corC01 is "multiple" or "several";
+        var corC02B = GetAnswerStr(answers, "COR-C02B");
+        int entityCount = corC01 switch
         {
-            "one" => 1,
-            "multiple" or "several" => "multiple",
-            _ => 0
+            "one" or "registering" => 1,
+            "multiple" or "several" => corC02B switch { "2" => 2, "3" => 3, "4plus" => 4, _ => 2 },
+            "none" => 0,
+            _ => 1
         };
 
-        var corC02 = GetAnswerStr(answers, "COR-C02");
-        f["company.jurisdiction"] = corC02;
+        f["company.entityCount"] = entityCount;
+        f["company.groupStructure"] = isMultiple;
 
-        if (answers.TryGetValue("COR-C02A", out var vGroup))
+        var primaryJurisdiction = GetAnswerStr(answers, "COR-C02A");
+        if (string.IsNullOrEmpty(primaryJurisdiction)) primaryJurisdiction = GetAnswerStr(answers, "COR-C02");
+        f["company.primaryJurisdiction"] = primaryJurisdiction;
+        f["company.jurisdiction"] = primaryJurisdiction;
+
+        var jurisdictionsList = new List<string>();
+        if (!string.IsNullOrEmpty(primaryJurisdiction)) jurisdictionsList.Add(primaryJurisdiction);
+
+        // Process Additional Entities (COR-C02C)
+        var entitiesSummary = new List<string>();
+        if (!string.IsNullOrEmpty(primaryJurisdiction))
         {
-            f["company.groupEntities"] = vGroup;
+            entitiesSummary.Add($"Основная компания: {FormatJurisdictionName(primaryJurisdiction)}");
         }
+
+        if (isMultiple && answers.TryGetValue("COR-C02C", out var rawC02C) && rawC02C != null)
+        {
+            f["company.additionalEntitiesRaw"] = rawC02C;
+            // Parse entities array or object
+            if (rawC02C is JsonElement je && je.ValueKind == JsonValueKind.Array)
+            {
+                int cIdx = 2;
+                foreach (var item in je.EnumerateArray())
+                {
+                    var jVal = item.TryGetProperty("jurisdiction", out var jp) ? jp.GetString() : null;
+                    var rList = item.TryGetProperty("roles", out var rp) && rp.ValueKind == JsonValueKind.Array
+                        ? rp.EnumerateArray().Select(x => x.GetString() ?? "").Where(x => !string.IsNullOrEmpty(x)).ToList()
+                        : new List<string>();
+
+                    if (!string.IsNullOrEmpty(jVal))
+                    {
+                        jurisdictionsList.Add(jVal);
+                        var roleStr = rList.Count > 0 ? string.Join(", ", rList.Select(FormatRoleName)) : "операционная деятельность";
+                        entitiesSummary.Add($"Компания {cIdx} ({FormatJurisdictionName(jVal)}): {roleStr}");
+                    }
+                    cIdx++;
+                }
+            }
+            else if (rawC02C is string strC02C && !string.IsNullOrWhiteSpace(strC02C))
+            {
+                entitiesSummary.Add($"Дополнительные компании: {strC02C}");
+            }
+        }
+
+        f["company.jurisdictions"] = jurisdictionsList.Distinct().ToList();
+
+        // Build Human-Readable Corporate Structure Narrative
+        string narrative;
+        if (corC01 == "none")
+        {
+            narrative = "Проект пока работает без зарегистрированного юридического лица.";
+        }
+        else if (corC01 == "registering")
+        {
+            narrative = $"Компания находится в процессе регистрации ({FormatJurisdictionName(primaryJurisdiction)}).";
+        }
+        else if (!isMultiple)
+        {
+            narrative = $"Бизнес ведет деятельность через одну компанию в юрисдикции {FormatJurisdictionName(primaryJurisdiction)}.";
+        }
+        else
+        {
+            narrative = $"В структуре бизнеса используется {entityCount} компаний:\n- " + string.Join("\n- ", entitiesSummary);
+        }
+
+        f["company.structureNarrative"] = narrative;
 
         var cor04 = GetAnswerStr(answers, "COR-04");
         f["capital.historyChanges"] = cor04 is "complete" or "main_docs" or "partial" or "missing";
@@ -172,6 +239,37 @@ public class FactNormalizer
         f["investment.priorInvestment"] = invest02 != "none" && !string.IsNullOrEmpty(invest02);
 
         return store;
+    }
+
+    private static string FormatJurisdictionName(string? code)
+    {
+        if (string.IsNullOrWhiteSpace(code)) return "Не указана";
+        return code.ToLowerInvariant() switch
+        {
+            "kz" => "Казахстан (ТОО)",
+            "aifc" => "МФЦА (AIFC)",
+            "us" => "США (Delaware / C-Corp)",
+            "uae" => "ОАЭ (Free Zone / Mainland)",
+            "uk" => "Великобритания (Ltd)",
+            "other" => "Другая юрисдикция",
+            "unknown" => "Юрисдикция уточняется",
+            _ => code
+        };
+    }
+
+    private static string FormatRoleName(string? role)
+    {
+        if (string.IsNullOrWhiteSpace(role)) return "операционная деятельность";
+        return role.ToLowerInvariant() switch
+        {
+            "holding" => "Владение долями (холдинг)",
+            "clients" => "Работа с клиентами и договоры",
+            "payments" => "Получение платежей и выручки",
+            "ip_assets" => "Владение продуктом и IP-активами",
+            "hiring" => "Найм команды",
+            "other" => "Операционная деятельность",
+            _ => role
+        };
     }
 
     private static string GetAnswerStr(Dictionary<string, object> answers, string key)

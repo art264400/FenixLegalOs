@@ -76,9 +76,11 @@ public class AiReportService
             facts = new
             {
                 entityStatus = facts.GetValueOrDefault("company.entityStatus"),
-                jurisdiction = facts.GetValueOrDefault("company.jurisdiction"),
+                primaryJurisdiction = facts.GetValueOrDefault("company.primaryJurisdiction"),
+                jurisdictions = facts.GetValueOrDefault("company.jurisdictions"),
                 entityCount = facts.GetValueOrDefault("company.entityCount"),
-                groupEntities = facts.GetValueOrDefault("company.groupEntities"),
+                groupStructure = facts.GetValueOrDefault("company.groupStructure"),
+                structureNarrative = facts.GetValueOrDefault("company.structureNarrative"),
                 founderCount = facts.GetValueOrDefault("founders.count"),
                 equityDistribution = facts.GetValueOrDefault("founders.equityDistribution"),
                 isEqual5050 = facts.GetValueOrDefault("founders.isEqual5050"),
@@ -99,13 +101,14 @@ public class AiReportService
 
 СТРОГИЕ ПРАВИЛА (LLM CONTRACT v1.1):
 1. Не меняйте баллы и severity рисков. Опирайтесь только на переданные факты и findings.
-2. Не используйте обвинительных формулировок («Вы нарушаете закон»). Пишите профессионально («По вашим ответам текущая модель может потребовать проверки...», «Система видит риск возникновения спора...»).
-3. Не придумывайте рисков, которых нет в findings.
-4. Текст должен быть на грамотном русском языке, структурированным, с понятными бизнес-выводами.
+2. В блоке «1. Юридический профиль проекта» обязательно понятно и профессионально опишите структуру владения и компаний стартапа, опираясь на факт facts.structureNarrative (например: если несколько компаний — четко укажите, какая компания выполняет роль холдинга, а какая работает с клиентами/платежами; если одна — укажите юрисдикцию).
+3. Не используйте обвинительных формулировок («Вы нарушаете закон»). Пишите профессионально («По вашим ответам текущая модель может потребовать проверки...», «Система видит риск возникновения спора...»).
+4. Не придумывайте рисков, которых нет в findings.
+5. Текст должен быть на грамотном русском языке, структурированным, с понятными бизнес-выводами.
 
 ФОРМАТ ВЫВОДА (MARKDOWN):
 ### 🎯 1. Юридический профиль проекта
-Краткая сводка: фаундеры, юрисдикция компании, уровень формализации отношений.
+Краткая сводка: фаундеры, распределение ролей, юрисдикции компаний и роли в структуре (холдинг / операционная / IP).
 
 ### ⚠️ 2. Ключевые точки внимания
 Маркированный список выявленных рисков (используйте маркеры * с эмодзи 🔴/🟠/🟡, БЕЗ числовой нумерации):
@@ -168,15 +171,7 @@ public class AiReportService
         var founderCount = facts.GetValueOrDefault("founders.count")?.ToString() ?? "1";
         var is5050 = facts.GetValueOrDefault("founders.isEqual5050") is true;
         var entityStatus = facts.GetValueOrDefault("company.entityStatus")?.ToString() ?? "none";
-        var jur = facts.GetValueOrDefault("company.jurisdiction")?.ToString() ?? "other";
-
-        string jurName = jur switch
-        {
-            "kz" => "Казахстан (ТОО)",
-            "aifc" => "МФЦА (AIFC)",
-            "english_law" => "юрисдикция английского права (Delaware / DIFC / ADGM)",
-            _ => "действующая юрисдикция"
-        };
+        var structureNarrative = facts.GetValueOrDefault("company.structureNarrative")?.ToString();
 
         if (founderCount == "1" || founderCount == "solo")
         {
@@ -188,17 +183,9 @@ public class AiReportService
                           (is5050 ? " с равным распределением долей (50/50)." : "."));
         }
 
-        if (entityStatus == "incorporated")
+        if (!string.IsNullOrWhiteSpace(structureNarrative))
         {
-            sb.AppendLine($"Основная компания зарегистрирована: **{jurName}**.");
-        }
-        else if (entityStatus == "registering")
-        {
-            sb.AppendLine("Юридическое лицо находится в процессе регистрации.");
-        }
-        else
-        {
-            sb.AppendLine("Проект на текущем этапе работает **без зарегистрированного юридического лица** (ранняя стадия).");
+            sb.AppendLine(structureNarrative);
         }
 
         sb.AppendLine();

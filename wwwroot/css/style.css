@@ -389,14 +389,42 @@ code { color: var(--accent); }
   outline: none;
 }
 .equity-status-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px dashed var(--line);
-  font-size: 13px;
-  color: var(--ink-soft);
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 13px; font-weight: 600; padding: 6px 0; border-top: 1px solid var(--line);
+}
+
+/* Jurisdiction Select & Entity Builder ------------------------------------ */
+.jur-builder-wrap { display: flex; flex-direction: column; gap: 16px; margin: 12px 0 20px 0; }
+.jur-card {
+  background: var(--bg-elev); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 16px 18px; display: flex; flex-direction: column; gap: 12px;
+}
+.jur-card-title {
+  font-size: 13.5px; font-weight: 700; color: #FFF; display: flex; align-items: center; justify-content: space-between;
+}
+.jur-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px;
+}
+.jur-btn {
+  background: var(--bg-card); border: 1px solid var(--line); border-radius: 8px;
+  padding: 9px 12px; font-size: 12.5px; font-weight: 600; color: var(--ink);
+  text-align: center; cursor: pointer; transition: all 0.15s ease;
+}
+.jur-btn:hover { border-color: var(--accent); background: var(--bg-surface); }
+.jur-btn.selected {
+  background: rgba(56, 189, 248, 0.15); border-color: var(--accent); color: var(--accent);
+}
+
+.roles-header { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-faint); font-weight: 700; margin-top: 4px; }
+.roles-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.role-chip {
+  background: var(--bg-card); border: 1px solid var(--line); border-radius: 6px;
+  padding: 6px 10px; font-size: 11.5px; color: var(--ink-soft); cursor: pointer;
+  transition: all 0.15s ease; user-select: none;
+}
+.role-chip:hover { border-color: var(--gold); color: #FFF; }
+.role-chip.selected {
+  background: rgba(229, 192, 123, 0.16); border-color: var(--gold); color: var(--gold); font-weight: 600;
 }
 
 /* Intro screen list */
