@@ -158,29 +158,29 @@
           '<div class="hero-copy">' +
             '<div class="hero-badge">Smart Legal Screening · by Fenix Law</div>' +
             '<h1>Что такое FENIX SLS?</h1>' +
-            '<p class="sub">Первичная юридическая диагностика для технологических компаний. Ответьте на понятные вопросы и получите персональный <strong>Legal Score</strong>, приоритизированный <strong>Action Plan</strong> и карту юридических рисков компании до прихода инвестора.</p>' +
+            '<p class="sub">Первичная юридическая диагностика технологической компании.<br><br>Ответьте на понятные вопросы о том, как устроен ваш бизнес, и получите оценку юридической готовности, карту рисков и понятный план действий.<br><br>Система покажет, что уже выстроено хорошо, где есть слабые места и что стоит исправить в первую очередь.</p>' +
           '</div>' +
           '<img class="hero-logo" src="/img/logo.png" alt="FENIX SLS">' +
         '</div>' +
         '<div class="hero-pillars">' +
           '<div class="pillar-card">' +
-            '<strong style="color:var(--ink)">Увидеть реальные риски</strong>' +
-            '<span>до прихода инвестора и Due Diligence</span>' +
+            '<strong style="color:var(--ink)">Увидеть слабые места</strong>' +
+            '<span>где компания юридически уязвима</span>' +
           '</div>' +
           '<div class="pillar-card">' +
-            '<strong style="color:var(--gold)">Понять приоритеты</strong>' +
-            '<span>что критично устранить прямо сейчас</span>' +
+            '<strong style="color:var(--gold)">Понять, что делать сначала</strong>' +
+            '<span>какие вопросы требуют внимания сейчас</span>' +
           '</div>' +
           '<div class="pillar-card">' +
             '<strong style="color:var(--positive)">Подготовиться к росту</strong>' +
-            '<span>и безопасным венчурным сделкам</span>' +
+            '<span>к запуску, масштабированию и инвестициям</span>' +
           '</div>' +
         '</div>' +
         '<div class="cta-row">' +
-          '<button class="btn" id="start-btn">Пройти диагностику (10 мин)</button>' +
+          '<button class="btn" id="start-btn">Проверить компанию за 15 минут</button>' +
         '</div>' +
         '<div class="trust-row">' +
-          '<span>✓ Бесплатно</span><span>✓ 10 минут</span><span>✓ Без загрузки документов</span><span>✓ На базе практики Fenix Law</span>' +
+          '<span>✓ Бесплатно</span><span>✓ Около 15 минут</span><span>✓ Без загрузки документов</span><span>✓ Методология Fenix Law</span>' +
         '</div>' +
         '<div class="flow-section">' +
           '<div class="flow-title">Как работает FENIX SLS</div>' +
