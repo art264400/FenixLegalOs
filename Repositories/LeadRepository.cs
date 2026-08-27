@@ -47,19 +47,87 @@ public class LeadRepository
     {
         using var conn = GetConn();
         return conn.Query(@"
-            SELECT l.id AS Id, l.name AS Name, l.company AS Company, l.email AS Email,
-                   l.messenger AS Messenger, l.type AS Type, l.interest AS Interest,
-                   l.heat_score AS HeatScore, l.heat_label AS HeatLabel, l.status AS Status,
-                   l.paid AS Paid, l.paid_at AS PaidAt, l.payment_amount AS PaymentAmount, l.payment_method AS PaymentMethod,
-                   l.created_at AS CreatedAt, s.result AS SessionResult
-            FROM leads l LEFT JOIN sessions s ON s.id = l.session_id
-            ORDER BY l.heat_score DESC, l.created_at DESC
+            SELECT 
+                l.id AS Id, 
+                l.name AS Name, 
+                l.company AS Company, 
+                l.email AS Email,
+                l.messenger AS Messenger, 
+                l.type AS Type, 
+                l.interest AS Interest,
+                l.heat_score AS HeatScore, 
+                l.heat_label AS HeatLabel, 
+                l.status AS Status,
+                l.paid AS Paid, 
+                l.paid_at AS PaidAt, 
+                l.payment_amount AS PaymentAmount, 
+                l.payment_method AS PaymentMethod,
+                l.created_at AS CreatedAt, 
+                s.result AS SessionResult
+            FROM leads l 
+            LEFT JOIN sessions s ON s.id = l.session_id
+
+            UNION ALL
+
+            SELECT 
+                'session_' || s.id AS Id,
+                'Сессия ' || SUBSTR(s.id, 1, 8) AS Name,
+                '' AS Company,
+                '— (контакт не оставлен)' AS Email,
+                '' AS Messenger,
+                CASE WHEN s.completed_at IS NOT NULL THEN 'completed_audit' ELSE 'in_progress' END AS Type,
+                '' AS Interest,
+                CASE WHEN s.completed_at IS NOT NULL THEN 60 ELSE 30 END AS HeatScore,
+                CASE WHEN s.completed_at IS NOT NULL THEN 'warm' ELSE 'cold' END AS HeatLabel,
+                'new' AS Status,
+                s.paid AS Paid,
+                s.paid_at AS PaidAt,
+                s.payment_amount AS PaymentAmount,
+                s.payment_method AS PaymentMethod,
+                s.created_at AS CreatedAt,
+                s.result AS SessionResult
+            FROM sessions s
+            WHERE s.id NOT IN (SELECT session_id FROM leads WHERE session_id IS NOT NULL)
+              AND (s.completed_at IS NOT NULL OR LENGTH(s.answers) > 2)
+
+            ORDER BY CreatedAt DESC
         ");
     }
 
     public dynamic? GetLead(string id)
     {
         using var conn = GetConn();
+        if (id.StartsWith("session_"))
+        {
+            var sessId = id.Substring("session_".Length);
+            return conn.QuerySingleOrDefault(@"
+                SELECT 
+                    'session_' || s.id AS Id, 
+                    s.id AS SessionId, 
+                    'completed_audit' AS Type, 
+                    'Сессия ' || SUBSTR(s.id, 1, 8) AS Name, 
+                    '' AS Company,
+                    '' AS Website, 
+                    '— (контакт не оставлен)' AS Email, 
+                    '' AS Messenger, 
+                    '' AS Interest,
+                    '' AS SourceRiskCode, 
+                    60 AS HeatScore, 
+                    'warm' AS HeatLabel,
+                    'new' AS Status, 
+                    s.paid AS Paid, 
+                    s.paid_at AS PaidAt, 
+                    s.payment_amount AS PaymentAmount,
+                    s.payment_method AS PaymentMethod, 
+                    s.created_at AS CreatedAt,
+                    s.answers AS SessionAnswers, 
+                    s.result AS SessionResult, 
+                    s.created_at AS SessionCreatedAt
+                FROM sessions s
+                WHERE s.id = @sessId
+            ", new { sessId });
+        }
+
         return conn.QuerySingleOrDefault(@"
             SELECT l.id AS Id, l.session_id AS SessionId, l.type AS Type, l.name AS Name, l.company AS Company,
                    l.website AS Website, l.email AS Email, l.messenger AS Messenger, l.interest AS Interest,
