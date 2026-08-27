@@ -623,8 +623,8 @@ public static class DataBank
                 new("no", "Нет, создавал только вне найма", 1.0, ConfidenceClass: "known"),
                 new("unrelated", "Да, но это никак не связано со сферой работодателя", 0.90, ConfidenceClass: "known"),
                 new("lawyer_checked", "Да, и этот вопрос проверяли с юристом (есть согласие работодателя)", 1.0, ConfidenceClass: "known"),
-                new("not_reviewed", "Да, но отдельно этот вопрос не проверяли", 0.35, Severity: "HIGH", RiskCode: "IP_EMPLOYER_RISK", ConfidenceClass: "partial"),
-                new("unknown", "Не уверен(а)", 0.20, Severity: "HIGH", RiskCode: "IP_EMPLOYER_RISK", ConfidenceClass: "unknown")
+                new("not_reviewed", "Да, но отдельно этот вопрос не проверяли", 0.35, ConfidenceClass: "partial"),
+                new("unknown", "Не уверен(а)", 0.20, ConfidenceClass: "unknown")
             }
         },
 
@@ -636,9 +636,9 @@ public static class DataBank
             Explanation = "Использование корпоративного ноутбука или репозитория работодателя — главный триггер судебных споров о принадлежности кода (Moonlighting claim).",
             Options = new() {
                 new("no", "Нет, использовались строго личные ресурсы и нерабочее время", 1.0, ConfidenceClass: "known"),
-                new("possible", "Возможно (рабочий ноутбук, офисный интернет или репозитории)", 0.45, Severity: "HIGH", RiskCode: "IP_EMPLOYER_RISK", ConfidenceClass: "partial"),
-                new("yes", "Да, использовались ресурсы работодателя", 0.10, Severity: "CRITICAL", RiskCode: "IP_EMPLOYER_RISK", ConfidenceClass: "known"),
-                new("unknown", "Не уверен(а)", 0.20, Severity: "HIGH", RiskCode: "IP_EMPLOYER_RISK", ConfidenceClass: "unknown")
+                new("possible", "Возможно (рабочий ноутбук, офисный интернет или репозитории)", 0.45, ConfidenceClass: "partial"),
+                new("yes", "Да, использовались ресурсы работодателя", 0.10, ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.20, ConfidenceClass: "unknown")
             }
         },
 
@@ -665,9 +665,9 @@ public static class DataBank
             Options = new() {
                 new("yes", "Да, это системно проверяется (нет вирусных GPL/AGPL-лицензий)", 1.0, ConfidenceClass: "known"),
                 new("main", "Проверяли только основные компоненты", 0.75, ConfidenceClass: "known"),
-                new("developers_only", "Разработчики сами следят, отдельно мы это не проверяли", 0.50, Severity: "MEDIUM", RiskCode: "IP_THIRD_PARTY_COMPONENTS", ConfidenceClass: "partial"),
-                new("no", "Нет, аудит лицензий не проводился", 0.20, Severity: "MEDIUM", RiskCode: "IP_THIRD_PARTY_COMPONENTS", ConfidenceClass: "known"),
-                new("unknown", "Не уверен(а)", 0.20, Severity: "MEDIUM", RiskCode: "IP_THIRD_PARTY_COMPONENTS", ConfidenceClass: "unknown")
+                new("developers_only", "Разработчики сами следят, отдельно мы это не проверяли", 0.50, ConfidenceClass: "partial"),
+                new("no", "Нет, аудит лицензий не проводился", 0.20, ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.20, ConfidenceClass: "unknown")
             }
         },
 

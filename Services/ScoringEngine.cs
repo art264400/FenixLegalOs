@@ -637,10 +637,10 @@ public class ScoringEngine
         }
 
         // §27.2 Rule: IP_EMPLOYER_RISK
-        // Condition: ip.externalEmployerCreation in [not_reviewed, unknown] AND ip.employerResourcesUsed in [true, possible, unknown]
+        // Condition: ip.employerResourcesUsed == true OR (ip.externalEmployerCreation in [not_reviewed, unknown] AND ip.employerResourcesUsed in [possible, unknown])
         var extEmployer = (string?)facts.Facts.GetValueOrDefault("ip.externalEmployerCreation");
         var resUsed = facts.Facts.GetValueOrDefault("ip.employerResourcesUsed");
-        if (extEmployer is "not_reviewed" or "unknown" && (resUsed is true or "possible" or "unknown"))
+        if (resUsed is true || (extEmployer is "not_reviewed" or "unknown" && resUsed is "possible" or "unknown"))
         {
             var def = allRisks.FirstOrDefault(r => r.Code == "IP_EMPLOYER_RISK");
             if (def != null)
@@ -649,6 +649,19 @@ public class ScoringEngine
                 var existing = list.FirstOrDefault(f => f.Code == def.Code);
                 if (existing != null) existing.Severity = sev;
                 else AddFinding(list, def, "IP-10A", resUsed?.ToString() ?? "possible", sev);
+            }
+        }
+
+        // §27.2 Rule: IP_THIRD_PARTY_COMPONENTS
+        // Condition: ip.thirdPartyComponentsUsed == true AND ip.thirdPartyTermsReview in [developers_only, no, unknown]
+        var tpComponentsUsed = facts.Facts.GetValueOrDefault("ip.thirdPartyComponentsUsed");
+        var tpReview = (string?)facts.Facts.GetValueOrDefault("ip.thirdPartyTermsReview");
+        if (tpComponentsUsed is true && tpReview is "developers_only" or "no" or "unknown")
+        {
+            var def = allRisks.FirstOrDefault(r => r.Code == "IP_THIRD_PARTY_COMPONENTS");
+            if (def != null && !list.Any(f => f.Code == def.Code))
+            {
+                AddFinding(list, def, "IP-11A", tpReview ?? "no", "MEDIUM");
             }
         }
 

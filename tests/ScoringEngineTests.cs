@@ -480,4 +480,71 @@ public class ScoringEngineTests
             Assert.True(ConditionsEvaluator.IsVisible(q11A.ShowIf, answersVisible), $"Expected IP-11A visible when IP-11 = {opt}");
         }
     }
+
+    [Fact]
+    public void IP_Employer_Risk_Rule_Engine_Boundary_Verification()
+    {
+        // 1. Unrelated employment + NO resources used -> NO IP_EMPLOYER_RISK
+        var cleanAnswers = new Dictionary<string, object>
+        {
+            ["IP-01"] = "ready",
+            ["IP-03"] = new List<string> { "founders" },
+            ["IP-10"] = "unrelated",
+            ["IP-10A"] = "no"
+        };
+        var res1 = _engine.ComputeResult(cleanAnswers);
+        Assert.DoesNotContain(res1.Risks, r => r.Code == "IP_EMPLOYER_RISK");
+
+        // 2. Unreviewed employment + possible resources -> HIGH severity
+        var highAnswers = new Dictionary<string, object>
+        {
+            ["IP-01"] = "ready",
+            ["IP-03"] = new List<string> { "founders" },
+            ["IP-10"] = "not_reviewed",
+            ["IP-10A"] = "possible"
+        };
+        var res2 = _engine.ComputeResult(highAnswers);
+        var rHigh = res2.Risks.FirstOrDefault(r => r.Code == "IP_EMPLOYER_RISK");
+        Assert.NotNull(rHigh);
+        Assert.Equal("HIGH", rHigh.Severity);
+
+        // 3. Resources used (yes) -> CRITICAL severity
+        var critAnswers = new Dictionary<string, object>
+        {
+            ["IP-01"] = "ready",
+            ["IP-03"] = new List<string> { "founders" },
+            ["IP-10"] = "lawyer_checked",
+            ["IP-10A"] = "yes"
+        };
+        var res3 = _engine.ComputeResult(critAnswers);
+        var rCrit = res3.Risks.FirstOrDefault(r => r.Code == "IP_EMPLOYER_RISK");
+        Assert.NotNull(rCrit);
+        Assert.Equal("CRITICAL", rCrit.Severity);
+    }
+
+    [Fact]
+    public void IP_Third_Party_Components_Rule_Engine_Boundary_Verification()
+    {
+        // 1. Open Source used + systematic review -> NO risk
+        var cleanAnswers = new Dictionary<string, object>
+        {
+            ["IP-01"] = "ready",
+            ["IP-11"] = "yes",
+            ["IP-11A"] = "yes"
+        };
+        var res1 = _engine.ComputeResult(cleanAnswers);
+        Assert.DoesNotContain(res1.Risks, r => r.Code == "IP_THIRD_PARTY_COMPONENTS");
+
+        // 2. Open Source used + no review -> Rule Engine activates MEDIUM finding
+        var riskAnswers = new Dictionary<string, object>
+        {
+            ["IP-01"] = "ready",
+            ["IP-11"] = "yes",
+            ["IP-11A"] = "no"
+        };
+        var res2 = _engine.ComputeResult(riskAnswers);
+        var rTp = res2.Risks.FirstOrDefault(r => r.Code == "IP_THIRD_PARTY_COMPONENTS");
+        Assert.NotNull(rTp);
+        Assert.Equal("MEDIUM", rTp.Severity);
+    }
 }
