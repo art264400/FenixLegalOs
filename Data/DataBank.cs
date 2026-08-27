@@ -804,6 +804,26 @@ public static class DataBank
             LawyerRequired = true,
             Resolution = "lawyer_required",
             ServiceCode = "CORPORATE_CLEANUP"
+        },
+        new() {
+            Code = "COR_NO_ENTITY_FOR_ACTIVITY",
+            RootCauseGroup = "ENTITY_ALIGNMENT",
+            Severity = "HIGH",
+            Priority = "NOW",
+            SectionId = "corporate",
+            Modules = new() { "corporate" },
+            Title = "Бизнес уже работает, но отдельная юридическая оболочка еще не сформирована",
+            Finding = "Проект уже ведет значимую деятельность, однако отдельная компания отсутствует или еще не завершила регистрацию.",
+            WhyItMatters = "В такой ситуации договоры, деньги, права на продукт и обязательства могут возникать непосредственно у основателей, что усложняет последующее структурирование.",
+            Recommendation = "Определить подходящую юридическую структуру для текущей модели, зафиксировать возникшие активы и перенести ключевые отношения на компанию.",
+            Recommendations = new() {
+                "Определить подходящую юридическую структуру для текущей модели.",
+                "Зафиксировать, какие активы и обязательства уже возникли у founders.",
+                "После регистрации перенести ключевые отношения на компанию."
+            },
+            LawyerRequired = true,
+            Resolution = "lawyer_required",
+            ServiceCode = "CORPORATE_CLEANUP"
         }
     };
 }

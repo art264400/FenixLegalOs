@@ -119,6 +119,46 @@ public class ScoringEngineTests
     }
 
     [Fact]
+    public void Pre_Incorporation_Idea_Stage_Should_Not_Trigger_No_Entity_Risk()
+    {
+        // Solo founder, no company, but no active commercial activity
+        var answers = new Dictionary<string, object>
+        {
+            ["FND-C01"] = "solo",
+            ["COR-C01"] = "none"
+        };
+
+        var result = _engine.ComputeResult(answers);
+
+        Assert.NotNull(result);
+        Assert.DoesNotContain(result.Risks, r => r.Code == "COR_NO_ENTITY_FOR_ACTIVITY");
+        var corpSec = result.Sections.FirstOrDefault(s => s.SectionId == "corporate");
+        Assert.NotNull(corpSec);
+        Assert.Equal("N_A", corpSec.Status);
+    }
+
+    [Fact]
+    public void Pre_Incorporation_With_Active_Revenue_Or_Team_Should_Trigger_COR_NO_ENTITY_FOR_ACTIVITY()
+    {
+        // No company, but operates with team/revenue
+        var answers = new Dictionary<string, object>
+        {
+            ["FND-C01"] = "solo",
+            ["COR-C01"] = "none",
+            ["TEAM-C01"] = "contractors",
+            ["REV-01"] = "active"
+        };
+
+        var result = _engine.ComputeResult(answers);
+
+        Assert.NotNull(result);
+        var finding = result.Risks.FirstOrDefault(r => r.Code == "COR_NO_ENTITY_FOR_ACTIVITY");
+        Assert.NotNull(finding);
+        Assert.Equal("HIGH", finding.Severity);
+        Assert.Equal("ENTITY_ALIGNMENT", finding.RootCauseGroup);
+    }
+
+    [Fact]
     public void All_Best_Practices_Should_Produce_High_Score()
     {
         // Arrange: Fully compliant co-founders with signed SHA, vesting, deadlock exit

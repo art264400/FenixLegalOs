@@ -382,7 +382,7 @@ public class ScoringEngine
             : 85;
 
         // 3. Merged & Suppressed Findings
-        var rawFindings = CollectRawFindings(visibleQs, answers, allRisks);
+        var rawFindings = CollectRawFindings(visibleQs, answers, allRisks, factStore);
         var mergedFindings = MergeAndSuppressFindings(rawFindings, factStore);
 
         // 4. Investment Readiness Overlay
@@ -435,7 +435,7 @@ public class ScoringEngine
         return f.TryGetValue(key, out var val) && val is bool b && b;
     }
 
-    private List<RiskFinding> CollectRawFindings(List<DiagnosticQuestion> visibleQs, Dictionary<string, object> answers, List<RiskDefinition> allRisks)
+    private List<RiskFinding> CollectRawFindings(List<DiagnosticQuestion> visibleQs, Dictionary<string, object> answers, List<RiskDefinition> allRisks, SharedFactStore facts)
     {
         var list = new List<RiskFinding>();
 
@@ -469,6 +469,40 @@ public class ScoringEngine
                 });
             }
         }
+
+        // §27.2 Rule: COR_NO_ENTITY_FOR_ACTIVITY
+        // Condition: company.entityStatus == not_incorporated AND (company.hasRevenue == true OR team.hasNonFounderTeam == true OR investment.priorInvestment == true)
+        var entityStatus = (string?)facts.Facts.GetValueOrDefault("company.entityStatus");
+        bool hasRevenue = GetBoolFact(facts.Facts, "company.hasRevenue") || GetBoolFact(facts.Facts, "revenue.exists") || answers.ContainsKey("REV-01") || answers.ContainsKey("REV-C01");
+        bool hasNonFounderTeam = GetBoolFact(facts.Facts, "team.hasNonFounderTeam") || (answers.TryGetValue("TEAM-C01", out var teamVal) && teamVal?.ToString() != "solo_only" && teamVal?.ToString() != "none");
+        bool priorInvestment = GetBoolFact(facts.Facts, "investment.priorInvestment") || (answers.TryGetValue("INV-C01", out var invVal) && invVal?.ToString() == "yes");
+
+        if (entityStatus == "not_incorporated" && (hasRevenue || hasNonFounderTeam || priorInvestment))
+        {
+            var def = allRisks.FirstOrDefault(r => r.Code == "COR_NO_ENTITY_FOR_ACTIVITY");
+            if (def != null && !list.Any(f => f.Code == def.Code))
+            {
+                list.Add(new RiskFinding
+                {
+                    Code = def.Code,
+                    RootCauseGroup = def.RootCauseGroup,
+                    Severity = def.Severity,
+                    Priority = def.Priority,
+                    SectionId = def.SectionId,
+                    Title = def.Title,
+                    Finding = def.Finding,
+                    WhyItMatters = def.WhyItMatters,
+                    Recommendation = def.Recommendation.Length > 0 ? def.Recommendation : (def.Recommendations.FirstOrDefault() ?? ""),
+                    Recommendations = def.Recommendations.Count > 0 ? def.Recommendations : new List<string> { def.Recommendation },
+                    Basis = new List<RiskFindingBasis> { new() { QuestionId = "COR-C01", AnswerId = "none" } },
+                    LawyerRequired = def.LawyerRequired,
+                    Resolution = def.Resolution,
+                    ServiceCode = def.ServiceCode,
+                    Cta = def.Cta
+                });
+            }
+        }
+
         return list;
     }
 
