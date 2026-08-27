@@ -1139,9 +1139,7 @@
       heroBlock(r) +
       '<div class="paywall-overlay-wrapper" id="pay-section">' +
         renderBlurredReportBackground(r, state.sessionId) +
-        '<div class="paywall-card-floating">' +
-          renderPaywallSection(state.sessionId) +
-        '</div>' +
+        renderPaywallSection(state.sessionId) +
       '</div>' +
       '<div class="mobile-sticky-bar">' +
         '<div class="bar-info">' +
