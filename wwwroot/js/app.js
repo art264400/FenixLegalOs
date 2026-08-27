@@ -961,56 +961,41 @@
     return out.join('');
   }
 
-  function renderRiskTeasers(r) {
-    const critical = r.risks.filter(function (x) { return (x.severity || '').toLowerCase() === 'critical' || (x.severity || '').toLowerCase() === 'blocker'; });
-    const high = r.risks.filter(function (x) { return (x.severity || '').toLowerCase() === 'high'; });
-    const totalRisks = critical.length + high.length;
-
-    if (totalRisks === 0) {
-      return (
-        '<section class="risks-block">' +
-          '<h2>Ключевые точки внимания</h2>' +
-          '<p class="hint" style="color:var(--positive)">Критических юридических разрывов не обнаружено. Структура находится в стабильном состоянии.</p>' +
-        '</section>'
-      );
-    }
-
-    let itemsHtml = '';
-    critical.forEach(function (x) {
-      itemsHtml +=
-        '<div class="risk-preview-item">' +
-          '<div class="risk-preview-title"><span class="sev sev-critical">CRITICAL</span> ' + esc(x.title) + '</div>' +
-          '<div class="risk-preview-locked-hint">🔒 Анализ рисков для компании, инвестиций и персональные рекомендации венчурного юриста доступны в полном отчёте.</div>' +
-        '</div>';
+  function renderBlurredReportBackground(r, sessionId) {
+    const bySeverity = { critical: [], high: [], medium: [] };
+    r.risks.forEach(function (x) {
+      const s = (x.severity || '').toLowerCase();
+      if (s === 'critical' || s === 'blocker') bySeverity.critical.push(x);
+      else if (s === 'high') bySeverity.high.push(x);
+      else bySeverity.medium.push(x);
     });
 
-    high.forEach(function (x) {
-      itemsHtml +=
-        '<div class="risk-preview-item high">' +
-          '<div class="risk-preview-title"><span class="sev sev-high">HIGH</span> ' + esc(x.title) + '</div>' +
-          '<div class="risk-preview-locked-hint">🔒 Правовые последствия и пошаговый алгоритм исправления скрыты в бесплатной версии.</div>' +
-        '</div>';
-    });
-
-    return (
-      '<section class="risks-block">' +
-        '<h2>Ключевые точки внимания (Экспресс-диагностика)</h2>' +
-        '<p class="hint">Предварительно выявлено: 🔴 <strong>' + critical.length + ' критических</strong>, 🟠 <strong>' + high.length + ' высоких</strong> зон внимания.</p>' +
-        itemsHtml +
-      '</section>'
-    );
-  }
-
-  function renderAiTeaser() {
-    return (
-      '<section class="ai-memo-card" style="opacity:0.92;border:1.5px dashed rgba(89,194,255,0.4);margin-top:36px">' +
-        '<div class="ai-memo-badge">🔒 AI Legal Assistant · Заключение венчурного юриста</div>' +
+    const mockAiMemo =
+      '<section class="ai-memo-card" style="margin-bottom:28px">' +
+        '<div class="ai-memo-badge">AI Legal Assistant · Заключение венчурного юриста</div>' +
         '<div class="ai-memo-header"><h2>Персональное юридическое заключение (Legal Memo)</h2></div>' +
         '<div class="ai-memo-sub">Автоматический юридический разбор ситуации фаундеров, структуры и прав на продукт от венчурного юриста Fenix Law.</div>' +
-        '<p style="color:var(--ink-soft);font-size:14px;line-height:1.55">' +
-          '⚡ Включает глубокий разбор рисков, 30–60 дневный пошаговый Action Plan и шаблоны формулировок для документов. <em>Формируется сразу после разблокировки отчёта.</em>' +
-        '</p>' +
-      '</section>'
+        '<div class="ai-memo-content markdown-body">' +
+          '<h3>🎯 1. Юридический профиль проекта</h3>' +
+          '<p>Комплексный анализ структуры владения и ключевых юридических активов компании выявил критические зоны внимания...</p>' +
+          '<h3>⚠️ 2. Ключевые точки внимания</h3>' +
+          '<p>• 🔴 Права на интеллектуальную собственность требуют срочного оформления передачи прав на компанию...</p>' +
+          '<p>• 🟠 Риск блокировки корпоративного управления и дедлока при отсутствии утвержденного регламента...</p>' +
+          '<h3>📋 3. Пошаговый Action Plan</h3>' +
+          '<p>1. <strong>Оформление долей и Vesting</strong>: Подготовить соглашение основателей с графиком перехода долей...</p>' +
+          '<p>2. <strong>Передача прав на интеллектуальную собственность</strong>: Подготовить и подписать IP Assignment договоры...</p>' +
+          '<p>3. <strong>Порядок принятия решений</strong>: Утвердить матрицу ключевых решений и процедуру преодоления тупиков...</p>' +
+        '</div>' +
+      '</section>';
+
+    return (
+      '<div class="blurred-preview-layer">' +
+        mockAiMemo +
+        block('Критические вопросы', bySeverity.critical, 'Вопросы, которые могут влиять на контроль над компанией, принадлежность продукта или ближайшую сделку.') +
+        block('Существенные вопросы', bySeverity.high, 'Пробелы, которые, вероятно, потребуется закрыть при росте или инвестиционном раунде.') +
+        block('Умеренные вопросы', bySeverity.medium, 'Вопросы, требующие внимания в рабочем порядке.') +
+        buildRoadmap(r) +
+      '</div>'
     );
   }
 
@@ -1152,9 +1137,12 @@
 
     render(
       heroBlock(r) +
-      renderRiskTeasers(r) +
-      renderAiTeaser() +
-      renderPaywallSection(state.sessionId) +
+      '<div class="paywall-overlay-wrapper" id="pay-section">' +
+        renderBlurredReportBackground(r, state.sessionId) +
+        '<div class="paywall-card-floating">' +
+          renderPaywallSection(state.sessionId) +
+        '</div>' +
+      '</div>' +
       '<div class="mobile-sticky-bar">' +
         '<div class="bar-info">' +
           '<span class="bar-title">Fenix Legal Score: <b>' + r.overall + '/100</b></span>' +
