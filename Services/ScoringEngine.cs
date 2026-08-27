@@ -299,7 +299,16 @@ public class FactNormalizer
             "no" => false,
             _ => "unknown"
         };
-        f["ip.thirdPartyTermsReview"] = GetAnswerStr(answers, "IP-11A");
+        var ip11A = GetAnswerStr(answers, "IP-11A");
+        f["ip.thirdPartyTermsReview"] = ip11A switch
+        {
+            "yes" => "systematic",
+            "main" => "main",
+            "developers_only" => "developers_only",
+            "no" => "none",
+            "unknown" => "unknown",
+            _ => null
+        };
         f["ip.externalDependency"] = GetAnswerStr(answers, "IP-12");
         f["ip.criticalAccountsControl"] = GetAnswerStr(answers, "IP-13");
         f["ip.brandDomainControl"] = GetAnswerStr(answers, "IP-14");
@@ -637,15 +646,17 @@ public class ScoringEngine
         }
 
         // §27.2 Rule: IP_EMPLOYER_RISK
-        // Condition: ip.employerResourcesUsed == true OR (ip.externalEmployerCreation in [not_reviewed, unknown] AND ip.employerResourcesUsed in [possible, unknown])
+        // Condition: ip.externalEmployerCreation in [not_reviewed, unknown] AND ip.employerResourcesUsed in [true, possible, unknown]
+        // Severity: HIGH_OR_CRITICAL_IF_CORE (CRITICAL if core product exists / resources used, HIGH otherwise)
         var extEmployer = (string?)facts.Facts.GetValueOrDefault("ip.externalEmployerCreation");
         var resUsed = facts.Facts.GetValueOrDefault("ip.employerResourcesUsed");
-        if (resUsed is true || (extEmployer is "not_reviewed" or "unknown" && resUsed is "possible" or "unknown"))
+        if (extEmployer is "not_reviewed" or "unknown" && (resUsed is true or "possible" or "unknown"))
         {
             var def = allRisks.FirstOrDefault(r => r.Code == "IP_EMPLOYER_RISK");
             if (def != null)
             {
-                string sev = resUsed is true ? "CRITICAL" : "HIGH";
+                bool isCore = resUsed is true || coreProductExists;
+                string sev = isCore ? "CRITICAL" : "HIGH";
                 var existing = list.FirstOrDefault(f => f.Code == def.Code);
                 if (existing != null) existing.Severity = sev;
                 else AddFinding(list, def, "IP-10A", resUsed?.ToString() ?? "possible", sev);
@@ -653,15 +664,16 @@ public class ScoringEngine
         }
 
         // §27.2 Rule: IP_THIRD_PARTY_COMPONENTS
-        // Condition: ip.thirdPartyComponentsUsed == true AND ip.thirdPartyTermsReview in [developers_only, no, unknown]
+        // Condition: ip.thirdPartyComponentsUsed == true AND ip.thirdPartyTermsReview in [developers_only, none, unknown]
+        // Severity: MEDIUM (Canonical default)
         var tpComponentsUsed = facts.Facts.GetValueOrDefault("ip.thirdPartyComponentsUsed");
         var tpReview = (string?)facts.Facts.GetValueOrDefault("ip.thirdPartyTermsReview");
-        if (tpComponentsUsed is true && tpReview is "developers_only" or "no" or "unknown")
+        if (tpComponentsUsed is true && tpReview is "developers_only" or "none" or "unknown")
         {
             var def = allRisks.FirstOrDefault(r => r.Code == "IP_THIRD_PARTY_COMPONENTS");
             if (def != null && !list.Any(f => f.Code == def.Code))
             {
-                AddFinding(list, def, "IP-11A", tpReview ?? "no", "MEDIUM");
+                AddFinding(list, def, "IP-11A", tpReview ?? "none", "MEDIUM");
             }
         }
 

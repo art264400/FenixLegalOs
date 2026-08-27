@@ -495,25 +495,23 @@ public class ScoringEngineTests
         var res1 = _engine.ComputeResult(cleanAnswers);
         Assert.DoesNotContain(res1.Risks, r => r.Code == "IP_EMPLOYER_RISK");
 
-        // 2. Unreviewed employment + possible resources -> HIGH severity
-        var highAnswers = new Dictionary<string, object>
-        {
-            ["IP-01"] = "ready",
-            ["IP-03"] = new List<string> { "founders" },
-            ["IP-10"] = "not_reviewed",
-            ["IP-10A"] = "possible"
-        };
-        var res2 = _engine.ComputeResult(highAnswers);
-        var rHigh = res2.Risks.FirstOrDefault(r => r.Code == "IP_EMPLOYER_RISK");
-        Assert.NotNull(rHigh);
-        Assert.Equal("HIGH", rHigh.Severity);
-
-        // 3. Resources used (yes) -> CRITICAL severity
-        var critAnswers = new Dictionary<string, object>
+        // 2. Lawyer checked employment + resources used -> NO IP_EMPLOYER_RISK (formal lawyer consent exists)
+        var lawyerCheckedAnswers = new Dictionary<string, object>
         {
             ["IP-01"] = "ready",
             ["IP-03"] = new List<string> { "founders" },
             ["IP-10"] = "lawyer_checked",
+            ["IP-10A"] = "yes"
+        };
+        var res2 = _engine.ComputeResult(lawyerCheckedAnswers);
+        Assert.DoesNotContain(res2.Risks, r => r.Code == "IP_EMPLOYER_RISK");
+
+        // 3. Unreviewed employment + resources used on ready product -> CRITICAL severity (CORE / resources used)
+        var critAnswers = new Dictionary<string, object>
+        {
+            ["IP-01"] = "ready",
+            ["IP-03"] = new List<string> { "founders" },
+            ["IP-10"] = "not_reviewed",
             ["IP-10A"] = "yes"
         };
         var res3 = _engine.ComputeResult(critAnswers);
