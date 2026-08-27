@@ -2,6 +2,9 @@ using FenixLegalOs.Repositories;
 using FenixLegalOs.Services;
 using Microsoft.Extensions.FileProviders;
 
+// 1. Automatically load .env file if present
+LoadDotEnv();
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Register Controllers
@@ -21,6 +24,48 @@ var app = builder.Build();
 // Init SQLite Database
 var dbInit = app.Services.GetRequiredService<DbInitializer>();
 dbInit.Initialize();
+
+void LoadDotEnv()
+{
+    var searchPaths = new[]
+    {
+        Path.Combine(Directory.GetCurrentDirectory(), ".env"),
+        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ".env"),
+        Path.Combine(Directory.GetCurrentDirectory(), "..", ".env"),
+        "/var/www/fenixlegalos/.env"
+    };
+
+    foreach (var path in searchPaths)
+    {
+        if (File.Exists(path))
+        {
+            Console.WriteLine($"[Env] Loading environment variables from {path}");
+            try
+            {
+                foreach (var line in File.ReadAllLines(path))
+                {
+                    var trimmed = line.Trim();
+                    if (string.IsNullOrEmpty(trimmed) || trimmed.StartsWith("#")) continue;
+                    var idx = trimmed.IndexOf('=');
+                    if (idx > 0)
+                    {
+                        var key = trimmed.Substring(0, idx).Trim();
+                        var val = trimmed.Substring(idx + 1).Trim().Trim('"', '\'');
+                        if (!string.IsNullOrEmpty(key))
+                        {
+                            Environment.SetEnvironmentVariable(key, val);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Env] Error reading {path}: {ex.Message}");
+            }
+            break;
+        }
+    }
+}
 
 // Static Files Configuration (serving wwwroot directory)
 var staticPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");

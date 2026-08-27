@@ -14,7 +14,7 @@ public class AiReportService
 
     public AiReportService(IConfiguration? config = null)
     {
-        _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(45) };
         _apiKey = Environment.GetEnvironmentVariable("AI_API_KEY") 
                   ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY") 
                   ?? Environment.GetEnvironmentVariable("DEEPSEEK_API_KEY")
@@ -25,30 +25,34 @@ public class AiReportService
         _model = Environment.GetEnvironmentVariable("AI_MODEL") 
                  ?? config?["AiSettings:Model"] 
                  ?? "gpt-4o-mini";
+
+        var keyStatus = string.IsNullOrWhiteSpace(_apiKey) ? "MISSING (check .env / OPENAI_API_KEY)" : "CONFIGURED";
+        Console.WriteLine($"[AiReportService] Initialized -> Model: {_model}, BaseUrl: {_baseUrl}, ApiKey: {keyStatus}");
     }
 
     public async Task<string> GenerateExecutiveSummaryAsync(Dictionary<string, object> answers, ScoreResult result)
     {
-        // If API key is available, call LLM endpoint
-        if (!string.IsNullOrWhiteSpace(_apiKey))
+        if (string.IsNullOrWhiteSpace(_apiKey))
         {
-            try
-            {
-                var prompt = BuildPromptPayload(answers, result);
-                var aiText = await CallLlmApiAsync(prompt);
-                if (!string.IsNullOrWhiteSpace(aiText))
-                {
-                    return aiText.Trim();
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[AiReportService] Error calling LLM API: {ex.Message}. Falling back to rule-based memo.");
-            }
+            return "⚠️ **AI-генерация недоступна**: API-токен не обнаружен.\n\n" +
+                   "Укажите `OPENAI_API_KEY` или `AI_API_KEY` в файле `.env` в корне проекта или в переменных окружения сервера.";
         }
 
-        // Fallback rule-based memo generator compliant with LLM contract v1.1
-        return GenerateRuleBasedMemo(answers, result);
+        try
+        {
+            var prompt = BuildPromptPayload(answers, result);
+            var aiText = await CallLlmApiAsync(prompt);
+            if (!string.IsNullOrWhiteSpace(aiText))
+            {
+                return aiText.Trim();
+            }
+            return "⚠️ **Ошибка генерации**: LLM вернула пустой ответ. Проверьте параметры модели в настройках.";
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[AiReportService] Exception in LLM call: {ex}");
+            return $"⚠️ **Ошибка вызова AI API**: {ex.Message}";
+        }
     }
 
     private string BuildPromptPayload(Dictionary<string, object> answers, ScoreResult result)
@@ -146,7 +150,7 @@ public class AiReportService
         {
             var err = await response.Content.ReadAsStringAsync();
             Console.WriteLine($"[AiReportService] API error ({response.StatusCode}): {err}");
-            return null;
+            return $"⚠️ **Ошибка вызова AI API ({response.StatusCode})**:\n```\n{err}\n```";
         }
 
         var resJson = await response.Content.ReadAsStringAsync();
@@ -158,89 +162,5 @@ public class AiReportService
             .GetString();
 
         return content;
-    }
-
-    private string GenerateRuleBasedMemo(Dictionary<string, object> answers, ScoreResult result)
-    {
-        var facts = FactNormalizer.NormalizeFacts(answers).Facts;
-        var sb = new StringBuilder();
-
-        // 1. Profile
-        sb.AppendLine("### 🎯 1. Юридический профиль проекта");
-        
-        var founderCount = facts.GetValueOrDefault("founders.count")?.ToString() ?? "1";
-        var is5050 = facts.GetValueOrDefault("founders.isEqual5050") is true;
-        var entityStatus = facts.GetValueOrDefault("company.entityStatus")?.ToString() ?? "none";
-        var structureNarrative = facts.GetValueOrDefault("company.structureNarrative")?.ToString();
-
-        if (founderCount == "1" || founderCount == "solo")
-        {
-            sb.AppendLine("Проект развивается **единственным основателем**.");
-        }
-        else
-        {
-            sb.AppendLine($"В проекте участвует команда из **{founderCount} сооснователей**" + 
-                          (is5050 ? " с равным распределением долей (50/50)." : "."));
-        }
-
-        if (!string.IsNullOrWhiteSpace(structureNarrative))
-        {
-            sb.AppendLine(structureNarrative);
-        }
-
-        sb.AppendLine();
-
-        // 2. Key Attention Points
-        sb.AppendLine("### ⚠️ 2. Ключевые точки внимания");
-        var relevantRisks = result.Risks.Where(r => r.SectionId is "founders" or "corporate").ToList();
-
-        if (relevantRisks.Count == 0)
-        {
-            sb.AppendLine("По результатам диагностики блоков «Основатели» и «Корпоративная структура» критических структурных рисков не выявлено. Базовая конструкция зафиксирована корректно.");
-        }
-        else
-        {
-            foreach (var r in relevantRisks.Take(4))
-            {
-                var icon = r.Severity == "CRITICAL" ? "🔴" : (r.Severity == "HIGH" ? "🟠" : "🟡");
-                sb.AppendLine($"* {icon} **{r.Title}**: {r.Finding} {r.WhyItMatters}");
-            }
-        }
-
-        sb.AppendLine();
-
-        // 3. Action Plan
-        sb.AppendLine("### 📋 3. Пошаговый Action Plan на 30 дней");
-        int step = 1;
-
-        if (is5050)
-        {
-            sb.AppendLine($"{step++}. **Урегулировать риск тупика (Deadlock)**: Зафиксировать порядок принятия решений в Соглашении основателей (Founders' Agreement) или Корпоративном договоре.");
-        }
-
-        if (relevantRisks.Any(r => r.Code.Contains("EQUITY") || r.Code.Contains("VESTING") || r.Code.Contains("PROMISE")))
-        {
-            sb.AppendLine($"{step++}. **Закрепить вестинг и опционы**: Оформить график постепенного перехода прав (Vesting) и пул опционов для команды.");
-        }
-
-        if (entityStatus != "incorporated")
-        {
-            sb.AppendLine($"{step++}. **Сформировать корпоративную структуру**: Выбрать юрисдикцию инкорпорации (МФЦА для венчурного капитала или локальное ТОО для операционной деятельности).");
-        }
-        else if (relevantRisks.Any(r => r.Code.Contains("CAP_TABLE") || r.Code.Contains("OWNERSHIP")))
-        {
-            sb.AppendLine($"{step++}. **Синхронизировать Cap Table**: Сопоставить фактические договоренности с официальным реестром участников компании.");
-        }
-
-        sb.AppendLine($"{step++}. **Утвердить матрицу полномочий**: Четко разграничить операционные решения CEO и стратегические вопросы участников.");
-
-        sb.AppendLine();
-
-        // 4. Consulting
-        sb.AppendLine("### 💼 4. Рекомендация Fenix Law");
-        var ctaText = result.Consulting?.PrimaryCta ?? "Привести корпоративную структуру и договоренности основателей в порядок";
-        sb.AppendLine($"Для безопасного масштабирования и подготовки к инвестициям рекомендуется: **{ctaText}**.");
-
-        return sb.ToString();
     }
 }
