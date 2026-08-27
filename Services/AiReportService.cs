@@ -60,24 +60,32 @@ public class AiReportService
     {
         var facts = FactNormalizer.NormalizeFacts(answers).Facts;
         var relevantRisks = result.Risks
-            .Where(r => r.SectionId is "founders" or "corporate")
             .Select(r => new
             {
                 r.Code,
                 r.Severity,
+                r.SectionId,
                 r.Title,
                 r.Finding,
                 r.WhyItMatters,
                 r.Recommendation
             }).ToList();
 
+        var sectionsSummary = result.Sections
+            .Select(s => new
+            {
+                s.SectionId,
+                s.Title,
+                s.Score,
+                s.Status,
+                s.Confidence
+            }).ToList();
+
         var payload = new
         {
             overallScore = result.Overall,
             confidence = result.Confidence,
-            foundersScore = result.Sections.FirstOrDefault(s => s.SectionId == "founders")?.Score,
-            corporateScore = result.Sections.FirstOrDefault(s => s.SectionId == "corporate")?.Score,
-            corporateStatus = result.Sections.FirstOrDefault(s => s.SectionId == "corporate")?.Status,
+            sections = sectionsSummary,
             facts = new
             {
                 entityStatus = facts.GetValueOrDefault("company.entityStatus"),
@@ -90,7 +98,18 @@ public class AiReportService
                 equityDistribution = facts.GetValueOrDefault("founders.equityDistribution"),
                 isEqual5050 = facts.GetValueOrDefault("founders.isEqual5050"),
                 inactiveExists = facts.GetValueOrDefault("founders.inactiveExists"),
-                hasDispute = facts.GetValueOrDefault("founders.dispute")
+                hasDispute = facts.GetValueOrDefault("founders.dispute"),
+                coreProductExists = facts.GetValueOrDefault("ip.coreProductExists"),
+                productStage = facts.GetValueOrDefault("product.stage"),
+                ipCreators = facts.GetValueOrDefault("ip.creators"),
+                overallRightsEvidence = facts.GetValueOrDefault("ip.overallRightsEvidence"),
+                founderRights = facts.GetValueOrDefault("ip.founderRights"),
+                contractorRights = facts.GetValueOrDefault("ip.contractorRights"),
+                formerCreatorStatus = facts.GetValueOrDefault("ip.formerCreatorStatus"),
+                employerResourcesUsed = facts.GetValueOrDefault("ip.employerResourcesUsed"),
+                thirdPartyComponents = facts.GetValueOrDefault("ip.thirdPartyComponentsUsed"),
+                criticalAccountsControl = facts.GetValueOrDefault("ip.criticalAccountsControl"),
+                brandDomainControl = facts.GetValueOrDefault("ip.brandDomainControl")
             },
             findings = relevantRisks,
             consultingRecommendation = result.Consulting
@@ -101,34 +120,37 @@ public class AiReportService
 
     private async Task<string?> CallLlmApiAsync(string jsonContext)
     {
-        var systemPrompt = @"Вы — профессиональный венчурный юридический аналитик сервиса Fenix Legal OS.
-Ваша задача — сформировать индивидуальное структурированное заключение (Legal Memo) для основателей IT-стартапа по итогам диагностики двух блоков: «Основатели» (Founders) и «Корпоративная структура» (Corporate Structure).
+        var systemPrompt = @"Вы — профессиональный венчурный юридический аналитик и эксперт сервиса Fenix Legal OS.
+Ваша задача — сформировать индивидуальное структурированное юридическое заключение (Legal Memo) для основателей технологического бизнеса по итогам комплексной правовой диагностики (Сооснователи, Корпоративная структура, Интеллектуальная собственность и права на продукт, Команда).
 
 СТРОГИЕ ПРАВИЛА (LLM CONTRACT v1.1):
 1. Не меняйте баллы и severity рисков. Опирайтесь ТОЛЬКО на переданные факты и findings.
-2. В блоке «1. Юридический профиль проекта» понятно и профессионально опишите структуру владения и компаний стартапа, опираясь на факт facts.structureNarrative (если проект без юрлица — нейтрально укажите стадию pre-incorporation / разработка MVP).
-3. В блоке «⚠️ 2. Ключевые точки внимания» вы ДОЛЖНЫ использовать ИСКЛЮЧИТЕЛЬНО риски из переданного массива `findings`. КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО самостоятельно придумывать или добавлять риски (включая отсутствие юрлица), если их нет в массиве findings.
-   - Если массив findings пуст: напишите ровно одну строку: `* 🟢 **Существенных рисков не выявлено**: Базовая юридическая основа сооснователей и текущей стадии зафиксирована корректно.`
-4. Не используйте обвинительных формулировок («Вы нарушаете закон»). Пишите профессионально и доброжелательно.
-5. Текст должен быть на грамотном русском языке, структурированным, с понятными практическими выводами.
+2. В блоке «1. Юридический профиль проекта» понятно и емко опишите структуру владения, компании и статус продукта/IP (опирайтесь на facts.structureNarrative, статус юрлица, количество фаундеров, стадию продукта).
+3. В блоке «⚠️ 2. Ключевые точки внимания» вы ДОЛЖНЫ использовать ИСКЛЮЧИТЕЛЬНО риски из переданного массива `findings`. КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО самостоятельно выдумывать или добавлять риски, если их нет в массиве findings.
+   - Сгруппируйте или перечислите все выявленные риски в порядке важности (🔴 CRITICAL, 🟠 HIGH, 🟡 MEDIUM).
+   - Если массив findings пуст: напишите ровно одну строку: `* 🟢 **Существенных рисков не выявлено**: Базовая юридическая основа проекта и текущей стадии зафиксирована корректно.`
+4. В блоке «📋 3. Пошаговый Action Plan на 30–60 дней» сформируйте нумерованный план конкретных действий (от 3 до 7 шагов), прямо вытекающих из выявленных рисков и рекомендаций (в приоритетном порядке: закрытие критических пробелов, затем оформление текущей деятельности). Не ограничивайтесь шаблонными тремя пунктами, если рисков больше — охватите все ключевые зоны.
+5. Не используйте обвинительных формулировок («Вы нарушаете закон»). Пишите профессионально, конструктивно и доброжелательно.
+6. Текст должен быть на безупречном русском языке с четким форматированием в Markdown.
 
 ФОРМАТ ВЫВОДА (MARKDOWN):
 ### 🎯 1. Юридический профиль проекта
-Краткая сводка: фаундеры, распределение ролей, юрисдикции компаний и роли в структуре (холдинг / операционная / IP).
+Краткая сводка: фаундеры, юрисдикции и роли компаний, статус продукта и прав на интеллектуальную собственность.
 
 ### ⚠️ 2. Ключевые точки внимания
-Маркированный список выявленных рисков (используйте маркеры * с эмодзи 🔴/🟠/🟡 строго из переданного массива findings, БЕЗ числовой нумерации):
-* 🔴 **Название риска**: Описание сути и почему это критично.
-* 🟠 **Название риска**: Описание сути и почему это критично.
+Маркированный список всех выявленных рисков (используйте маркеры * с эмодзи 🔴/🟠/🟡 строго из переданного массива findings, БЕЗ числовой нумерации):
+* 🔴 **Название риска**: Суть проблемы и почему это критично для бизнеса и раунда.
+* 🟠 **Название риска**: Суть проблемы и последствия.
+* 🟡 **Название риска**: Суть проблемы и рекомендации.
 
-### 📋 3. Пошаговый Action Plan на 30 дней
-Нумерованный список практических шагов (строго 1., 2., 3.):
-1. **Первый шаг**: Что конкретно сделать.
-2. **Второй шаг**: Что конкретно сделать.
-3. **Третий шаг**: Что конкретно сделать.
+### 📋 3. Пошаговый Action Plan
+Нумерованный список конкретных юридических и организационных шагов (в зависимости от объема рисков, от 3 до 7 пунктов):
+1. **[Приоритет 1] Название шага**: Конкретное действие (какой документ подготовить/подписать, с кем урегулировать).
+2. **[Приоритет 2] Название шага**: Конкретное действие.
+...
 
 ### 💼 4. Рекомендация Fenix Law
-Краткий совет по формализации структуры и подготовке к сделкам.";
+Краткое экспертное резюме венчурного юриста о готовности бизнеса к масштабированию и привлечению инвестиций.";
 
         var requestBody = new
         {
