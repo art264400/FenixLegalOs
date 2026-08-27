@@ -448,4 +448,36 @@ public class ScoringEngineTests
         Assert.NotNull(brandInfo);
         Assert.Equal("INFO", brandInfo.Severity);
     }
+
+    [Fact]
+    public void IP_Routing_IP10_To_IP10A_Should_Control_Visibility_And_Weights()
+    {
+        // When IP-10 == 'no', IP-10A should be hidden
+        var q10A = DataBank.Questions.First(q => q.Id == "IP-10A");
+        var answersNo = new Dictionary<string, object> { ["IP-10"] = "no" };
+        Assert.False(ConditionsEvaluator.IsVisible(q10A.ShowIf, answersNo));
+
+        // When IP-10 in [unrelated, lawyer_checked, not_reviewed, unknown], IP-10A should be visible
+        foreach (var opt in new[] { "unrelated", "lawyer_checked", "not_reviewed", "unknown" })
+        {
+            var answersVisible = new Dictionary<string, object> { ["IP-10"] = opt };
+            Assert.True(ConditionsEvaluator.IsVisible(q10A.ShowIf, answersVisible), $"Expected IP-10A visible when IP-10 = {opt}");
+        }
+    }
+
+    [Fact]
+    public void IP_Routing_IP11_To_IP11A_Should_Control_Visibility_And_Weights()
+    {
+        // When IP-11 == 'no', IP-11A should be hidden
+        var q11A = DataBank.Questions.First(q => q.Id == "IP-11A");
+        var answersNo = new Dictionary<string, object> { ["IP-11"] = "no" };
+        Assert.False(ConditionsEvaluator.IsVisible(q11A.ShowIf, answersNo));
+
+        // When IP-11 in [yes, likely, unknown], IP-11A should be visible
+        foreach (var opt in new[] { "yes", "likely", "unknown" })
+        {
+            var answersVisible = new Dictionary<string, object> { ["IP-11"] = opt };
+            Assert.True(ConditionsEvaluator.IsVisible(q11A.ShowIf, answersVisible), $"Expected IP-11A visible when IP-11 = {opt}");
+        }
+    }
 }
