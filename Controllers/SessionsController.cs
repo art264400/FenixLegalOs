@@ -131,7 +131,20 @@ public class SessionsController : ControllerBase
         var result = JsonSerializer.Deserialize<ScoreResult>(session.ResultJson);
         if (result == null) return NotFound(new { error = "invalid_result" });
 
-        var pdfBytes = await _pdfService.GeneratePdfAsync(result);
+        string? aiSummary = null;
+        try
+        {
+            var answersDict = !string.IsNullOrEmpty(session.AnswersJson)
+                ? JsonSerializer.Deserialize<Dictionary<string, object>>(session.AnswersJson) ?? new()
+                : new();
+            aiSummary = await _aiReportService.GenerateExecutiveSummaryAsync(answersDict, result);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("[PDF AI Summary Error] " + ex.Message);
+        }
+
+        var pdfBytes = await _pdfService.GeneratePdfAsync(result, aiSummary);
         if (pdfBytes == null) return Problem("PDF generation failed");
 
         return File(pdfBytes, "application/pdf", $"Fenix_Legal_Score_Report_{id}.pdf");
