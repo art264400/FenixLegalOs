@@ -716,7 +716,13 @@
 
   async function finishDiagnostic() {
     setProgress(1);
-    render('<section class="q-screen"><div class="q-meta">Диагностика завершена</div><h1 class="q-title">Считаем ваш Legal Score…</h1></section>');
+    render(
+      '<section class="q-screen">' +
+        '<div class="q-meta">Диагностика завершена</div>' +
+        '<h1 class="q-title">Считаем ваш Legal Score…</h1>' +
+        '<div class="spinner" style="margin:30px auto"></div>' +
+      '</section>'
+    );
     try {
       if (!state.sessionId) {
         const created = await api('POST', '/api/sessions');
@@ -727,7 +733,11 @@
       const data = await api('POST', '/api/sessions/' + state.sessionId + '/complete', { answers: state.answers });
       lastResult = data.result;
       unlocked = false;
-      location.hash = '#/results';
+      if (location.hash === '#/results') {
+        screenResults();
+      } else {
+        location.hash = '#/results';
+      }
     } catch (e) {
       render(
         '<section class="q-screen"><h1 class="q-title">Не удалось сохранить результат</h1>' +
@@ -1196,6 +1206,19 @@
     }
     html += '</section>';
     return html;
+  }
+
+  function block(title, items, subtitle) {
+    if (!items || !items.length) return '';
+    return (
+      '<section class="risks-block">' +
+        '<h2>' + esc(title) + '</h2>' +
+        (subtitle ? '<p class="hint">' + esc(subtitle) + '</p>' : '') +
+        '<div class="risks-grid">' +
+          items.map(function (x, idx) { return riskCard(x, idx, true); }).join('') +
+        '</div>' +
+      '</section>'
+    );
   }
 
   function screenFullReport(sessionId) {
