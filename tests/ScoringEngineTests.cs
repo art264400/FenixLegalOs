@@ -545,4 +545,206 @@ public class ScoringEngineTests
         Assert.NotNull(rTp);
         Assert.Equal("MEDIUM", rTp.Severity);
     }
+
+    [Fact(DisplayName = "4.1 Точный скоринг: Идеальный профиль дает ровно 100 баллов, Level 'strong' и статус 'Сильная основа'")]
+    public void Exact_Score_Gold_Standard_Clean_Profile_Gives_100_Overall()
+    {
+        // Сценарий: 100% идеальные ответы по всем направлениям
+        var answers = new Dictionary<string, object>
+        {
+            ["FND-C01"] = "2",
+            ["FND-C04"] = "signed",
+            ["FND-01"] = "none",
+            ["FND-02"] = "written",
+            ["FND-03"] = "full",
+            ["FND-04"] = "registered",
+            ["FND-05"] = "vesting",
+            ["FND-05A"] = "yes",
+            ["FND-06"] = "written",
+            ["FND-07"] = "mechanism",
+            ["FND-08"] = "written",
+            ["COR-C01"] = "aifc",
+            ["COR-02"] = "registered",
+            ["COR-03"] = "signed",
+            ["COR-04"] = "complete",
+            ["COR-04A"] = "yes",
+            ["COR-05"] = "systematic",
+            ["COR-06"] = "clear_limits",
+            ["COR-07_AIFC"] = "clean",
+            ["COR-08"] = "organized",
+            ["COR-T01"] = "none",
+            ["IP-01"] = "ready",
+            ["IP-02"] = new List<string> { "code", "app", "web", "brand", "domain" },
+            ["IP-03"] = new List<string> { "founders" },
+            ["IP-04"] = "all",
+            ["IP-05"] = "assigned",
+            ["IP-10"] = "no",
+            ["IP-11"] = "no",
+            ["IP-12"] = "no",
+            ["IP-13"] = "company",
+            ["IP-14"] = "company",
+            ["IP-15"] = "clear"
+        };
+
+        var result = _engine.ComputeResult(answers);
+
+        Assert.NotNull(result);
+        Assert.Equal(100, result.Overall);
+        Assert.Equal("strong", result.Level);
+        Assert.Equal("Сильная основа", result.LevelTitle);
+        Assert.Equal(0, result.CriticalCount);
+        Assert.Equal(0, result.HighCount);
+    }
+
+    [Fact(DisplayName = "4.2 Точный скоринг: Исключение веса юрлица из знаменателя при pre-incorporation (точность взвешивания)")]
+    public void Exact_Score_Pre_Incorporation_Weight_Exclusion_Math()
+    {
+        // Сценарий: Pre-incorporation (COR-C01 = none). Секция corporate получает статус N/A (вес 0 в знаменателе).
+        // Проверяем, что общий балл вычисляется ровно как взвешенное среднее применимых секций (Founders 100%, IP 100% -> Overall = 100).
+        var answers = new Dictionary<string, object>
+        {
+            ["FND-C01"] = "solo",
+            ["COR-C01"] = "none",
+            ["IP-01"] = "ready",
+            ["IP-02"] = new List<string> { "code" },
+            ["IP-03"] = new List<string> { "founders" },
+            ["IP-04"] = "all",
+            ["IP-05"] = "assigned",
+            ["IP-10"] = "no",
+            ["IP-11"] = "no",
+            ["IP-12"] = "no",
+            ["IP-13"] = "company",
+            ["IP-14"] = "company",
+            ["IP-15"] = "clear"
+        };
+
+        var result = _engine.ComputeResult(answers);
+
+        Assert.NotNull(result);
+        var fndSec = result.Sections.FirstOrDefault(s => s.SectionId == "founders");
+        var corpSec = result.Sections.FirstOrDefault(s => s.SectionId == "corporate");
+        var ipSec = result.Sections.FirstOrDefault(s => s.SectionId == "ip");
+
+        Assert.Equal(100, fndSec?.Score);
+        Assert.Equal("N_A", corpSec?.Status);
+        Assert.Null(corpSec?.Score);
+        Assert.Equal(100, ipSec?.Score);
+        Assert.Equal(100, result.Overall);
+    }
+
+    [Fact(DisplayName = "4.3 Точный скоринг: Корпоративная структура — расчет балла при частичных недостатках (Cap table, история)")]
+    public void Exact_Score_Corporate_Section_Mixed_Compliance_Calculation()
+    {
+        // Сценарий: Одно юрлицо в РК с частично оформленными документами
+        var answers = new Dictionary<string, object>
+        {
+            ["FND-C01"] = "solo",
+            ["COR-C01"] = "one",
+            ["COR-C02A"] = "kz",
+            ["COR-01"] = "match",         // 1.0 (вес 20) -> 2000
+            ["COR-02"] = "partial",       // 0.6 (вес 15) -> 900
+            ["COR-03"] = "signed",        // 1.0 (вес 10) -> 1000
+            ["COR-04"] = "main_docs",     // 0.8 (вес 15 * 70%) -> 840
+            ["COR-04A"] = "yes",          // 1.0 (вес 15 * 30%) -> 450
+            ["COR-05"] = "systematic",    // 1.0 (вес 12) -> 1200
+            ["COR-06"] = "clear_limits",  // 1.0 (вес 10) -> 1000
+            ["COR-07"] = "aligned",       // 1.0 (вес 13) -> 1300
+            ["COR-08"] = "organized"      // 1.0 (вес 5)  -> 500
+        };
+
+        var result = _engine.ComputeResult(answers);
+        var corpSec = result.Sections.FirstOrDefault(s => s.SectionId == "corporate");
+
+        Assert.NotNull(corpSec);
+        Assert.Equal("APPLICABLE", corpSec.Status);
+        // Точный балл согласно весам DataBank v1.1: (2000 + 1275 + 1000 + 892.5 + 450 + 1200 + 1000 + 1300 + 500) / 100 = 9617.5 / 100 = 96%
+        Assert.Equal(96, corpSec.Score);
+    }
+
+    [Fact(DisplayName = "4.4 Точный скоринг: Градация пороговых уровней (structural_risks < 40, material_gaps 40-59, attention 60-79, strong >= 80)")]
+    public void Exact_Score_Level_Threshold_Classifications()
+    {
+        // Проверка уровней классификации по каноническим границам
+        Assert.Equal("structural_risks", ScoringEngine.GetLevel(0));
+        Assert.Equal("structural_risks", ScoringEngine.GetLevel(39));
+        Assert.Equal("material_gaps", ScoringEngine.GetLevel(40));
+        Assert.Equal("material_gaps", ScoringEngine.GetLevel(59));
+        Assert.Equal("attention", ScoringEngine.GetLevel(60));
+        Assert.Equal("attention", ScoringEngine.GetLevel(79));
+        Assert.Equal("strong", ScoringEngine.GetLevel(80));
+        Assert.Equal("strong", ScoringEngine.GetLevel(100));
+
+        Assert.Equal("Структурные вопросы", ScoringEngine.GetLevelTitle("structural_risks"));
+        Assert.Equal("Существенные пробелы", ScoringEngine.GetLevelTitle("material_gaps"));
+        Assert.Equal("Есть вопросы, требующие внимания", ScoringEngine.GetLevelTitle("attention"));
+        Assert.Equal("Сильная основа", ScoringEngine.GetLevelTitle("strong"));
+    }
+
+    [Fact(DisplayName = "4.5 Точный скоринг: Расчёт процента уверенности (Confidence Score) при неизвестных ответах")]
+    public void Exact_Score_Confidence_Calculation_Based_On_Unknown_Answers()
+    {
+        // Сценарий: Все ответы известны точно -> Confidence = 100%
+        var knownAnswers = new Dictionary<string, object>
+        {
+            ["FND-C01"] = "solo",
+            ["COR-C01"] = "one",
+            ["COR-C02A"] = "kz",
+            ["COR-01"] = "match",
+            ["COR-02"] = "complete",
+            ["COR-07"] = "aligned"
+        };
+        var resKnown = _engine.ComputeResult(knownAnswers);
+        Assert.Equal(100, resKnown.Confidence);
+        Assert.Equal("Высокая определенность ответов.", resKnown.ConfidenceText);
+
+        // Сценарий: Несколько ответов 'unknown' -> Confidence снижается
+        var unknownAnswers = new Dictionary<string, object>
+        {
+            ["FND-C01"] = "2",
+            ["FND-C04"] = "unknown",
+            ["FND-01"] = "none",
+            ["FND-02"] = "unknown",
+            ["FND-03"] = "unknown",
+            ["FND-04"] = "unknown",
+            ["FND-05"] = "unknown",
+            ["FND-06"] = "unknown",
+            ["FND-07"] = "unknown",
+            ["FND-08"] = "unknown",
+            ["COR-C01"] = "none"
+        };
+        var resUnknown = _engine.ComputeResult(unknownAnswers);
+        Assert.True(resUnknown.Confidence < 70, $"Ожидался низкий Confidence при ответах 'unknown', получено: {resUnknown.Confidence}");
+    }
+
+    [Fact(DisplayName = "4.6 Точный скоринг: Интеллектуальная собственность — точный расчет весов IP-компонентов и дочерних вопросов")]
+    public void Exact_Score_IP_Section_Weighted_Components_Math()
+    {
+        // Сценарий: IP-контур с частичным оформлением (IP-04 main 0.5, IP-05 assigned 1.0, IP-10 unrelated 1.0, IP-10A no 1.0, IP-13 company 1.0, IP-14 company 1.0, IP-15 clear 1.0)
+        var answers = new Dictionary<string, object>
+        {
+            ["FND-C01"] = "solo",
+            ["COR-C01"] = "one",
+            ["IP-01"] = "ready",
+            ["IP-02"] = new List<string> { "code", "brand" },
+            ["IP-03"] = new List<string> { "founders" },
+            ["IP-04"] = "main",       // 0.5 (вес 20) -> 1000
+            ["IP-05"] = "assigned",   // 1.0 (вес 15) -> 1500
+            ["IP-10"] = "unrelated",  // 1.0 (вес 15 * 60%) -> 900
+            ["IP-10A"] = "no",        // 1.0 (вес 15 * 40%) -> 600
+            ["IP-11"] = "no",         // no 3rd party
+            ["IP-12"] = "no",         // 1.0 (вес 12) -> 1200
+            ["IP-13"] = "company",    // 1.0 (вес 15) -> 1500
+            ["IP-14"] = "company",    // 1.0 (вес 8)  -> 800
+            ["IP-15"] = "clear"       // 1.0 (вес 15) -> 1500
+        };
+
+        var result = _engine.ComputeResult(answers);
+        var ipSec = result.Sections.FirstOrDefault(s => s.SectionId == "ip");
+
+        Assert.NotNull(ipSec);
+        Assert.Equal("APPLICABLE", ipSec.Status);
+        // Сумма весов: 20 + 15 + 15 + 12 + 15 + 8 + 15 = 100
+        // Взвешенная сумма: 1000 + 1500 + 900 + 600 + 1200 + 1500 + 800 + 1500 = 9000 -> 90%
+        Assert.Equal(90, ipSec.Score);
+    }
 }

@@ -833,14 +833,14 @@ public class ScoringEngine
         _ => 4
     };
 
-    private string GetConfidenceText(int confidence) => confidence switch
+    public static string GetConfidenceText(int confidence) => confidence switch
     {
         >= 80 => "Высокая определенность ответов.",
         >= 60 => "Оценка достаточно надежна, но часть вопросов требует подтверждения.",
         _ => "Оценка ограничена недостатком определенности ответов."
     };
 
-    private string GetLevel(int score) => score switch
+    public static string GetLevel(int score) => score switch
     {
         >= 80 => "strong",
         >= 60 => "attention",
@@ -848,7 +848,7 @@ public class ScoringEngine
         _ => "structural_risks"
     };
 
-    private string GetLevelTitle(string level) => level switch
+    public static string GetLevelTitle(string level) => level switch
     {
         "strong" => "Сильная основа",
         "attention" => "Есть вопросы, требующие внимания",
@@ -856,7 +856,7 @@ public class ScoringEngine
         _ => "Структурные вопросы"
     };
 
-    private string GetLevelText(string level) => level switch
+    public static string GetLevelText(string level) => level switch
     {
         "strong" => "Ваша компания имеет относительно сильную юридическую основу.",
         "attention" => "Основа сформирована частично. Некоторые вопросы требуют внимания.",
