@@ -3,6 +3,7 @@ using System.Text.Json;
 using FenixLegalOs.Data;
 using FenixLegalOs.Models;
 using FenixLegalOs.Repositories;
+using FenixLegalOs.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FenixLegalOs.Controllers;
@@ -13,14 +14,22 @@ public class AdminController : ControllerBase
 {
     private readonly LeadRepository _leads;
     private readonly QuestionRepository _questionRepo;
+    private readonly ScoringEngine _scoringEngine;
+    private readonly AiReportService _aiReportService;
     private const string AdminTokenCookieName = "fenix_admin";
     private static readonly HashSet<string> AdminTokens = new();
     private static readonly string AdminPassword = Environment.GetEnvironmentVariable("FENIX_ADMIN_PASSWORD") ?? "fenix2026";
 
-    public AdminController(LeadRepository leads, QuestionRepository questionRepo)
+    public AdminController(
+        LeadRepository leads,
+        QuestionRepository questionRepo,
+        ScoringEngine scoringEngine,
+        AiReportService aiReportService)
     {
         _leads = leads;
         _questionRepo = questionRepo;
+        _scoringEngine = scoringEngine;
+        _aiReportService = aiReportService;
     }
 
     private bool IsAdmin()
@@ -176,6 +185,226 @@ public class AdminController : ControllerBase
         {
             version = versions.GetValueOrDefault("risk_library", DataBank.RiskLibraryVersion),
             risks = _questionRepo.GetRisks()
+        });
+    }
+
+    [HttpGet("testbench/presets")]
+    public IActionResult GetTestBenchPresets()
+    {
+        if (!IsAdmin()) return Unauthorized();
+        var presets = new[]
+        {
+            new
+            {
+                id = "preset_deadlock",
+                title = "Критический Deadlock 50/50 и нет IP",
+                description = "2 сооснователя, равные доли 50/50, совместные решения без механизма выхода из тупика, юрлицо не зарегистрировано, код у фрилансеров.",
+                badge = "🔴 Высокий риск",
+                answers = new Dictionary<string, object>
+                {
+                    ["FND-01"] = "two",
+                    ["FND-02"] = "verbal",
+                    ["FND-03"] = "equal_50_50",
+                    ["FND-C01"] = "50",
+                    ["FND-C02"] = "50",
+                    ["FND-04"] = "unanimous",
+                    ["FND-05"] = "none",
+                    ["FND-06"] = "no",
+                    ["COR-C01"] = "none",
+                    ["IP-01"] = "contractors",
+                    ["IP-02"] = "none",
+                    ["IP-03"] = "none",
+                    ["IP-04"] = "none",
+                    ["TEAM-01"] = "contractors_only",
+                    ["TEAM-02"] = "none",
+                    ["TEAM-03"] = "shared_passwords",
+                    ["PROD-01"] = "no",
+                    ["PROD-02"] = "personal_card",
+                    ["PROD-03"] = "none",
+                    ["DATA-01"] = "yes_many",
+                    ["DATA-02"] = "public_llm_api",
+                    ["DATA-03"] = "none",
+                    ["CONT-01"] = "no_written",
+                    ["CONT-02"] = "unlimited",
+                    ["CONT-03"] = "informal",
+                    ["INVEST-01"] = "m3",
+                    ["INVEST-02"] = "none",
+                    ["INVEST-03"] = "not_prepared"
+                }
+            },
+            new
+            {
+                id = "preset_solo_ai",
+                title = "Solo-Founder B2B SaaS с AI",
+                description = "1 основатель 100%, ТОО зарегистрировано, B2B-клиенты, интеграция с LLM, но есть пробелы в обработке данных и публичной оферте.",
+                badge = "🟠 Средний уровень",
+                answers = new Dictionary<string, object>
+                {
+                    ["FND-01"] = "single",
+                    ["FND-C01"] = "100",
+                    ["COR-C01"] = "kz_llp",
+                    ["COR-02"] = "founder_only",
+                    ["COR-03"] = "standard_charter",
+                    ["COR-04"] = "clean",
+                    ["IP-01"] = "founder_personal",
+                    ["IP-02"] = "assigned_to_company",
+                    ["IP-03"] = "registered",
+                    ["IP-04"] = "audited",
+                    ["TEAM-01"] = "full_time",
+                    ["TEAM-02"] = "labor_ip_clauses",
+                    ["TEAM-03"] = "role_based",
+                    ["PROD-01"] = "public_offer",
+                    ["PROD-02"] = "business_gateway",
+                    ["PROD-03"] = "capped_fees",
+                    ["DATA-01"] = "yes_many",
+                    ["DATA-02"] = "public_llm_api",
+                    ["DATA-03"] = "none",
+                    ["CONT-01"] = "standard_b2b",
+                    ["CONT-02"] = "liability_cap",
+                    ["CONT-03"] = "clear_sla",
+                    ["INVEST-01"] = "m3_6",
+                    ["INVEST-02"] = "safe",
+                    ["INVEST-03"] = "data_room_ready"
+                }
+            },
+            new
+            {
+                id = "preset_seed_ready",
+                title = "Зрелый Seed-стартап (Раунд $500k+)",
+                description = "3 основателя с вестингом, компания МФЦА / Delaware, Cap Table чистый, SAFE соглашения, высокий уровень юридической готовности к раунду.",
+                badge = "🟢 Инвестиционно готов",
+                answers = new Dictionary<string, object>
+                {
+                    ["FND-01"] = "three_plus",
+                    ["FND-02"] = "sha_signed",
+                    ["FND-03"] = "custom_split",
+                    ["FND-C01"] = "50",
+                    ["FND-C02"] = "30",
+                    ["FND-C03"] = "20",
+                    ["FND-04"] = "board_majority",
+                    ["FND-05"] = "russian_roulette",
+                    ["FND-06"] = "standard_4y_cliff",
+                    ["COR-C01"] = "aifc",
+                    ["COR-02"] = "board_directors",
+                    ["COR-03"] = "custom_tailored",
+                    ["COR-04"] = "clean_option_pool",
+                    ["IP-01"] = "all_assigned",
+                    ["IP-02"] = "assigned_to_company",
+                    ["IP-03"] = "registered",
+                    ["IP-04"] = "audited",
+                    ["TEAM-01"] = "full_time_and_contractors",
+                    ["TEAM-02"] = "full_ip_nda_nca",
+                    ["TEAM-03"] = "sso_mfa",
+                    ["PROD-01"] = "public_offer_and_msa",
+                    ["PROD-02"] = "business_gateway",
+                    ["PROD-03"] = "capped_fees",
+                    ["DATA-01"] = "dpa_gdpr_compliant",
+                    ["DATA-02"] = "enterprise_private_ai",
+                    ["DATA-03"] = "consent_banner",
+                    ["CONT-01"] = "custom_enterprise_msa",
+                    ["CONT-02"] = "liability_cap",
+                    ["CONT-03"] = "clear_sla",
+                    ["INVEST-01"] = "m3",
+                    ["INVEST-02"] = "safe_convertible",
+                    ["INVEST-03"] = "data_room_ready"
+                }
+            }
+        };
+
+        // Also fetch up to 10 latest real user sessions for testing live data
+        var liveLeads = _leads.ListLeads().Take(10).Select(l => new
+        {
+            id = "session_" + l.Id,
+            title = "Сессия: " + (string.IsNullOrEmpty(l.Company) ? (l.Name ?? l.Id) : l.Company),
+            description = $"Создан: {l.CreatedAt}, Heat: {l.HeatLabel}, Контакт: {l.Email ?? l.Messenger ?? "нет"}",
+            badge = "👤 Реальный пользователь",
+            answers = l.SessionAnswers != null ? JsonSerializer.Deserialize<Dictionary<string, object>>((string)l.SessionAnswers) : new()
+        }).ToList();
+
+        return Ok(new { presets, liveSessions = liveLeads });
+    }
+
+    [HttpPost("testbench/simulate")]
+    public IActionResult SimulateTest([FromBody] JsonElement body)
+    {
+        if (!IsAdmin()) return Unauthorized();
+        var answers = new Dictionary<string, object>();
+        if (body.TryGetProperty("answers", out var aProp) && aProp.ValueKind == JsonValueKind.Object)
+        {
+            answers = JsonSerializer.Deserialize<Dictionary<string, object>>(aProp.GetRawText()) ?? new();
+        }
+
+        var result = _scoringEngine.ComputeResult(answers);
+
+        // Format questions and chosen answers grouped by sections for human-friendly display
+        var allQuestions = _questionRepo.GetQuestions(enabledOnly: false);
+        var allSections = _questionRepo.GetSections(enabledOnly: false);
+
+        var structuredAnswers = allSections.Select(sec =>
+        {
+            var secQuestions = allQuestions.Where(q => q.SectionId == sec.Id).Select(q =>
+            {
+                answers.TryGetValue(q.Id, out var val);
+                string answerText = "—";
+                if (val != null)
+                {
+                    var opt = q.Options?.FirstOrDefault(o => o.Id.Equals(val.ToString(), StringComparison.OrdinalIgnoreCase));
+                    answerText = opt != null ? opt.Label : val.ToString()!;
+                }
+
+                return new
+                {
+                    id = q.Id,
+                    question = q.Question,
+                    rawVal = val?.ToString(),
+                    answerText = answerText,
+                    answered = val != null
+                };
+            }).Where(q => q.answered).ToList();
+
+            return new
+            {
+                sectionId = sec.Id,
+                sectionTitle = sec.Title,
+                questions = secQuestions
+            };
+        }).Where(s => s.questions.Count > 0).ToList();
+
+        return Ok(new
+        {
+            result,
+            structuredAnswers,
+            totalAnswered = answers.Count
+        });
+    }
+
+    [HttpPost("testbench/generate-ai")]
+    public async Task<IActionResult> GenerateAiTest([FromBody] JsonElement body)
+    {
+        if (!IsAdmin()) return Unauthorized();
+        ScoreResult? result = null;
+        Dictionary<string, object>? answers = null;
+
+        if (body.TryGetProperty("result", out var rProp) && rProp.ValueKind == JsonValueKind.Object)
+        {
+            result = JsonSerializer.Deserialize<ScoreResult>(rProp.GetRawText());
+        }
+        if (body.TryGetProperty("answers", out var aProp) && aProp.ValueKind == JsonValueKind.Object)
+        {
+            answers = JsonSerializer.Deserialize<Dictionary<string, object>>(aProp.GetRawText());
+        }
+
+        if (result == null) return BadRequest(new { error = "missing_result" });
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var memo = await _aiReportService.GenerateExecutiveSummaryAsync(answers ?? new(), result);
+        sw.Stop();
+
+        return Ok(new
+        {
+            memo,
+            durationMs = sw.ElapsedMilliseconds,
+            model = "gpt-4o-mini"
         });
     }
 }

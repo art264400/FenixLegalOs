@@ -32,6 +32,8 @@ public class QuestionRepository
         )).ToList();
     }
 
+    private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };
+
     public List<DiagnosticQuestion> GetQuestions(bool enabledOnly = true)
     {
         using var conn = new SqliteConnection(_connectionString);
@@ -64,16 +66,16 @@ public class QuestionRepository
                 DimensionWeight = Convert.ToDouble(r.dimension_weight),
                 WithinDimensionWeight = Convert.ToDouble(r.within_dimension_weight),
                 Options = !string.IsNullOrEmpty((string)r.options_json)
-                    ? JsonSerializer.Deserialize<List<AnswerOption>>((string)r.options_json)
+                    ? JsonSerializer.Deserialize<List<AnswerOption>>((string)r.options_json, JsonOpts) ?? new()
                     : new List<AnswerOption>(),
                 Tags = !string.IsNullOrEmpty((string)r.tags_json)
-                    ? JsonSerializer.Deserialize<List<string>>((string)r.tags_json) ?? new()
+                    ? JsonSerializer.Deserialize<List<string>>((string)r.tags_json, JsonOpts) ?? new()
                     : new List<string>(),
                 ShowIf = !string.IsNullOrEmpty((string)r.show_if_json)
-                    ? JsonSerializer.Deserialize<List<ConditionalRule>>((string)r.show_if_json)
+                    ? JsonSerializer.Deserialize<List<ConditionalRule>>((string)r.show_if_json, JsonOpts)
                     : null,
                 SkipIf = !string.IsNullOrEmpty((string)r.skip_if_json)
-                    ? JsonSerializer.Deserialize<List<ConditionalRule>>((string)r.skip_if_json)
+                    ? JsonSerializer.Deserialize<List<ConditionalRule>>((string)r.skip_if_json, JsonOpts)
                     : null,
                 Enabled = Convert.ToInt32(r.enabled) == 1
             };
@@ -99,20 +101,20 @@ public class QuestionRepository
                 Priority = (string)r.priority,
                 SectionId = (string)r.section_id,
                 Modules = !string.IsNullOrEmpty((string)r.modules_json)
-                    ? JsonSerializer.Deserialize<List<string>>((string)r.modules_json) ?? new()
+                    ? JsonSerializer.Deserialize<List<string>>((string)r.modules_json, JsonOpts) ?? new()
                     : new List<string>(),
                 Title = (string)r.title,
                 Finding = (string)r.finding,
                 WhyItMatters = (string)r.why_it_matters,
                 Recommendations = !string.IsNullOrEmpty((string)r.recommendations_json)
-                    ? JsonSerializer.Deserialize<List<string>>((string)r.recommendations_json) ?? new()
+                    ? JsonSerializer.Deserialize<List<string>>((string)r.recommendations_json, JsonOpts) ?? new()
                     : new List<string>(),
                 Recommendation = (string)r.recommendation,
                 LawyerRequired = Convert.ToInt32(r.lawyer_required) == 1,
                 Resolution = (string)r.resolution,
                 ServiceCode = r.service_code as string,
                 SuppressCodes = !string.IsNullOrEmpty((string)r.suppress_codes_json)
-                    ? JsonSerializer.Deserialize<List<string>>((string)r.suppress_codes_json) ?? new()
+                    ? JsonSerializer.Deserialize<List<string>>((string)r.suppress_codes_json, JsonOpts) ?? new()
                     : new List<string>(),
                 Cta = r.cta as string
             };
