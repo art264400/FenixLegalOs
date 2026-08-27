@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Fenix Law System · Founders Block Canonical Vocabulary §24</title>
+<style>
+    @page {
+        size: A4 portrait;
+        margin: 10mm 10mm 12mm 10mm;
+    }
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        color: #0f172a;
+        background-color: #ffffff;
+        margin: 0;
+        padding: 0;
+        font-size: 8pt;
+        line-height: 1.25;
+    }
+    .header {
+        border-bottom: 2px solid #2563eb;
+        padding-bottom: 6px;
+        margin-bottom: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+    }
+    .title {
+        font-size: 14pt;
+        font-weight: 700;
+        color: #0f172a;
+        margin: 0;
+        letter-spacing: -0.2px;
+    }
+    .subtitle {
+        font-size: 8.5pt;
+        color: #475569;
+        margin-top: 2px;
+        font-weight: 500;
+    }
+    .badge {
+        display: inline-block;
+        padding: 2.5px 6px;
+        font-size: 7pt;
+        font-weight: 600;
+        border-radius: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+    }
+    .badge-primary {
+        background-color: #eff6ff;
+        color: #1d4ed8;
+        border: 1px solid #bfdbfe;
+    }
+    .badge-success {
+        background-color: #f0fdf4;
+        color: #15803d;
+        border: 1px solid #bbf7d0;
+    }
+    .section-title {
+        font-size: 10pt;
+        font-weight: 700;
+        color: #1e3a8a;
+        margin-top: 10px;
+        margin-bottom: 5px;
+        border-left: 3px solid #2563eb;
+        padding-left: 5px;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 8px;
+    }
+    tr {
+        page-break-inside: avoid;
+    }
+    thead {
+        display: table-header-group;
+    }
+    th {
+        background-color: #f8fafc;
+        color: #334155;
+        font-weight: 700;
+        text-align: left;
+        padding: 4px 5px;
+        border: 1px solid #cbd5e1;
+        font-size: 7.5pt;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+    td {
+        padding: 3px 5px;
+        border: 1px solid #e2e8f0;
+        vertical-align: middle;
+        font-size: 7.5pt;
+    }
+    tr:nth-child(even) td {
+        background-color: #f8fafc;
+    }
+    .code {
+        font-family: "Cascadia Code", "Consolas", monospace;
+        font-size: 7pt;
+        color: #0f766e;
+        background-color: #f0fdfa;
+        padding: 0.5px 3px;
+        border-radius: 3px;
+        border: 1px solid #ccfbf1;
+    }
+    .fact {
+        font-family: "Cascadia Code", "Consolas", monospace;
+        font-size: 7pt;
+        color: #4338ca;
+        background-color: #eef2ff;
+        padding: 0.5px 3px;
+        border-radius: 3px;
+        border: 1px solid #e0e7ff;
+    }
+    .score-cell {
+        font-weight: 700;
+        text-align: center;
+        width: 35px;
+    }
+    .score-1 { color: #16a34a; }
+    .score-mid { color: #d97706; }
+    .score-0 { color: #dc2626; }
+    .footer {
+        margin-top: 10px;
+        padding-top: 6px;
+        border-top: 1px solid #e2e8f0;
+        font-size: 7pt;
+        color: #94a3b8;
+        display: flex;
+        justify-content: space-between;
+    }
+</style>
+</head>
+<body>
+
+<div class="header">
+    <div>
+        <div class="title">Fenix Law System · Founders Block (§24)</div>
+        <div class="subtitle">Нормативная спецификация канонического словаря и маппинга фактов</div>
+    </div>
+    <div>
+        <span class="badge badge-success">Architecture v1.1 §24</span>
+        <span class="badge badge-primary">Tests: 49/49 PASS</span>
+    </div>
+</div>
+
+<div class="section-title">1. Канонический словарь и нормализация фактов (§24)</div>
+
+<table>
+    <thead>
+        <tr>
+            <th style="width: 65px;">Question</th>
+            <th style="width: 130px;">Canonical Answer ID</th>
+            <th>Canonical Fact Key / Value</th>
+            <th style="width: 40px; text-align: center;">Score</th>
+            <th style="width: 95px;">Source in Code</th>
+        </tr>
+    </thead>
+    <tbody>
+        <!-- FND-C01 -->
+        <tr>
+            <td><strong>FND-C01</strong></td>
+            <td><span class="code">solo</span></td>
+            <td><span class="fact">founders.count = 1</span>, <span class="fact">founders.activeCount = 1</span></td>
+            <td class="score-cell score-1">1.0</td>
+            <td>DataBank.cs:L30</td>
+        </tr>
+        <tr>
+            <td><strong>FND-C01</strong></td>
+            <td><span class="code">2</span></td>
+            <td><span class="fact">founders.count = 2</span>, <span class="fact">founders.activeCount = 2</span></td>
+            <td class="score-cell score-1">1.0</td>
+            <td>DataBank.cs:L31</td>
+        </tr>
+        <tr>
+            <td><strong>FND-C01</strong></td>
+            <td><span class="code">3</span></td>
+            <td><span class="fact">founders.count = 3</span>, <span class="fact">founders.activeCount = 3</span></td>
+            <td class="score-cell score-1">1.0</td>
+            <td>DataBank.cs:L32</td>
+        </tr>
+        <tr>
+            <td><strong>FND-C01</strong></td>
+            <td><span class="code">4plus</span></td>
+            <td><span class="fact">founders.count = 4</span>, <span class="fact">founders.activeCount = 4</span></td>
+            <td class="score-cell score-1">1.0</td>
+            <td>DataBank.cs:L33</td>
+        </tr>
+        <tr>
+            <td><strong>FND-C01</strong></td>
+            <td><span class="code">inactive_exist</span></td>
+            <td><span class="fact">founders.inactiveExists = true</span></td>
+            <td class="score-cell score-1">1.0</td>
+            <td>DataBank.cs:L34</td>
+        </tr>
+
+        <!-- FND-C02 -->
+        <tr style="background-color: #f0fdf4;">
+            <td><strong>FND-C02</strong></td>
+            <td><span class="code">CUSTOM equity inputs</span></td>
+            <td><span class="fact">founders.isEqual5050</span>, <span class="fact">founders.nearEqualControl</span> (derived)</td>
+            <td class="score-cell">—</td>
+            <td>DataBank.cs:L39</td>
+        </tr>
+
+        <!-- FND-C03 -->
+        <tr>
+            <td><strong>FND-C03</strong></td>
+            <td><span class="code">none</span></td>
+            <td><span class="fact">founders.departedFounderExists = false</span></td>
+            <td class="score-cell score-1">1.0</td>
+            <td>DataBank.cs:L54</td>
+        </tr>
+        <tr>
+            <td><strong>FND-C03</strong></td>
+            <td><span class="code">resolved</span></td>
+            <td><span class="fact">founders.departedFounderStatus = "clean"</span></td>
+            <td class="score-cell score-1">1.0</td>
+            <td>DataBank.cs:L55</td>
+        </tr>
+        <tr>
+            <td><strong>FND-C03</strong></td>
+            <td><span class="code">unresolved</span></td>
+            <td><span class="fact">founders.departedFounderStatus = "unresolved"</span></td>
+            <td class="score-cell score-0">0.0</td>
+            <td>DataBank.cs:L56</td>
+        </tr>
+        <tr>
+            <td><strong>FND-C03</strong></td>
+            <td><span class="code">dispute</span></td>
+            <td><span class="fact">founders.departedFounderStatus = "dispute"</span></td>
+            <td class="score-cell score-0">0.0</td>
+            <td>DataBank.cs:L57</td>
+        </tr>
+        <tr>
+            <td><strong>FND-C03</strong></td>
+            <td><span class="code">unknown</span></td>
+            <td><span class="fact">founders.departedFounderStatus = "unknown"</span></td>
+            <td class="score-cell score-mid">0.5</td>
+            <td>DataBank.cs:L58</td>
+        </tr>
+
+        <!-- FND-C04 -->
+        <tr style="background-color: #f0fdf4;">
+            <td><strong>FND-C04</strong></td>
+            <td><span class="code">signed</span></td>
+            <td><span class="fact">founders.founderAgreementStatus = "signed"</span></td>
+            <td class="score-cell score-1">1.0</td>
+            <td>DataBank.cs:L68</td>
+        </tr>
+        <tr style="background-color: #f0fdf4;">
+            <td><strong>FND-C04</strong></td>
+            <td><span class="code">multiple_docs</span></td>
+            <td><span class="fact">founders.founderAgreementStatus = "multiple_docs"</span></td>
+            <td class="score-cell score-1">0.8</td>
+            <td>DataBank.cs:L69</td>
+        </tr>
+        <tr style="background-color: #f0fdf4;">
+            <td><strong>FND-C04</strong></td>
+            <td><span class="code">draft</span></td>
+            <td><span class="fact">founders.founderAgreementStatus = "draft"</span></td>
+            <td class="score-cell score-mid">0.5</td>
+            <td>DataBank.cs:L70</td>
+        </tr>
+        <tr style="background-color: #f0fdf4;">
+            <td><strong>FND-C04</strong></td>
+            <td><span class="code">informal</span></td>
+            <td><span class="fact">founders.founderAgreementStatus = "informal"</span></td>
+            <td class="score-cell score-mid">0.25</td>
+            <td>DataBank.cs:L71</td>
+        </tr>
+        <tr style="background-color: #f0fdf4;">
+            <td><strong>FND-C04</strong></td>
+            <td><span class="code">none</span></td>
+            <td><span class="fact">founders.founderAgreementStatus = "none"</span></td>
+            <td class="score-cell score-0">0.0</td>
+            <td>DataBank.cs:L72</td>
+        </tr>
+        <tr style="background-color: #f0fdf4;">
+            <td><strong>FND-C04</strong></td>
+            <td><span class="code">unknown</span></td>
+            <td><span class="fact">founders.founderAgreementStatus = "unknown"</span></td>
+            <td class="score-cell score-mid">0.25</td>
+            <td>DataBank.cs:L73</td>
+        </tr>
+
+        <!-- FND-01 -->
+        <tr style="background-color: #fefce8;">
+            <td><strong>FND-01</strong></td>
+            <td><span class="code">none</span></td>
+            <td><span class="fact">founders.activeDispute = false</span>, <span class="fact">disputeLevel = "none"</span></td>
+            <td class="score-cell score-1">1.0</td>
+            <td>DataBank.cs:L83</td>
+        </tr>
+        <tr style="background-color: #fefce8;">
+            <td><strong>FND-01</strong></td>
+            <td><span class="code">minor</span></td>
+            <td><span class="fact">founders.activeDispute = false</span>, <span class="fact">disputeLevel = "minor"</span></td>
+            <td class="score-cell score-1">0.75</td>
+            <td>DataBank.cs:L84</td>
+        </tr>
+        <tr style="background-color: #fefce8;">
+            <td><strong>FND-01</strong></td>
+            <td><span class="code">material</span></td>
+            <td><span class="fact">founders.activeDispute = false</span>, <span class="fact">disputeLevel = "material"</span></td>
+            <td class="score-cell score-mid">0.25</td>
+            <td>DataBank.cs:L85</td>
+        </tr>
+        <tr style="background-color: #fefce8;">
+            <td><strong>FND-01</strong></td>
+            <td><span class="code">active_conflict</span></td>
+            <td><span class="fact">founders.activeDispute = true</span>, <span class="fact">disputeLevel = "active_conflict"</span></td>
+            <td class="score-cell score-0">0.0</td>
+            <td>DataBank.cs:L86</td>
+        </tr>
+        <tr style="background-color: #fefce8;">
+            <td><strong>FND-01</strong></td>
+            <td><span class="code">formal_dispute</span></td>
+            <td><span class="fact">founders.activeDispute = true</span>, <span class="fact">disputeLevel = "formal_dispute"</span></td>
+            <td class="score-cell score-0">0.0</td>
+            <td>DataBank.cs:L87</td>
+        </tr>
+
+        <!-- FND-02 -->
+        <tr style="background-color: #eff6ff;">
+            <td><strong>FND-02</strong></td>
+            <td><span class="code">written</span></td>
+            <td><span class="fact">founders.roleClarity = "written"</span></td>
+            <td class="score-cell score-1">1.0</td>
+            <td>DataBank.cs:L97</td>
+        </tr>
+        <tr style="background-color: #eff6ff;">
+            <td><strong>FND-02</strong></td>
+            <td><span class="code">clear_oral</span></td>
+            <td><span class="fact">founders.roleClarity = "clear_oral"</span></td>
+            <td class="score-cell score-1">0.75</td>
+            <td>DataBank.cs:L98</td>
+        </tr>
+        <tr style="background-color: #eff6ff;">
+            <td><strong>FND-02</strong></td>
+            <td><span class="code">overlap</span></td>
+            <td><span class="fact">founders.roleClarity = "overlap"</span></td>
+            <td class="score-cell score-mid">0.25</td>
+            <td>DataBank.cs:L99</td>
+        </tr>
+        <tr style="background-color: #eff6ff;">
+            <td><strong>FND-02</strong></td>
+            <td><span class="code">disputed</span></td>
+            <td><span class="fact">founders.roleClarity = "disputed"</span></td>
+            <td class="score-cell score-0">0.0</td>
+            <td>DataBank.cs:L100</td>
+        </tr>
+
+        <!-- FND-03 -->
+        <tr>
+            <td><strong>FND-03</strong></td>
+            <td><span class="code">aligned</span></td>
+            <td><span class="fact">founders.commitmentStatus = "aligned"</span></td>
+            <td class="score-cell score-1">1.0</td>
+            <td>DataBank.cs:L110</td>
+        </tr>
+        <tr>
+            <td><strong>FND-03</strong></td>
+            <td><span class="code">temporary_part_time</span></td>
+            <td><span class="fact">founders.commitmentStatus = "temporary_part_time"</span></td>
+            <td class="score-cell score-1">0.85</td>
+            <td>DataBank.cs:L111</td>
+        </tr>
+        <tr>
+            <td><strong>FND-03</strong></td>
+            <td><span class="code">different_accepted</span></td>
+            <td><span class="fact">founders.commitmentStatus = "different_accepted"</span></td>
+            <td class="score-cell score-1">0.65</td>
+            <td>DataBank.cs:L112</td>
+        </tr>
+        <tr>
+            <td><strong>FND-03</strong></td>
+            <td><span class="code">below_expected</span></td>
+            <td><span class="fact">founders.commitmentStatus = "below_expected"</span></td>
+            <td class="score-cell score-mid">0.25</td>
+            <td>DataBank.cs:L113</td>
+        </tr>
+        <tr>
+            <td><strong>FND-03</strong></td>
+            <td><span class="code">stopped</span></td>
+            <td><span class="fact">founders.commitmentStatus = "stopped"</span>, <span class="fact">inactiveExists = true</span></td>
+            <td class="score-cell score-0">0.0</td>
+            <td>DataBank.cs:L114</td>
+        </tr>
+
+        <!-- FND-04 -->
+        <tr>
+            <td><strong>FND-04</strong></td>
+            <td><span class="code">registered</span></td>
+            <td><span class="fact">founders.equityClarity = "registered"</span></td>
+            <td class="score-cell score-1">1.0</td>
+            <td>DataBank.cs:L124</td>
+        </tr>
+        <tr>
+            <td><strong>FND-04</strong></td>
+            <td><span class="code">written_agreed</span></td>
+            <td><span class="fact">founders.equityClarity = "written_agreed"</span></td>
+            <td class="score-cell score-1">0.8</td>
+            <td>DataBank.cs:L125</td>
+        </tr>
+        <tr>
+            <td><strong>FND-04</strong></td>
+            <td><span class="code">preliminary</span></td>
+            <td><span class="fact">founders.equityClarity = "preliminary"</span></td>
+            <td class="score-cell score-1">0.6</td>
+            <td>DataBank.cs:L126</td>
+        </tr>
+        <tr>
+            <td><strong>FND-04</strong></td>
+            <td><span class="code">verbal</span></td>
+            <td><span class="fact">founders.equityClarity = "verbal"</span></td>
+            <td class="score-cell score-mid">0.4</td>
+            <td>DataBank.cs:L127</td>
+        </tr>
+        <tr>
+            <td><strong>FND-04</strong></td>
+            <td><span class="code">ambiguous</span></td>
+            <td><span class="fact">founders.equityClarity = "ambiguous"</span></td>
+            <td class="score-cell score-0">0.15</td>
+            <td>DataBank.cs:L128</td>
+        </tr>
+        <tr>
+            <td><strong>FND-04</strong></td>
+            <td><span class="code">dispute</span></td>
+            <td><span class="fact">founders.equityClarity = "dispute"</span></td>
+            <td class="score-cell score-0">0.0</td>
+            <td>DataBank.cs:L129</td>
+        </tr>
+        <tr>
+            <td><strong>FND-04</strong></td>
+            <td><span class="code">unknown</span></td>
+            <td><span class="fact">founders.equityClarity = "unknown"</span></td>
+            <td class="score-cell score-0">0.15</td>
+            <td>DataBank.cs:L130</td>
+        </tr>
+
+        <!-- FND-05 -->
+        <tr>
+            <td><strong>FND-05</strong></td>
+            <td><span class="code">vesting</span></td>
+            <td><span class="fact">founders.vestingStatus = "vesting_signed"</span></td>
+            <td class="score-cell score-1">1.0</td>
+            <td>DataBank.cs:L140</td>
+        </tr>
+        <tr>
+            <td><strong>FND-05</strong></td>
+            <td><span class="code">repurchase</span></td>
+            <td><span class="fact">founders.vestingStatus = "repurchase_signed"</span></td>
+            <td class="score-cell score-1">0.9</td>
+            <td>DataBank.cs:L141</td>
+        </tr>
+        <tr>
+            <td><strong>FND-05</strong></td>
+            <td><span class="code">verbal_rule</span></td>
+            <td><span class="fact">founders.vestingStatus = "verbal_rule"</span></td>
+            <td class="score-cell score-mid">0.55</td>
+            <td>DataBank.cs:L142</td>
+        </tr>
+        <tr>
+            <td><strong>FND-05</strong></td>
+            <td><span class="code">retains_all</span></td>
+            <td><span class="fact">founders.vestingStatus = "none"</span></td>
+            <td class="score-cell score-0">0.1</td>
+            <td>DataBank.cs:L143</td>
+        </tr>
+        <tr>
+            <td><strong>FND-05</strong></td>
+            <td><span class="code">not_discussed</span></td>
+            <td><span class="fact">founders.vestingStatus = "none"</span></td>
+            <td class="score-cell score-0">0.0</td>
+            <td>DataBank.cs:L144</td>
+        </tr>
+        <tr>
+            <td><strong>FND-05</strong></td>
+            <td><span class="code">unknown</span></td>
+            <td><span class="fact">founders.vestingStatus = "unknown"</span></td>
+            <td class="score-cell score-0">0.15</td>
+            <td>DataBank.cs:L145</td>
+        </tr>
+
+        <!-- FND-05A -->
+        <tr>
+            <td><strong>FND-05A</strong></td>
+            <td><span class="code">defined</span></td>
+            <td><span class="fact">founders.leaverRules = "defined"</span></td>
+            <td class="score-cell score-1">1.0</td>
+            <td>DataBank.cs:L155</td>
+        </tr>
+        <tr>
+            <td><strong>FND-05A</strong></td>
+            <td><span class="code">partial</span></td>
+            <td><span class="fact">founders.leaverRules = "partial"</span></td>
+            <td class="score-cell score-1">0.7</td>
+            <td>DataBank.cs:L156</td>
+        </tr>
+        <tr>
+            <td><strong>FND-05A</strong></td>
+            <td><span class="code">oral</span></td>
+            <td><span class="fact">founders.leaverRules = "oral"</span></td>
+            <td class="score-cell score-mid">0.4</td>
+            <td>DataBank.cs:L157</td>
+        </tr>
+        <tr>
+            <td><strong>FND-05A</strong></td>
+            <td><span class="code">none</span></td>
+            <td><span class="fact">founders.leaverRules = "none"</span></td>
+            <td class="score-cell score-0">0.15</td>
+            <td>DataBank.cs:L158</td>
+        </tr>
+        <tr>
+            <td><strong>FND-05A</strong></td>
+            <td><span class="code">unknown</span></td>
+            <td><span class="fact">founders.leaverRules = "unknown"</span></td>
+            <td class="score-cell score-0">0.15</td>
+            <td>DataBank.cs:L159</td>
+        </tr>
+
+        <!-- FND-06 -->
+        <tr>
+            <td><strong>FND-06</strong></td>
+            <td><span class="code">written</span></td>
+            <td><span class="fact">founders.governanceClarity = "written"</span></td>
+            <td class="score-cell score-1">1.0</td>
+            <td>DataBank.cs:L169</td>
+        </tr>
+        <tr>
+            <td><strong>FND-06</strong></td>
+            <td><span class="code">verbal</span></td>
+            <td><span class="fact">founders.governanceClarity = "verbal"</span></td>
+            <td class="score-cell score-1">0.75</td>
+            <td>DataBank.cs:L170</td>
+        </tr>
+        <tr>
+            <td><strong>FND-06</strong></td>
+            <td><span class="code">partial</span></td>
+            <td><span class="fact">founders.governanceClarity = "partial"</span></td>
+            <td class="score-cell score-mid">0.5</td>
+            <td>DataBank.cs:L171</td>
+        </tr>
+        <tr>
+            <td><strong>FND-06</strong></td>
+            <td><span class="code">all_together</span></td>
+            <td><span class="fact">founders.governanceClarity = "all_together"</span></td>
+            <td class="score-cell score-mid">0.25</td>
+            <td>DataBank.cs:L172</td>
+        </tr>
+        <tr>
+            <td><strong>FND-06</strong></td>
+            <td><span class="code">none</span></td>
+            <td><span class="fact">founders.governanceClarity = "none"</span></td>
+            <td class="score-cell score-0">0.0</td>
+            <td>DataBank.cs:L173</td>
+        </tr>
+        <tr>
+            <td><strong>FND-06</strong></td>
+            <td><span class="code">unknown</span></td>
+            <td><span class="fact">founders.governanceClarity = "unknown"</span></td>
+            <td class="score-cell score-0">0.15</td>
+            <td>DataBank.cs:L174</td>
+        </tr>
+
+        <!-- FND-06A -->
+        <tr style="background-color: #f0fdf4;">
+            <td><strong>FND-06A</strong></td>
+            <td><span class="code">different_thresholds</span></td>
+            <td><span class="fact">founders.keyDecisionMode = "different_thresholds"</span></td>
+            <td class="score-cell">—</td>
+            <td>DataBank.cs:L184</td>
+        </tr>
+        <tr style="background-color: #f0fdf4;">
+            <td><strong>FND-06A</strong></td>
+            <td><span class="code">majority</span></td>
+            <td><span class="fact">founders.keyDecisionMode = "majority"</span></td>
+            <td class="score-cell">—</td>
+            <td>DataBank.cs:L185</td>
+        </tr>
+        <tr style="background-color: #f0fdf4;">
+            <td><strong>FND-06A</strong></td>
+            <td><span class="code">material_unanimity</span></td>
+            <td><span class="fact">founders.keyDecisionMode = "material_unanimity"</span></td>
+            <td class="score-cell">—</td>
+            <td>DataBank.cs:L186</td>
+        </tr>
+        <tr style="background-color: #f0fdf4;">
+            <td><strong>FND-06A</strong></td>
+            <td><span class="code">broad_unanimity</span></td>
+            <td><span class="fact">founders.keyDecisionMode = "broad_unanimity"</span></td>
+            <td class="score-cell">—</td>
+            <td>DataBank.cs:L187</td>
+        </tr>
+        <tr style="background-color: #f0fdf4;">
+            <td><strong>FND-06A</strong></td>
+            <td><span class="code">undefined</span></td>
+            <td><span class="fact">founders.keyDecisionMode = "undefined"</span></td>
+            <td class="score-cell">—</td>
+            <td>DataBank.cs:L188</td>
+        </tr>
+        <tr style="background-color: #f0fdf4;">
+            <td><strong>FND-06A</strong></td>
+            <td><span class="code">unknown</span></td>
+            <td><span class="fact">founders.keyDecisionMode = "unknown"</span></td>
+            <td class="score-cell">—</td>
+            <td>DataBank.cs:L189</td>
+        </tr>
+
+        <!-- FND-07 -->
+        <tr style="background-color: #fefce8;">
+            <td><strong>FND-07</strong></td>
+            <td><span class="code">full</span></td>
+            <td><span class="fact">founders.deadlockMechanism = "full"</span></td>
+            <td class="score-cell score-1">1.0</td>
+            <td>DataBank.cs:L199</td>
+        </tr>
+        <tr style="background-color: #fefce8;">
+            <td><strong>FND-07</strong></td>
+            <td><span class="code">staged</span></td>
+            <td><span class="fact">founders.deadlockMechanism = "staged"</span></td>
+            <td class="score-cell score-1">0.85</td>
+            <td>DataBank.cs:L200</td>
+        </tr>
+        <tr style="background-color: #fefce8;">
+            <td><strong>FND-07</strong></td>
+            <td><span class="code">casting_vote</span></td>
+            <td><span class="fact">founders.deadlockMechanism = "casting_vote"</span></td>
+            <td class="score-cell score-1">0.70</td>
+            <td>DataBank.cs:L201</td>
+        </tr>
+        <tr style="background-color: #fefce8;">
+            <td><strong>FND-07</strong></td>
+            <td><span class="code">mediator_only</span></td>
+            <td><span class="fact">founders.deadlockMechanism = "mediator_only"</span></td>
+            <td class="score-cell score-mid">0.55</td>
+            <td>DataBank.cs:L202</td>
+        </tr>
+        <tr style="background-color: #fefce8;">
+            <td><strong>FND-07</strong></td>
+            <td><span class="code">only_agree</span></td>
+            <td><span class="fact">founders.deadlockMechanism = "only_agree"</span></td>
+            <td class="score-cell score-0">0.15</td>
+            <td>DataBank.cs:L203</td>
+        </tr>
+        <tr style="background-color: #fefce8;">
+            <td><strong>FND-07</strong></td>
+            <td><span class="code">none</span></td>
+            <td><span class="fact">founders.deadlockMechanism = "none"</span></td>
+            <td class="score-cell score-0">0.0</td>
+            <td>DataBank.cs:L204</td>
+        </tr>
+        <tr style="background-color: #fefce8;">
+            <td><strong>FND-07</strong></td>
+            <td><span class="code">unknown</span></td>
+            <td><span class="fact">founders.deadlockMechanism = "unknown"</span></td>
+            <td class="score-cell score-0">0.10</td>
+            <td>DataBank.cs:L205</td>
+        </tr>
+
+        <!-- FND-08 -->
+        <tr style="background-color: #eff6ff;">
+            <td><strong>FND-08</strong></td>
+            <td><span class="code">full</span></td>
+            <td><span class="fact">founders.exitRules = "full"</span></td>
+            <td class="score-cell score-1">1.0</td>
+            <td>DataBank.cs:L215</td>
+        </tr>
+        <tr style="background-color: #eff6ff;">
+            <td><strong>FND-08</strong></td>
+            <td><span class="code">partial</span></td>
+            <td><span class="fact">founders.exitRules = "partial"</span></td>
+            <td class="score-cell score-1">0.65</td>
+            <td>DataBank.cs:L216</td>
+        </tr>
+        <tr style="background-color: #eff6ff;">
+            <td><strong>FND-08</strong></td>
+            <td><span class="code">oral</span></td>
+            <td><span class="fact">founders.exitRules = "oral"</span></td>
+            <td class="score-cell score-mid">0.40</td>
+            <td>DataBank.cs:L217</td>
+        </tr>
+        <tr style="background-color: #eff6ff;">
+            <td><strong>FND-08</strong></td>
+            <td><span class="code">none</span></td>
+            <td><span class="fact">founders.exitRules = "none"</span></td>
+            <td class="score-cell score-0">0.10</td>
+            <td>DataBank.cs:L218</td>
+        </tr>
+        <tr style="background-color: #eff6ff;">
+            <td><strong>FND-08</strong></td>
+            <td><span class="code">already_unresolved</span></td>
+            <td><span class="fact">founders.exitRules = "unresolved_departure"</span></td>
+            <td class="score-cell score-0">0.0</td>
+            <td>DataBank.cs:L219</td>
+        </tr>
+
+        <!-- FND-09 -->
+        <tr style="background-color: #f0fdf4;">
+            <td><strong>FND-09</strong></td>
+            <td><span class="code">none</span></td>
+            <td><span class="fact">founders.personalContributions = "none"</span></td>
+            <td class="score-cell score-1">1.0</td>
+            <td>DataBank.cs:L229</td>
+        </tr>
+        <tr style="background-color: #f0fdf4;">
+            <td><strong>FND-09</strong></td>
+            <td><span class="code">documented</span></td>
+            <td><span class="fact">founders.personalContributions = "documented"</span></td>
+            <td class="score-cell score-1">1.0</td>
+            <td>DataBank.cs:L230</td>
+        </tr>
+        <tr style="background-color: #f0fdf4;">
+            <td><strong>FND-09</strong></td>
+            <td><span class="code">small_partial</span></td>
+            <td><span class="fact">founders.personalContributions = "small_partial"</span></td>
+            <td class="score-cell score-1">0.70</td>
+            <td>DataBank.cs:L231</td>
+        </tr>
+        <tr style="background-color: #f0fdf4;">
+            <td><strong>FND-09</strong></td>
+            <td><span class="code">material_unclear</span></td>
+            <td><span class="fact">founders.personalContributions = "material_unclear"</span></td>
+            <td class="score-cell score-mid">0.25</td>
+            <td>DataBank.cs:L232</td>
+        </tr>
+        <tr style="background-color: #f0fdf4;">
+            <td><strong>FND-09</strong></td>
+            <td><span class="code">dispute</span></td>
+            <td><span class="fact">founders.personalContributions = "dispute"</span></td>
+            <td class="score-cell score-0">0.0</td>
+            <td>DataBank.cs:L233</td>
+        </tr>
+        <tr style="background-color: #f0fdf4;">
+            <td><strong>FND-09</strong></td>
+            <td><span class="code">unknown</span></td>
+            <td><span class="fact">founders.personalContributions = "unknown"</span></td>
+            <td class="score-cell score-mid">0.30</td>
+            <td>DataBank.cs:L234</td>
+        </tr>
+
+        <!-- FND-10 -->
+        <tr>
+            <td><strong>FND-10</strong></td>
+            <td><span class="code">none</span></td>
+            <td><span class="fact">founders.externalActivity = "none"</span></td>
+            <td class="score-cell score-1">1.0</td>
+            <td>DataBank.cs:L244</td>
+        </tr>
+        <tr>
+            <td><strong>FND-10</strong></td>
+            <td><span class="code">unrelated</span></td>
+            <td><span class="fact">founders.externalActivity = "unrelated"</span></td>
+            <td class="score-cell score-1">0.9</td>
+            <td>DataBank.cs:L245</td>
+        </tr>
+        <tr>
+            <td><strong>FND-10</strong></td>
+            <td><span class="code">overlap_rules</span></td>
+            <td><span class="fact">founders.externalActivity = "overlap_rules"</span></td>
+            <td class="score-cell score-1">0.75</td>
+            <td>DataBank.cs:L246</td>
+        </tr>
+        <tr>
+            <td><strong>FND-10</strong></td>
+            <td><span class="code">potential_competitor</span></td>
+            <td><span class="fact">founders.externalActivity = "potential_competitor"</span></td>
+            <td class="score-cell score-mid">0.25</td>
+            <td>DataBank.cs:L247</td>
+        </tr>
+        <tr>
+            <td><strong>FND-10</strong></td>
+            <td><span class="code">employer_same_field</span></td>
+            <td><span class="fact">founders.externalActivity = "employer_same_field"</span></td>
+            <td class="score-cell score-mid">0.25</td>
+            <td>DataBank.cs:L248</td>
+        </tr>
+        <tr>
+            <td><strong>FND-10</strong></td>
+            <td><span class="code">active_competition</span></td>
+            <td><span class="fact">founders.externalActivity = "active_competition"</span></td>
+            <td class="score-cell score-0">0.0</td>
+            <td>DataBank.cs:L249</td>
+        </tr>
+        <tr>
+            <td><strong>FND-10</strong></td>
+            <td><span class="code">unknown</span></td>
+            <td><span class="fact">founders.externalActivity = "unknown"</span></td>
+            <td class="score-cell score-mid">0.4</td>
+            <td>DataBank.cs:L250</td>
+        </tr>
+
+        <!-- FND-11 -->
+        <tr style="background-color: #eff6ff;">
+            <td><strong>FND-11</strong></td>
+            <td><span class="code">aligned</span></td>
+            <td><span class="fact">founders.strategicAlignment = "aligned"</span></td>
+            <td class="score-cell score-1">1.0</td>
+            <td>DataBank.cs:L260</td>
+        </tr>
+        <tr style="background-color: #eff6ff;">
+            <td><strong>FND-11</strong></td>
+            <td><span class="code">differences_discussed</span></td>
+            <td><span class="fact">founders.strategicAlignment = "differences_discussed"</span></td>
+            <td class="score-cell score-1">0.75</td>
+            <td>DataBank.cs:L261</td>
+        </tr>
+        <tr style="background-color: #eff6ff;">
+            <td><strong>FND-11</strong></td>
+            <td><span class="code">not_discussed</span></td>
+            <td><span class="fact">founders.strategicAlignment = "not_discussed"</span></td>
+            <td class="score-cell score-mid">0.50</td>
+            <td>DataBank.cs:L262</td>
+        </tr>
+        <tr style="background-color: #eff6ff;">
+            <td><strong>FND-11</strong></td>
+            <td><span class="code">material_difference</span></td>
+            <td><span class="fact">founders.strategicAlignment = "material_difference"</span></td>
+            <td class="score-cell score-mid">0.20</td>
+            <td>DataBank.cs:L263</td>
+        </tr>
+        <tr style="background-color: #eff6ff;">
+            <td><strong>FND-11</strong></td>
+            <td><span class="code">conflict</span></td>
+            <td><span class="fact">founders.strategicAlignment = "conflict"</span></td>
+            <td class="score-cell score-0">0.0</td>
+            <td>DataBank.cs:L264</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="section-title">2. Сводка исправлений («Before → After»)</div>
+<table>
+    <thead>
+        <tr>
+            <th style="width: 70px;">Question</th>
+            <th>Before (Legacy / Synthetic)</th>
+            <th>After (Strict Canonical §24)</th>
+            <th>Нормативное обоснование</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>FND-01</strong></td>
+            <td><code>significant</code></td>
+            <td><code>material</code></td>
+            <td>Канонический факт <code>founders.activeDispute</code> + <code>founders.disputeLevel</code></td>
+        </tr>
+        <tr>
+            <td><strong>FND-02</strong></td>
+            <td><code>mostly_shared</code> / <code>shared</code></td>
+            <td><code>overlap</code></td>
+            <td>Канонический факт <code>founders.roleClarity</code></td>
+        </tr>
+        <tr>
+            <td><strong>FND-C04</strong></td>
+            <td><code>founders.equityAgreementStatus</code></td>
+            <td><code>founders.founderAgreementStatus</code></td>
+            <td>Канонический факт §24</td>
+        </tr>
+        <tr>
+            <td><strong>FND-06A</strong></td>
+            <td>ScoreMode: diagnostic (0.9/0.7/0.4)</td>
+            <td>ScoreMode: context (Score=N/A, Weight=0)</td>
+            <td>Контекстный вопрос, факт <code>founders.keyDecisionMode</code></td>
+        </tr>
+        <tr>
+            <td><strong>FND-07</strong></td>
+            <td><code>mechanism</code>, <code>stages</code>, <code>mediator</code></td>
+            <td><code>full</code>, <code>staged</code>, <code>casting_vote</code>, <code>mediator_only</code>, <code>only_agree</code>, <code>none</code></td>
+            <td>Точные ID и факт <code>founders.deadlockMechanism</code></td>
+        </tr>
+        <tr>
+            <td><strong>FND-08</strong></td>
+            <td><code>basic</code>, <code>verbal</code>, <code>no</code>, <code>departed_unresolved</code></td>
+            <td><code>full</code>, <code>partial</code>, <code>oral</code>, <code>none</code>, <code>already_unresolved</code></td>
+            <td>Факт <code>founders.exitRules</code> (<code>already_unresolved</code> → <code>unresolved_departure</code>)</td>
+        </tr>
+        <tr>
+            <td><strong>FND-09</strong></td>
+            <td><code>part_expenses</code>, <code>significant_untracked</code></td>
+            <td><code>none</code>, <code>documented</code>, <code>small_partial</code>, <code>material_unclear</code>, <code>dispute</code></td>
+            <td>Факт <code>founders.personalContributions</code></td>
+        </tr>
+        <tr>
+            <td><strong>FND-11</strong></td>
+            <td><code>differences_discussed = 0.80</code>, <code>material_difference = 0.25</code></td>
+            <td><code>differences_discussed = 0.75</code>, <code>material_difference = 0.20</code></td>
+            <td>Точные нормативные веса §24</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="footer">
+    <div>Fenix Law System · Legal Screening Engine · Developer Architecture v1.1</div>
+    <div>Дата генерации: 2026-08-27 · Статус: Production Verified</div>
+</div>
+
+</body>
+</html>

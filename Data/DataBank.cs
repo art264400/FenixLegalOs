@@ -10,7 +10,7 @@ public static class DataBank
 
     public static readonly List<DiagnosticSection> Sections = new()
     {
-        new("founders", 1, "Сооснователи", "Founders", 18),
+        new("founders", 1, "Сооснователи", "Founders", 15),
         new("corporate", 2, "Корпоративная структура", "Corporate", 12),
         new("ip", 3, "Интеллектуальная собственность", "IP", 18)
     };
@@ -35,16 +35,13 @@ public static class DataBank
             }
         },
 
-        // 2. FND-C02 (Контекст: распределение долей)
+        // 2. FND-C02 (Контекст: распределение долей и контроль)
         new() {
             Id = "FND-C02", SectionId = "founders", Order = 2, Type = "equity_inputs", ScoreMode = "context", Weight = 0,
             ShowIf = new() { new() { QuestionId = "FND-C01", Op = "neq", Value = "solo" } },
             Question = "Если доли уже согласованы, как они распределены между сооснователями?",
-            Explanation = "От количества сооснователей зависит сложность фиксирования взаимоотношений в команде",
-            Options = new() {
-                new("not_agreed_yet", "Доли пока окончательно не распределены / в процессе обсуждения", 0.5),
-                new("unknown", "Не уверен(а)", 0.5)
-            }
+            Explanation = "От соотношения долей зависит наличие контроля и вероятность корпоративного тупика (Deadlock).",
+            Options = new()
         },
 
         // 3. FND-C03 (Триггер: ушедшие фаундеры с долями)
@@ -56,15 +53,15 @@ public static class DataBank
             Options = new() {
                 new("none", "Нет, все заявленные основатели активно работают", 1),
                 new("resolved", "Да, но его выход и судьба доли полностью урегулированы письменно", 1),
-                new("unresolved", "Да, есть нерешённые вопросы по доле или компенсации", 0, "HIGH", "R_FOUNDERS_NO_LEAVER"),
-                new("dispute", "Да, возник открытый конфликт / претензии", 0, "CRITICAL", "R_FOUNDERS_EQUITY_UNFIXED"),
+                new("unresolved", "Да, есть нерешённые вопросы по доле или компенсации", 0, "HIGH", "FND_DEPARTED_UNRESOLVED"),
+                new("dispute", "Да, возник открытый конфликт / претензии", 0, "CRITICAL", "FND_EQUITY_DISPUTE"),
                 new("unknown", "Не уверен(а)", 0.5)
             }
         },
 
-        // 3. FND-C04 (Контекст: форма фиксации соглашений)
+        // 4. FND-C04 (Контекст: форма фиксации соглашений)
         new() {
-            Id = "FND-C04", SectionId = "founders", Order = 3, Type = "single", ScoreMode = "context", Weight = 0,
+            Id = "FND-C04", SectionId = "founders", Order = 4, Type = "single", ScoreMode = "context", Weight = 0,
             ShowIf = new() { new() { QuestionId = "FND-C01", Op = "neq", Value = "solo" } },
             Question = "В какой форме зафиксированы договоренности между сооснователями?",
             Options = new() {
@@ -77,165 +74,194 @@ public static class DataBank
             }
         },
 
-        // 4. FND-01 (Диагностика: разногласия и конфликты)
+        // 5. FND-01 (Диагностика: разногласия и конфликты)
         new() {
-            Id = "FND-01", SectionId = "founders", DimensionId = "existing_dispute", Order = 4, Type = "single", ScoreMode = "diagnostic", Weight = 8, DimensionWeight = 8, WithinDimensionWeight = 100,
+            Id = "FND-01", SectionId = "founders", DimensionId = "existing_dispute", Order = 5, Type = "single", ScoreMode = "diagnostic", Weight = 8, DimensionWeight = 8, WithinDimensionWeight = 100,
             ShowIf = new() { new() { QuestionId = "FND-C01", Op = "neq", Value = "solo" } },
             Question = "Есть ли сейчас нерешённые разногласия по долям, ролям, деньгам или выходу?",
             Options = new() {
                 new("none", "Нет, все ключевые вопросы согласованы", 1.0, ConfidenceClass: "known"),
                 new("minor", "Есть отдельные рабочие дискуссии, но без риска конфликта", 0.75, ConfidenceClass: "known"),
-                new("significant", "Есть существенные нерешённые вопросы, вызывающие напряжение", 0.25, Severity: "HIGH", RiskCode: "R_FOUNDERS_NO_AGREEMENT", ConfidenceClass: "partial"),
-                new("active_conflict", "Активный конфликт между сооснователями", 0.0, Severity: "CRITICAL", RiskCode: "R_FOUNDERS_EQUITY_UNFIXED", ConfidenceClass: "known"),
-                new("formal_dispute", "Формальный спор / претензии / угроза суда", 0.0, Severity: "CRITICAL", RiskCode: "R_FOUNDERS_EQUITY_UNFIXED", ConfidenceClass: "known")
+                new("material", "Есть существенные нерешённые вопросы, вызывающие напряжение", 0.25, Severity: "HIGH", RiskCode: "FND_DOCUMENTATION_GAP", ConfidenceClass: "partial"),
+                new("active_conflict", "Активный конфликт между сооснователями", 0.0, Severity: "CRITICAL", RiskCode: "FND_EQUITY_DISPUTE", ConfidenceClass: "known"),
+                new("formal_dispute", "Формальный спор / претензии / угроза суда", 0.0, Severity: "CRITICAL", RiskCode: "FND_EQUITY_DISPUTE", ConfidenceClass: "known")
             }
         },
 
-        // 5. FND-02 (Диагностика: разделение ролей)
+        // 6. FND-02 (Диагностика: разделение ролей)
         new() {
-            Id = "FND-02", SectionId = "founders", DimensionId = "roles", Order = 5, Type = "single", ScoreMode = "diagnostic", Weight = 8, DimensionWeight = 8, WithinDimensionWeight = 100,
+            Id = "FND-02", SectionId = "founders", DimensionId = "roles", Order = 6, Type = "single", ScoreMode = "diagnostic", Weight = 8, DimensionWeight = 8, WithinDimensionWeight = 100,
             ShowIf = new() { new() { QuestionId = "FND-C01", Op = "neq", Value = "solo" } },
             Question = "Насколько чётко закреплены роли и зоны ответственности каждого сооснователя?",
             Options = new() {
                 new("written", "Закреплены письменно в соглашении с понятными KPI и обязанностями", 1.0, ConfidenceClass: "known"),
-                new("verbal_clear", "Понятны всем основателям, но зафиксированы только на словах", 0.75, ConfidenceClass: "known"),
-                new("overlap", "Есть пересечения и споры, кто за что отвечает", 0.5, Severity: "MEDIUM", RiskCode: "R_FOUNDERS_ROLES", ConfidenceClass: "partial"),
-                new("shared", "Многое решаем 'вместе', конкретных зон ответственности нет", 0.25, Severity: "MEDIUM", RiskCode: "R_FOUNDERS_ROLES", ConfidenceClass: "partial"),
-                new("dispute", "Постоянные разногласия по поводу вклада и обязанностей", 0.0, Severity: "HIGH", RiskCode: "R_FOUNDERS_ROLES", ConfidenceClass: "known")
+                new("clear_oral", "Понятны всем основателям, но зафиксированы только на словах", 0.75, ConfidenceClass: "known"),
+                new("overlap", "Есть пересечения и споры, кто за что отвечает", 0.25, Severity: "MEDIUM", RiskCode: "FND_ROLE_AMBIGUITY", ConfidenceClass: "partial"),
+                new("disputed", "Постоянные разногласия по поводу вклада и обязанностей", 0.0, Severity: "HIGH", RiskCode: "FND_ROLE_AMBIGUITY", ConfidenceClass: "known")
             }
         },
 
-        // 6. FND-03 (Диагностика: занятость и вовлеченность)
+        // 7. FND-03 (Диагностика: занятость и вовлеченность)
         new() {
-            Id = "FND-03", SectionId = "founders", DimensionId = "commitment", Order = 6, Type = "single", ScoreMode = "diagnostic", Weight = 10, DimensionWeight = 10, WithinDimensionWeight = 100,
+            Id = "FND-03", SectionId = "founders", DimensionId = "commitment", Order = 7, Type = "single", ScoreMode = "diagnostic", Weight = 10, DimensionWeight = 10, WithinDimensionWeight = 100,
             ShowIf = new() { new() { QuestionId = "FND-C01", Op = "neq", Value = "solo" } },
             Question = "Соответствует ли фактическая занятость каждого сооснователя договорённостям?",
             Options = new() {
-                new("full", "Да, все основатели работают над проектом full-time", 1.0, ConfidenceClass: "known"),
-                new("parttime_agreed", "Часть совмещает, но это согласовано всеми и отражено в долях", 0.85, ConfidenceClass: "known"),
-                new("accepted_diff", "Вклад по времени различается, но пока всех устраивает", 0.65, ConfidenceClass: "known"),
-                new("less_no_rules", "Кто-то уделяет проекту гораздо меньше времени без ясных правил", 0.25, Severity: "HIGH", RiskCode: "R_FOUNDERS_NO_VESTING", ConfidenceClass: "partial"),
-                new("stopped", "Один из сооснователей фактически прекратил работу, сохраняя долю", 0.0, Severity: "CRITICAL", RiskCode: "R_FOUNDERS_NO_LEAVER", ConfidenceClass: "known")
+                new("aligned", "Да, все основатели работают над проектом full-time", 1.0, ConfidenceClass: "known"),
+                new("temporary_part_time", "Часть временно совмещает, но это согласовано всеми и отражено в долях", 0.85, ConfidenceClass: "known"),
+                new("different_accepted", "Вклад по времени различается, но пока всех устраивает", 0.65, ConfidenceClass: "known"),
+                new("below_expected", "Кто-то уделяет проекту гораздо меньше времени без ясных правил", 0.25, Severity: "HIGH", RiskCode: "FND_COMMITMENT_MISMATCH", ConfidenceClass: "partial"),
+                new("stopped", "Один из сооснователей фактически прекратил работу, сохраняя долю", 0.0, Severity: "CRITICAL", RiskCode: "FND_DEAD_EQUITY", ConfidenceClass: "known")
             }
         },
 
-        // 7. FND-04 (Диагностика: определенность долей)
+        // 8. FND-04 (Диагностика: определенность долей)
         new() {
-            Id = "FND-04", SectionId = "founders", DimensionId = "equity_clarity", Order = 7, Type = "single", ScoreMode = "diagnostic", Weight = 12, DimensionWeight = 12, WithinDimensionWeight = 100,
+            Id = "FND-04", SectionId = "founders", DimensionId = "equity_clarity", Order = 8, Type = "single", ScoreMode = "diagnostic", Weight = 12, DimensionWeight = 12, WithinDimensionWeight = 100,
             ShowIf = new() { new() { QuestionId = "FND-C01", Op = "neq", Value = "solo" } },
             Question = "Насколько определённо зафиксировано распределение долей между сооснователями?",
             Options = new() {
                 new("registered", "Оформлено в уставе компании / реестре участников", 1.0, ConfidenceClass: "known"),
                 new("written_agreed", "Зафиксировано в подписанном корпоративном договоре", 0.8, ConfidenceClass: "known"),
                 new("preliminary", "Есть подписанный Term Sheet / предварительный меморандум", 0.6, ConfidenceClass: "partial"),
-                new("verbal", "Только устная договоренность, в документах не отражено", 0.4, Severity: "HIGH", RiskCode: "R_FOUNDERS_EQUITY_UNFIXED", ConfidenceClass: "known"),
-                new("ambiguous", "Есть несколько противоречивых обещаний долей", 0.15, Severity: "HIGH", RiskCode: "R_FOUNDERS_EQUITY_UNFIXED", ConfidenceClass: "partial"),
-                new("dispute", "Есть открытый спор о распределении долей", 0.0, Severity: "CRITICAL", RiskCode: "R_FOUNDERS_EQUITY_UNFIXED", ConfidenceClass: "known"),
+                new("verbal", "Только устная договоренность, в документах не отражено", 0.4, Severity: "MEDIUM", RiskCode: "FND_EQUITY_NOT_FORMALIZED", ConfidenceClass: "known"),
+                new("ambiguous", "Есть несколько противоречивых обещаний долей", 0.15, Severity: "HIGH", RiskCode: "FND_EQUITY_AMBIGUITY", ConfidenceClass: "partial"),
+                new("dispute", "Есть открытый спор о распределении долей", 0.0, Severity: "CRITICAL", RiskCode: "FND_EQUITY_DISPUTE", ConfidenceClass: "known"),
                 new("unknown", "Не уверен(а)", 0.15, ConfidenceClass: "unknown")
             }
         },
 
-        // 8. FND-05 (Диагностика: Vesting и ранний уход)
+        // 9. FND-05 (Диагностика: Vesting и ранний уход)
         new() {
-            Id = "FND-05", SectionId = "founders", DimensionId = "early_exit_equity", Order = 8, Type = "single", ScoreMode = "diagnostic", Weight = 18, DimensionWeight = 18, WithinDimensionWeight = 70,
+            Id = "FND-05", SectionId = "founders", DimensionId = "early_exit_equity", Order = 9, Type = "single", ScoreMode = "diagnostic", Weight = 18, DimensionWeight = 18, WithinDimensionWeight = 70,
             ShowIf = new() { new() { QuestionId = "FND-C01", Op = "neq", Value = "solo" } },
             Question = "Что происходит с долей основателя, если он прекращает работу раньше оговоренного срока?",
             Options = new() {
                 new("vesting", "Оформлен график постепенного закрепления долей (Vesting с периодом Cliff)", 1.0, ConfidenceClass: "known"),
                 new("repurchase", "Оформлено обязательство обратного выкупа доли компанией / другими фаундерами", 0.9, ConfidenceClass: "known"),
-                new("verbal_rule", "Договорились устно, но юридически не закрепили", 0.55, Severity: "MEDIUM", RiskCode: "R_FOUNDERS_NO_VESTING", ConfidenceClass: "partial"),
-                new("retains_all", "Сохраняет всю свою долю независимо от продолжения работы", 0.1, Severity: "HIGH", RiskCode: "R_FOUNDERS_NO_LEAVER", ConfidenceClass: "known"),
-                new("not_discussed", "Этот вопрос вообще не обсуждался", 0.0, Severity: "HIGH", RiskCode: "R_FOUNDERS_NO_LEAVER", ConfidenceClass: "known"),
+                new("verbal_rule", "Договорились устно, но юридически не закрепили", 0.55, Severity: "MEDIUM", RiskCode: "FND_NO_VESTING", ConfidenceClass: "partial"),
+                new("retains_all", "Сохраняет всю свою долю независимо от продолжения работы", 0.1, Severity: "HIGH", RiskCode: "FND_EXIT_RULES_MISSING", ConfidenceClass: "known"),
+                new("not_discussed", "Этот вопрос вообще не обсуждался", 0.0, Severity: "HIGH", RiskCode: "FND_EXIT_RULES_MISSING", ConfidenceClass: "known"),
                 new("unknown", "Не уверен(а)", 0.15, ConfidenceClass: "unknown")
             }
         },
 
-        // 9. FND-05A (Диагностика: Good/Bad Leaver)
+        // 10. FND-05A (Диагностика: Good/Bad Leaver)
         new() {
-            Id = "FND-05A", SectionId = "founders", DimensionId = "early_exit_equity", Order = 9, Type = "single", ScoreMode = "diagnostic", Weight = 18, DimensionWeight = 18, WithinDimensionWeight = 30,
+            Id = "FND-05A", SectionId = "founders", DimensionId = "early_exit_equity", Order = 10, Type = "single", ScoreMode = "diagnostic", Weight = 18, DimensionWeight = 18, WithinDimensionWeight = 30,
             ShowIf = new() { new() { QuestionId = "FND-C01", Op = "neq", Value = "solo" } },
             Question = "Предусмотрены ли разные условия выкупа доли при обычном уходе и уходе из-за нарушения (Good / Bad Leaver)?",
             Options = new() {
-                new("yes", "Да, правила Good/Bad Leaver прописаны документально", 1.0, ConfidenceClass: "known"),
+                new("defined", "Да, правила Good/Bad Leaver прописаны документально", 1.0, ConfidenceClass: "known"),
                 new("partial", "Частично зафиксированы", 0.7, ConfidenceClass: "partial"),
-                new("verbal", "Только устно", 0.4, Severity: "MEDIUM", RiskCode: "R_FOUNDERS_NO_LEAVER", ConfidenceClass: "partial"),
-                new("no", "Нет, условия выкупа одинаковы при любых обстоятельствах", 0.15, Severity: "MEDIUM", RiskCode: "R_FOUNDERS_NO_LEAVER", ConfidenceClass: "known"),
+                new("oral", "Только устная договоренность", 0.4, Severity: "MEDIUM", RiskCode: "FND_INCOMPLETE_LEAVER_RULES", ConfidenceClass: "partial"),
+                new("none", "Нет, условия выкупа одинаковы при любых обстоятельствах", 0.15, Severity: "MEDIUM", RiskCode: "FND_INCOMPLETE_LEAVER_RULES", ConfidenceClass: "known"),
                 new("unknown", "Не уверен(а)", 0.15, ConfidenceClass: "unknown")
             }
         },
 
-        // 10. FND-06 (Диагностика: матрица принятия решений)
+        // 11. FND-06 (Диагностика: ясность матрицы управления)
         new() {
-            Id = "FND-06", SectionId = "founders", DimensionId = "governance", Order = 10, Type = "single", ScoreMode = "diagnostic", Weight = 12, DimensionWeight = 12, WithinDimensionWeight = 100,
+            Id = "FND-06", SectionId = "founders", DimensionId = "governance", Order = 11, Type = "single", ScoreMode = "diagnostic", Weight = 12, DimensionWeight = 12, WithinDimensionWeight = 100,
             ShowIf = new() { new() { QuestionId = "FND-C01", Op = "neq", Value = "solo" } },
-            Question = "Зафиксировано ли, какие решения требуют единогласного согласия всех сооснователей?",
+            Question = "Зафиксировано ли, какие решения требуют согласования между сооснователями?",
             Options = new() {
-                new("written", "Письменно закреплен перечень ключевых решений (инвестиции, продажа, найм C-level)", 1.0, ConfidenceClass: "known"),
+                new("written", "Письменно закреплен перечень ключевых совместных решений", 1.0, ConfidenceClass: "known"),
                 new("verbal", "Общее понимание есть, но юридически перечень не оформлен", 0.75, ConfidenceClass: "known"),
-                new("partial", "Зафиксирована только часть правил в стандартном уставе", 0.5, Severity: "MEDIUM", RiskCode: "R_FOUNDERS_DECISIONS", ConfidenceClass: "partial"),
-                new("all_together", "Все решения принимаем строго вместе без регламента", 0.25, Severity: "MEDIUM", RiskCode: "R_FOUNDERS_DECISIONS", ConfidenceClass: "known"),
-                new("none", "Правил нет, каждый действует по своему усмотрению", 0.0, Severity: "HIGH", RiskCode: "R_FOUNDERS_DECISIONS", ConfidenceClass: "known")
+                new("partial", "Зафиксирована только часть правил в стандартном уставе", 0.5, Severity: "MEDIUM", RiskCode: "FND_GOVERNANCE_AMBIGUITY", ConfidenceClass: "partial"),
+                new("all_together", "Все решения принимаем строго вместе без регламента", 0.25, Severity: "MEDIUM", RiskCode: "FND_GOVERNANCE_AMBIGUITY", ConfidenceClass: "known"),
+                new("none", "Правил нет, каждый действует по своему усмотрению", 0.0, Severity: "HIGH", RiskCode: "FND_GOVERNANCE_AMBIGUITY", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.15, ConfidenceClass: "unknown")
             }
         },
 
-        // 11. FND-07 (Диагностика: Deadlock / тупик при голосовании)
+        // 12. FND-06A (Контекст: порядок принятия ключевых решений)
         new() {
-            Id = "FND-07", SectionId = "founders", DimensionId = "deadlock", Order = 11, Type = "single", ScoreMode = "diagnostic", Weight = 15, DimensionWeight = 15, WithinDimensionWeight = 100,
+            Id = "FND-06A", SectionId = "founders", DimensionId = "governance", Order = 12, Type = "single", ScoreMode = "context", Weight = 0, DimensionWeight = 0, WithinDimensionWeight = 0,
+            ShowIf = new() { new() { QuestionId = "FND-C01", Op = "neq", Value = "solo" } },
+            Question = "Какой порядок голосования и принятия решений установлен для ключевых вопросов компании?",
+            Options = new() {
+                new("different_thresholds", "Разные пороги для разных типов решений (операционные — большинство, ключевые — квалифицированное)", 1.0),
+                new("majority", "Простое большинство голосов (>50%)", 1.0),
+                new("material_unanimity", "Единогласие только по ключевым материальным вопросам (M&A, инвестиции, бюджет)", 1.0),
+                new("broad_unanimity", "Единогласие по всем или почти всем решениям ('все согласны')", 1.0),
+                new("undefined", "Порядок принятия решений четко не определен", 1.0),
+                new("unknown", "Не уверен(а)", 1.0)
+            }
+        },
+
+        // 13. FND-07 (Диагностика: Deadlock / тупик при голосовании)
+        new() {
+            Id = "FND-07", SectionId = "founders", DimensionId = "deadlock", Order = 13, Type = "single", ScoreMode = "diagnostic", Weight = 15, DimensionWeight = 15, WithinDimensionWeight = 100,
             ShowIf = new() { new() { QuestionId = "FND-C01", Op = "neq", Value = "solo" } },
             Question = "Есть ли зафиксированный механизм разрешения тупиковых разногласий (Deadlock), когда голоса равны 50/50?",
             Options = new() {
-                new("mechanism", "Да, оформлен юридический механизм (решающий голос / Russian Roulette / Texas Shootout / медиация)", 1.0, ConfidenceClass: "known"),
-                new("stages", "Предусмотрены формализованные этапы переговоров", 0.85, ConfidenceClass: "known"),
-                new("casting_vote", "Закреплен решающий голос конкретного фаундера (CEO)", 0.7, ConfidenceClass: "known"),
-                new("mediator", "Договорились привлекать внешнего эксперта/эдвайзера", 0.55, ConfidenceClass: "partial"),
-                new("only_agree", "Механизма нет, надеемся только на умение договариваться", 0.15, Severity: "HIGH", RiskCode: "R_FOUNDERS_DECISIONS", ConfidenceClass: "known"),
-                new("none", "Вопрос тупика вообще не продуман", 0.0, Severity: "CRITICAL", RiskCode: "R_FOUNDERS_DECISIONS", ConfidenceClass: "known"),
-                new("unknown", "Не уверен(а)", 0.1, ConfidenceClass: "unknown")
+                new("full", "Да, оформлен полный юридический механизм (решающий голос / Russian Roulette / Texas Shootout / выкуп)", 1.0, ConfidenceClass: "known"),
+                new("staged", "Предусмотрены поэтапные переговоры и эскалация", 0.85, ConfidenceClass: "known"),
+                new("casting_vote", "Закреплен решающий голос конкретного фаундера (CEO)", 0.70, ConfidenceClass: "known"),
+                new("mediator_only", "Договорились только о привлечении внешнего медиатора/эксперта", 0.55, ConfidenceClass: "partial"),
+                new("only_agree", "Механизма нет, надеемся только на умение договариваться", 0.15, Severity: "HIGH", RiskCode: "FND_NO_DEADLOCK_PROTECTION", ConfidenceClass: "known"),
+                new("none", "Вопрос тупика вообще не продуман", 0.0, Severity: "CRITICAL", RiskCode: "FND_DEADLOCK", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.10, ConfidenceClass: "unknown")
             }
         },
 
-        // 12. FND-08 (Диагностика: передача дел при уходе)
+        // 14. FND-08 (Диагностика: передача дел и порядок выхода)
         new() {
-            Id = "FND-08", SectionId = "founders", DimensionId = "exit_continuity", Order = 12, Type = "single", ScoreMode = "diagnostic", Weight = 7, DimensionWeight = 7, WithinDimensionWeight = 100,
+            Id = "FND-08", SectionId = "founders", DimensionId = "exit_continuity", Order = 14, Type = "single", ScoreMode = "diagnostic", Weight = 7, DimensionWeight = 7, WithinDimensionWeight = 100,
             ShowIf = new() { new() { QuestionId = "FND-C01", Op = "neq", Value = "solo" } },
-            Question = "Определено ли заранее, как происходит передача дел, доступов и полномочий при уходе основателя?",
+            Question = "Определен ли заранее порядок передачи дел, доступов и полномочий при уходе основателя?",
             Options = new() {
-                new("full", "Да, прописан порядок передачи доступов, прав на код, клиентов и документов", 1.0, ConfidenceClass: "known"),
-                new("basic", "Есть базовое понимание и список критических доступов", 0.65, ConfidenceClass: "known"),
-                new("verbal", "Только устная договоренность", 0.4, Severity: "MEDIUM", RiskCode: "R_FOUNDERS_ROLES", ConfidenceClass: "partial"),
-                new("no", "Порядок не определен", 0.1, Severity: "MEDIUM", RiskCode: "R_FOUNDERS_ROLES", ConfidenceClass: "known"),
-                new("departed_unresolved", "Кто-то уже ушел, и доступы/дела до конца не переданы", 0.0, Severity: "HIGH", RiskCode: "R_FOUNDERS_ROLES", ConfidenceClass: "known")
+                new("full", "Да, прописан полный регламент передачи доступов, прав на код, клиентов и документов", 1.0, ConfidenceClass: "known"),
+                new("partial", "Есть базовое понимание и список критических доступов", 0.65, ConfidenceClass: "known"),
+                new("oral", "Только устная договоренность", 0.40, Severity: "MEDIUM", RiskCode: "FND_ROLE_AMBIGUITY", ConfidenceClass: "partial"),
+                new("none", "Порядок не определен", 0.10, Severity: "MEDIUM", RiskCode: "FND_ROLE_AMBIGUITY", ConfidenceClass: "known"),
+                new("already_unresolved", "Кто-то уже ушел, и доступы/дела до конца не переданы", 0.0, Severity: "HIGH", RiskCode: "FND_DEPARTED_UNRESOLVED", ConfidenceClass: "known")
             }
         },
 
-        // 13. FND-09 (Диагностика: личные вложения основателей)
+        // 15. FND-09 (Диагностика: личные вложения основателей)
         new() {
-            Id = "FND-09", SectionId = "founders", DimensionId = "founder_contributions", Order = 13, Type = "single", ScoreMode = "diagnostic", Weight = 3, DimensionWeight = 3, WithinDimensionWeight = 100,
+            Id = "FND-09", SectionId = "founders", DimensionId = "founder_contributions", Order = 15, Type = "single", ScoreMode = "diagnostic", Weight = 3, DimensionWeight = 3, WithinDimensionWeight = 100,
             ShowIf = new() { new() { QuestionId = "FND-C01", Op = "neq", Value = "solo" } },
             Question = "Если основатели вкладывают в проект личные деньги, понятно ли, как они учитываются?",
             Options = new() {
-                new("no_funds", "Личные деньги не вкладывались (только труд)", 1.0, ConfidenceClass: "known"),
+                new("none", "Личные деньги не вкладывались (только труд)", 1.0, ConfidenceClass: "known"),
                 new("documented", "Все вложения оформлены как займы участников или вклады в капитал", 1.0, ConfidenceClass: "known"),
-                new("part_expenses", "Ведется учет расходов в таблице, но без договоров займа", 0.7, ConfidenceClass: "known"),
-                new("significant_untracked", "Вложены значительные личные суммы без юридического оформления", 0.25, Severity: "MEDIUM", RiskCode: "R_FOUNDERS_AGREEMENT_PARTIAL", ConfidenceClass: "partial"),
-                new("dispute", "Есть разногласия по поводу возврата вложенных личных средств", 0.0, Severity: "HIGH", RiskCode: "R_FOUNDERS_AGREEMENT_PARTIAL", ConfidenceClass: "known"),
-                new("unknown", "Не уверен(а)", 0.3, ConfidenceClass: "unknown")
+                new("small_partial", "Ведется учет расходов в таблице, но без договоров займа", 0.70, ConfidenceClass: "known"),
+                new("material_unclear", "Вложены значительные личные суммы без юридического оформления", 0.25, Severity: "MEDIUM", RiskCode: "FND_CONTRIBUTION_AMBIGUITY", ConfidenceClass: "partial"),
+                new("dispute", "Есть разногласия по поводу возврата вложенных личных средств", 0.0, Severity: "HIGH", RiskCode: "FND_CONTRIBUTION_AMBIGUITY", ConfidenceClass: "known"),
+                new("unknown", "Не уверен(а)", 0.30, ConfidenceClass: "unknown")
             }
         },
 
-        // 14. FND-10 (Диагностика: конфликт интересов и сторонние проекты)
+        // 16. FND-10 (Диагностика: конфликт интересов и сторонние проекты)
         new() {
-            Id = "FND-10", SectionId = "founders", DimensionId = "conflict_of_interest", Order = 14, Type = "single", ScoreMode = "diagnostic", Weight = 4, DimensionWeight = 4, WithinDimensionWeight = 100,
+            Id = "FND-10", SectionId = "founders", DimensionId = "conflict_of_interest", Order = 16, Type = "single", ScoreMode = "diagnostic", Weight = 4, DimensionWeight = 4, WithinDimensionWeight = 100,
             ShowIf = new() { new() { QuestionId = "FND-C01", Op = "neq", Value = "solo" } },
             Question = "Есть ли у сооснователей другая работа или сторонние проекты, которые могут пересекаться со стартапом?",
             Options = new() {
                 new("none", "Нет, все сфокусированы только на этом проекте", 1.0, ConfidenceClass: "known"),
-                new("no_overlap", "Сторонняя работа есть, но она никак не связана со сферой стартапа", 0.9, ConfidenceClass: "known"),
-                new("settled", "Возможное пересечение согласовано между фаундерами письменно (Non-Compete)", 0.75, ConfidenceClass: "known"),
-                new("competing", "Есть сторонний проект в смежной сфере без четкого разделения прав", 0.25, Severity: "HIGH", RiskCode: "R_FOUNDERS_AGREEMENT_PARTIAL", ConfidenceClass: "partial"),
-                new("employer", "Один из фаундеров параллельно работает по найму в смежной IT-компании", 0.25, Severity: "HIGH", RiskCode: "R_FOUNDERS_AGREEMENT_PARTIAL", ConfidenceClass: "known"),
-                new("active_competition", "Фаундер участвует в прямом конкурирующем бизнесе", 0.0, Severity: "CRITICAL", RiskCode: "R_FOUNDERS_EQUITY_UNFIXED", ConfidenceClass: "known"),
+                new("unrelated", "Сторонняя работа есть, но она никак не связана со сферой стартапа", 0.9, ConfidenceClass: "known"),
+                new("overlap_rules", "Возможное пересечение согласовано между фаундерами письменно с четкими правилами", 0.75, ConfidenceClass: "known"),
+                new("potential_competitor", "Есть сторонний проект в смежной сфере без четкого разделения прав", 0.25, Severity: "HIGH", RiskCode: "FND_CONFLICT_OF_INTEREST", ConfidenceClass: "partial"),
+                new("employer_same_field", "Один из фаундеров параллельно работает по найму в смежной IT-компании", 0.25, Severity: "HIGH", RiskCode: "FND_CONFLICT_OF_INTEREST", ConfidenceClass: "known"),
+                new("active_competition", "Фаундер участвует в прямом конкурирующем бизнесе", 0.0, Severity: "CRITICAL", RiskCode: "FND_CONFLICT_OF_INTEREST", ConfidenceClass: "known"),
                 new("unknown", "Не уверен(а)", 0.4, ConfidenceClass: "unknown")
+            }
+        },
+
+        // 17. FND-11 (Диагностика: стратегическая согласованность)
+        new() {
+            Id = "FND-11", SectionId = "founders", DimensionId = "strategic_alignment", Order = 17, Type = "single", ScoreMode = "diagnostic", Weight = 3, DimensionWeight = 3, WithinDimensionWeight = 100,
+            ShowIf = new() { new() { QuestionId = "FND-C01", Op = "neq", Value = "solo" } },
+            Question = "Совпадают ли взгляды сооснователей на стратегию, темпы роста, привлечение инвестиций и возможную продажу компании?",
+            Options = new() {
+                new("aligned", "Полное совпадение видения по ключевым целям и финансированию", 1.0, ConfidenceClass: "known"),
+                new("differences_discussed", "Есть рабочие дискуссии, но общее направление согласовано", 0.75, ConfidenceClass: "known"),
+                new("not_discussed", "Стратегические цели и горизонт пока подробно не обсуждались", 0.50, ConfidenceClass: "partial"),
+                new("material_difference", "Существенные различия во взглядах на темп роста или дивиденды/инвестиции", 0.20, Severity: "MEDIUM", RiskCode: "FND_STRATEGIC_MISALIGNMENT", ConfidenceClass: "partial"),
+                new("conflict", "Принципиальный конфликт целей (быстрый экзит vs долгосрочный бизнес)", 0.0, Severity: "HIGH", RiskCode: "FND_STRATEGIC_MISALIGNMENT", ConfidenceClass: "known")
             }
         },
 
@@ -568,7 +594,7 @@ public static class DataBank
 
         // 7. IP-07 (Диагностика: права на результат внешних разработчиков)
         new() {
-            Id = "IP-07", SectionId = "ip", DimensionId = "external_creators", Order = 7, Type = "single", ScoreMode = "diagnostic", Weight = 10, DimensionWeight = 20, WithinDimensionWeight = 50,
+            Id = "IP-07", SectionId = "ip", DimensionId = "external_creators", Order = 7, Type = "single", ScoreMode = "diagnostic", Weight = 20, DimensionWeight = 20, WithinDimensionWeight = 50,
             ShowIf = new() { new() { QuestionId = "ip.creators", Op = "contains", Value = "contractors" } },
             Question = "С внешними разработчиками есть документы, из которых понятно, кому принадлежит результат?",
             Explanation = "Оплата счета или инвойса не передает исключительные права автоматически. Нужен договор авторского заказа / услуг с явной передачей прав.",
@@ -584,7 +610,7 @@ public static class DataBank
 
         // 8. IP-08 (Диагностика: права ушедших авторов)
         new() {
-            Id = "IP-08", SectionId = "ip", DimensionId = "external_creators", Order = 8, Type = "single", ScoreMode = "diagnostic", Weight = 6, DimensionWeight = 20, WithinDimensionWeight = 30,
+            Id = "IP-08", SectionId = "ip", DimensionId = "external_creators", Order = 8, Type = "single", ScoreMode = "diagnostic", Weight = 20, DimensionWeight = 20, WithinDimensionWeight = 30,
             ShowIf = new() { new() { QuestionId = "ip.creators", Op = "contains", Value = "former" } },
             Question = "Есть ли среди создателей важной части продукта те, кто уже не работает?",
             Explanation = "Если ключевой разработчик ушел без подписанных актов передачи прав, после ухода закрыть такой разрыв значительно сложнее.",
@@ -600,7 +626,7 @@ public static class DataBank
 
         // 9. IP-09 (Диагностика: разработка внешней студией)
         new() {
-            Id = "IP-09", SectionId = "ip", DimensionId = "external_creators", Order = 9, Type = "single", ScoreMode = "diagnostic", Weight = 4, DimensionWeight = 20, WithinDimensionWeight = 20,
+            Id = "IP-09", SectionId = "ip", DimensionId = "external_creators", Order = 9, Type = "single", ScoreMode = "diagnostic", Weight = 20, DimensionWeight = 20, WithinDimensionWeight = 20,
             ShowIf = new() { new() { QuestionId = "ip.creators", Op = "contains", Value = "studio" } },
             Question = "Если продукт делала внешняя компания, понятно ли, кто создавал код и переданы ли вам права на весь результат?",
             Explanation = "Студия могла привлекать субподрядчиков без прав на сублицензирование. Требуются прямые гарантии отчуждения исключительных прав.",
@@ -615,7 +641,7 @@ public static class DataBank
 
         // 10. IP-10 (Диагностика: работа основателя у стороннего работодателя)
         new() {
-            Id = "IP-10", SectionId = "ip", DimensionId = "external_employer", Order = 10, Type = "single", ScoreMode = "diagnostic", Weight = 3, DimensionWeight = 8, WithinDimensionWeight = 40,
+            Id = "IP-10", SectionId = "ip", DimensionId = "external_employer", Order = 10, Type = "single", ScoreMode = "diagnostic", Weight = 8, DimensionWeight = 8, WithinDimensionWeight = 40,
             ShowIf = new() { new() { QuestionId = "ip.creators", Op = "contains", Value = "founders" } },
             Question = "Создавал ли основатель продукт, одновременно работая в другой компании?",
             Explanation = "Если продукт создавался в период работы по найму в IT-сфере, прежний работодатель может заявить права на служебное произведение.",
@@ -630,7 +656,7 @@ public static class DataBank
 
         // 11. IP-10A (Диагностика: ресурсы стороннего работодателя)
         new() {
-            Id = "IP-10A", SectionId = "ip", DimensionId = "external_employer", Order = 11, Type = "single", ScoreMode = "diagnostic", Weight = 5, DimensionWeight = 8, WithinDimensionWeight = 60,
+            Id = "IP-10A", SectionId = "ip", DimensionId = "external_employer", Order = 11, Type = "single", ScoreMode = "diagnostic", Weight = 8, DimensionWeight = 8, WithinDimensionWeight = 60,
             ShowIf = new() { new() { QuestionId = "IP-10", Op = "in", Value = "unrelated,lawyer_checked,not_reviewed,unknown" } },
             Question = "Использовались ли рабочее время, оборудование, данные или ресурсы той компании?",
             Explanation = "Использование корпоративного ноутбука или репозитория работодателя — главный триггер судебных споров о принадлежности кода (Moonlighting claim).",
@@ -658,7 +684,7 @@ public static class DataBank
 
         // 13. IP-11A (Диагностика: лицензионный аудит сторонних компонентов)
         new() {
-            Id = "IP-11A", SectionId = "ip", DimensionId = "third_party_dependencies", Order = 13, Type = "single", ScoreMode = "diagnostic", Weight = 5, DimensionWeight = 10, WithinDimensionWeight = 50,
+            Id = "IP-11A", SectionId = "ip", DimensionId = "third_party_dependencies", Order = 13, Type = "single", ScoreMode = "diagnostic", Weight = 10, DimensionWeight = 10, WithinDimensionWeight = 50,
             ShowIf = new() { new() { QuestionId = "IP-11", Op = "in", Value = "yes,likely,unknown" } },
             Question = "Проверяли ли, на каких условиях можно использовать готовые компоненты?",
             Explanation = "Вирусные лицензии (GPL/AGPL) могут обязать компанию раскрыть весь исходный коммерческий код в публичный доступ.",
@@ -673,7 +699,7 @@ public static class DataBank
 
         // 14. IP-12 (Диагностика: внешняя критическая зависимость)
         new() {
-            Id = "IP-12", SectionId = "ip", DimensionId = "third_party_dependencies", Order = 14, Type = "single", ScoreMode = "diagnostic", Weight = 5, DimensionWeight = 10, WithinDimensionWeight = 50,
+            Id = "IP-12", SectionId = "ip", DimensionId = "third_party_dependencies", Order = 14, Type = "single", ScoreMode = "diagnostic", Weight = 10, DimensionWeight = 10, WithinDimensionWeight = 50,
             ShowIf = new() { new() { QuestionId = "ip.coreProductExists", Op = "eq", Value = "true" } },
             Question = "Есть ли внешняя технология или сервис, без которого продукт не сможет нормально работать?",
             Explanation = "Зависимость от проприетарного API (OpenAI, Stripe, Google Maps) создает риски непрерывности бизнеса при блокировке или смене тарифов.",
@@ -735,137 +761,366 @@ public static class DataBank
 
     public static readonly List<RiskDefinition> Risks = new()
     {
-        // =====================================================================
-        // РЕЕСТР РИСКОВ БЛОКА «СООСНОВАТЕЛИ»
+                // =====================================================================
+        // РЕЕСТР РИСКОВ БЛОКА «СООСНОВАТЕЛИ» (CANONICAL §25 — 18 FINDINGS)
         // =====================================================================
         new() {
-            Code = "R_FOUNDERS_EQUITY_UNFIXED",
+            Code = "FND_ACTIVE_DISPUTE",
+            RootCauseGroup = "FOUNDER_CONFLICT",
+            Severity = "CRITICAL",
+            Priority = "NOW",
+            SectionId = "founders",
+            Modules = new() { "founders" },
+            Title = "Между основателями уже существует существенный конфликт",
+            Finding = "По вашим ответам между основателями есть нерешенные разногласия, которые уже влияют или могут влиять на доли, управление, деньги, права на продукт или выход из компании.",
+            WhyItMatters = "В такой ситуации стандартная профилактическая документация может быть недостаточной: сначала нужно определить фактические позиции сторон и существующие права.",
+            Recommendation = "Зафиксировать предмет разногласий и позиции сторон до принятия новых существенных решений.",
+            Recommendations = new() {
+                "Зафиксировать предмет разногласий и позиции сторон.",
+                "Проверить действующие корпоративные и договорные документы.",
+                "Определить юридический сценарий урегулирования до новых существенных решений."
+            },
+            LawyerRequired = true,
+            Resolution = "lawyer_required",
+            ServiceCode = "FOUNDERS_REVIEW",
+            Cta = "Урегулировать разногласия с Fenix Law"
+        },
+        new() {
+            Code = "FND_EQUITY_DISPUTE",
+            RootCauseGroup = "FOUNDER_EQUITY",
+            Severity = "CRITICAL",
+            Priority = "NOW",
+            SectionId = "founders",
+            Modules = new() { "founders" },
+            Title = "Принадлежность долей между основателями оспаривается или определена неоднозначно",
+            Finding = "Система видит спор или существенную неопределенность относительно того, кому должна принадлежать часть компании.",
+            WhyItMatters = "Неопределенность по долям напрямую влияет на контроль, экономические права и возможность безопасно менять структуру компании или привлекать инвестиции.",
+            Recommendation = "Собрать все договоренности и документы о долях и сопоставить их с зарегистрированным владением.",
+            Recommendations = new() {
+                "Собрать все договоренности и документы о долях.",
+                "Сопоставить их с официально зарегистрированным владением.",
+                "До новых сделок определить и оформить согласованную структуру."
+            },
+            LawyerRequired = true,
+            Resolution = "lawyer_required",
+            ServiceCode = "FOUNDERS_REVIEW",
+            Cta = "Зафиксировать структуру долей"
+        },
+        new() {
+            Code = "FND_DEAD_EQUITY",
+            RootCauseGroup = "FOUNDER_EXIT",
+            Severity = "CRITICAL",
+            Priority = "NOW",
+            SectionId = "founders",
+            Modules = new() { "founders" },
+            Title = "Существенная доля может остаться у человека, который больше не участвует в компании",
+            Finding = "По вашим ответам полная доля одного из основателей не связана с продолжением его участия, при этом его вклад уже ниже ожидаемого, он неактивен или покинул проект.",
+            WhyItMatters = "Это может повлиять на управление компанией, мотивацию действующей команды и будущую инвестиционную проверку.",
+            Recommendation = "Определить, какая часть доли должна зависеть от продолжения участия, и согласовать механизм выкупа.",
+            Recommendations = new() {
+                "Определить, какая часть доли должна зависеть от продолжения участия.",
+                "Согласовать последствия обычного и проблемного ухода.",
+                "Оформить согласованный механизм в документах."
+            },
+            LawyerRequired = true,
+            Resolution = "lawyer_required",
+            ServiceCode = "FOUNDERS_REVIEW"
+        },
+        new() {
+            Code = "FND_DEADLOCK",
             RootCauseGroup = "FOUNDER_CONTROL",
             Severity = "CRITICAL",
             Priority = "NOW",
             SectionId = "founders",
             Modules = new() { "founders" },
-            Title = "Доли сооснователей не зафиксированы документально",
-            Finding = "Доли сооснователей согласованы только на словах или имеют неясный статус без юридического оформления.",
-            WhyItMatters = "Устная договорённость работает, пока всё спокойно. При первом конфликте или появлении крупных денег юридически считается, что долей нет, либо компания оформлена на номинала.",
-            Recommendation = "Подписать Корпоративный договор / Founder Agreement с фиксацией долей, прав и вкладов каждого сооснователя.",
+            Title = "Компания может оказаться неспособной принять ключевое решение",
+            Finding = "У основателей сопоставимый контроль, существенные решения требуют совместного согласия, а понятный механизм выхода из тупиковой ситуации не определен.",
+            WhyItMatters = "При серьезном разногласии риск состоит не только в конфликте, но и в фактической неспособности компании принять решение о финансировании, стратегии или другой критичной операции.",
+            Recommendation = "Определить перечень совместных решений и зафиксировать правила разрешения тупика.",
             Recommendations = new() {
-                "Составить и подписать соглашение сооснователей (Founder Agreement) с точными долями.",
-                "При зарегистрированном юрлице — синхронизировать фактические доли с официальным реестром участников."
-            },
-            LawyerRequired = true,
-            Resolution = "lawyer_required",
-            ServiceCode = "FOUNDERS_REVIEW",
-            Cta = "Разобрать структуру между основателями"
-        },
-        new() {
-            Code = "R_FOUNDERS_NO_AGREEMENT",
-            RootCauseGroup = "FOUNDER_CONTROL",
-            Severity = "HIGH",
-            Priority = "NOW",
-            SectionId = "founders",
-            Modules = new() { "founders" },
-            Title = "Отсутствует соглашение сооснователей (Founder Agreement)",
-            Finding = "Отношения между фаундерами строятся без оформленного письменного соглашения.",
-            WhyItMatters = "Стандартный типовой устав ТОО/LLC не защищает от тупиков при голосовании, внезапного ухода фаундера и кражи интеллектуальной собственности сооснователем.",
-            Recommendation = "Разработать персональный Founder Agreement под юрисдикцию компании (Казахстан / МФЦА / Delaware).",
-            Recommendations = new() {
-                "Разработать правила голосования и утверждения бюджета.",
-                "Закрепить передачу создаваемой сооснователями интеллектуальной собственности на компанию."
-            },
-            LawyerRequired = true,
-            Resolution = "lawyer_required",
-            ServiceCode = "FOUNDERS_REVIEW",
-            Cta = "Разработать соглашение сооснователей"
-        },
-        new() {
-            Code = "R_FOUNDERS_NO_LEAVER",
-            RootCauseGroup = "FOUNDER_EXIT",
-            Severity = "HIGH",
-            Priority = "NOW",
-            SectionId = "founders",
-            Modules = new() { "founders" },
-            Title = "Не определены правила выхода фаундера (Bad / Good Leaver)",
-            Finding = "Нет зафиксированного механизма выкупа доли в случае, если один из сооснователей перестает работать над проектом.",
-            WhyItMatters = "Если основатель уйдет через 3 месяца с 40% доли, компания получит 'мертвый капитал' (Dead Equity). Ни один венчурный инвестор не инвестирует в стартап, где крупная доля принадлежит неработающему человеку.",
-            Recommendation = "Внедрить концепции Good Leaver и Bad Leaver с дифференцированной ценой выкупа доли.",
-            Recommendations = new() {
-                "Установить, что при недобросовестном уходе (Bad Leaver) незакрепленная доля выкупается по номинальной стоимости.",
-                "Определить порядок рассрочки выкупа, чтобы не вымывать оборотный капитал стартапа."
+                "Определить перечень решений, где действительно необходимо совместное согласие.",
+                "Согласовать этапы разрешения тупика и конечный механизм.",
+                "Закрепить правила в документах между основателями и корпоративных документах."
             },
             LawyerRequired = true,
             Resolution = "lawyer_required",
             ServiceCode = "FOUNDERS_REVIEW"
         },
         new() {
-            Code = "R_FOUNDERS_NO_VESTING",
+            Code = "FND_DEPARTED_UNRESOLVED",
             RootCauseGroup = "FOUNDER_EXIT",
+            Severity = "CRITICAL",
+            Priority = "NOW",
+            SectionId = "founders",
+            Modules = new() { "founders" },
+            Title = "Уход одного из основателей юридически не завершен",
+            Finding = "Человек уже перестал активно участвовать в компании, но его доля, полномочия, обязательства или иные последствия выхода остаются неурегулированными.",
+            WhyItMatters = "Нерешенный выход может блокировать решения, создавать спор о долях и стать отдельным вопросом при инвестиционной проверке.",
+            Recommendation = "Определить права ушедшего основателя и юридически закрыть передачу дел и доли.",
+            Recommendations = new() {
+                "Определить текущие права и полномочия ушедшего основателя.",
+                "Урегулировать судьбу доли и передачу дел.",
+                "Синхронизировать договоренности с корпоративными документами и доступами."
+            },
+            LawyerRequired = true,
+            Resolution = "lawyer_required",
+            ServiceCode = "FOUNDERS_REVIEW"
+        },
+        new() {
+            Code = "FND_CONFLICT_OF_INTEREST",
+            RootCauseGroup = "FOUNDER_CONFLICT_OF_INTEREST",
             Severity = "HIGH",
+            Priority = "NOW",
+            SectionId = "founders",
+            Modules = new() { "founders" },
+            Title = "Сторонняя деятельность основателя может пересекаться с интересами компании",
+            Finding = "Один из основателей ведет или может вести деятельность, которая пересекается с бизнесом компании, а правила такого пересечения определены не полностью.",
+            WhyItMatters = "Это может создавать спор о приоритетах, клиентах, технологиях или результатах работы и дополнительно влиять на права на продукт.",
+            Recommendation = "Определить допустимые и недопустимые пересечения и зафиксировать правила конфликтов интересов.",
+            Recommendations = new() {
+                "Определить допустимые и недопустимые пересечения.",
+                "Проверить обязательства перед внешним работодателем или другим бизнесом.",
+                "Зафиксировать правила конфликтов интересов и использования результатов работы."
+            },
+            LawyerRequired = true,
+            Resolution = "lawyer_required",
+            ServiceCode = "FOUNDERS_REVIEW"
+        },
+        new() {
+            Code = "FND_ROLE_AMBIGUITY",
+            RootCauseGroup = "FOUNDER_GOVERNANCE",
+            Severity = "MEDIUM",
             Priority = "30_DAYS",
             SectionId = "founders",
             Modules = new() { "founders" },
-            Title = "Vesting долей сооснователей не оформлен",
-            Finding = "Доли распределены сразу на 100% без привязки к сроку работы над проектом (Reverse Vesting).",
-            WhyItMatters = "Стандарт венчурного рынка — вестинг на 3–4 года с 1 годом Cliff. Без вестинга риск потери контроля при уходе фаундера максимален.",
-            Recommendation = "Подписать график вестинга долей сооснователей.",
+            Title = "Ответственность за часть ключевых функций распределена не полностью",
+            Finding = "По вашим ответам роли основателей понятны лишь частично либо значительная часть функций фактически остается общей.",
+            WhyItMatters = "На ранней стадии это может работать неформально, но при росте повышает вероятность споров о полномочиях и ответственности.",
+            Recommendation = "Определить владельца каждой ключевой функции и зафиксировать согласованную модель.",
             Recommendations = new() {
-                "Оформить опционную схему или договор обратного выкупа (Reverse Vesting).",
-                "Установить 1-летний cliff-период для новых сооснователей."
-            },
-            LawyerRequired = true,
-            Resolution = "lawyer_required",
-            ServiceCode = "FOUNDERS_REVIEW"
-        },
-        new() {
-            Code = "R_FOUNDERS_DECISIONS",
-            RootCauseGroup = "FOUNDER_CONTROL",
-            Severity = "HIGH",
-            Priority = "NOW",
-            SectionId = "founders",
-            Modules = new() { "founders" },
-            Title = "Отсутствует механизм разрешения тупика (Deadlock Resolution)",
-            Finding = "При равенстве голосов 50/50 нет регламента, как принимается финальное решение по ключевым вопросам.",
-            WhyItMatters = "Корпоративный тупик полностью парализует бизнес: нельзя привлечь раунд, продлить аренду, нанять команду или закрыть сделку.",
-            Recommendation = "Определить процедуру разрешения Deadlock (право решающего голоса CEO, механизм Russian Roulette / Texas Shootout или медиация).",
-            Recommendations = new() {
-                "Закрепить матрицу полномочий: операционные вопросы решает CEO, стратегические — большинством голосов.",
-                "Прописать финальный механизм при неразрешимом конфликте."
+                "Определить владельца каждой ключевой функции.",
+                "Разделить операционные и совместные решения.",
+                "Зафиксировать согласованную модель в документах."
             },
             LawyerRequired = false,
             Resolution = "check_with_lawyer",
             ServiceCode = "FOUNDERS_REVIEW"
         },
         new() {
-            Code = "R_FOUNDERS_ROLES",
-            RootCauseGroup = "FOUNDER_CONTROL",
+            Code = "FND_COMMITMENT_MISMATCH",
+            RootCauseGroup = "FOUNDER_COMMITMENT",
+            Severity = "HIGH",
+            Priority = "NOW",
+            SectionId = "founders",
+            Modules = new() { "founders" },
+            Title = "Фактический вклад одного из основателей ниже ожидаемого",
+            Finding = "Участие одного или нескольких основателей заметно отличается от согласованного объема, а специальные правила на такой случай не определены.",
+            WhyItMatters = "Если вклад и доля расходятся длительное время, это может привести к конфликту и проблеме неактивной доли.",
+            Recommendation = "Сверить ожидаемую и фактическую занятость и проверить связь с долей.",
+            Recommendations = new() {
+                "Сверить ожидаемую и фактическую занятость.",
+                "Согласовать срок и условия восстановления участия либо иной сценарий.",
+                "Проверить, как эта ситуация связана с долей и правилами ухода."
+            },
+            LawyerRequired = true,
+            Resolution = "lawyer_required",
+            ServiceCode = "FOUNDERS_REVIEW"
+        },
+        new() {
+            Code = "FND_EQUITY_NOT_FORMALIZED",
+            RootCauseGroup = "FOUNDER_EQUITY",
             Severity = "MEDIUM",
             Priority = "30_DAYS",
             SectionId = "founders",
             Modules = new() { "founders" },
-            Title = "Роли и зоны ответственности не формализованы",
-            Finding = "Разделение обязанностей между сооснователями существует только на словах.",
-            WhyItMatters = "Приводит к конфликтам ожиданий, дублированию функций или 'проседанию' направлений (продажи, финансы, комплаенс).",
-            Recommendation = "Составить и утвердить соглашение о ролях, ключевых метриках и полномочиях сооснователей.",
+            Title = "Договоренность о долях не полностью оформлена",
+            Finding = "Основатели в целом понимают распределение долей, но существующая договоренность подтверждается только частично или не доведена до юридического оформления.",
+            WhyItMatters = "При изменении отношений или появлении инвестора устная либо предварительная договоренность может оказаться недостаточной для подтверждения структуры.",
+            Recommendation = "Собрать текущую договоренность и оформить итоговую структуру в применимых документах.",
             Recommendations = new() {
-                "Закрепить должности и сферы единоличного принятия решений для каждого фаундера."
+                "Собрать текущую договоренность в одном месте.",
+                "Сопоставить ее с зарегистрированными правами.",
+                "Оформить итоговую структуру в применимых документах."
             },
             LawyerRequired = false,
             Resolution = "check_with_lawyer",
             ServiceCode = "FOUNDERS_REVIEW"
         },
         new() {
-            Code = "R_FOUNDERS_AGREEMENT_PARTIAL",
-            RootCauseGroup = "FOUNDER_CONTROL",
+            Code = "FND_EQUITY_AMBIGUITY",
+            RootCauseGroup = "FOUNDER_EQUITY",
+            Severity = "HIGH",
+            Priority = "NOW",
+            SectionId = "founders",
+            Modules = new() { "founders" },
+            Title = "По долям существуют несколько несовпадающих договоренностей",
+            Finding = "По вашим ответам есть разные обещания или неясность относительно распределения долей между основателями.",
+            WhyItMatters = "Это может привести к спору о собственности и усложнить корпоративные изменения или инвестиционный раунд.",
+            Recommendation = "Собрать все обещания, определить единую структуру и синхронизировать с корпоративными документами.",
+            Recommendations = new() {
+                "Собрать все обещания и версии договоренностей.",
+                "Определить единую согласованную структуру.",
+                "Синхронизировать ее с корпоративными документами."
+            },
+            LawyerRequired = true,
+            Resolution = "lawyer_required",
+            ServiceCode = "FOUNDERS_REVIEW"
+        },
+        new() {
+            Code = "FND_NO_VESTING",
+            RootCauseGroup = "FOUNDER_EXIT",
+            Severity = "HIGH",
+            Priority = "30_DAYS",
+            SectionId = "founders",
+            Modules = new() { "founders" },
+            Title = "Полная доля не связана с продолжением участия основателя",
+            Finding = "Сейчас основатель сохраняет всю долю независимо от того, как долго он продолжает работать над компанией.",
+            WhyItMatters = "Пока все активно участвуют, это может не создавать непосредственной проблемы, но при раннем уходе в структуре капитала может остаться крупная доля неактивного участника.",
+            Recommendation = "Обсудить механизм связи доли с продолжением участия и оформить согласованную модель.",
+            Recommendations = new() {
+                "Обсудить механизм связи доли с продолжением участия.",
+                "Определить последствия раннего ухода.",
+                "Оформить согласованную модель."
+            },
+            LawyerRequired = true,
+            Resolution = "lawyer_required",
+            ServiceCode = "FOUNDERS_REVIEW"
+        },
+        new() {
+            Code = "FND_INCOMPLETE_LEAVER_RULES",
+            RootCauseGroup = "FOUNDER_EXIT",
             Severity = "MEDIUM",
             Priority = "30_DAYS",
             SectionId = "founders",
             Modules = new() { "founders" },
-            Title = "Правила между сооснователями зафиксированы частично",
-            Finding = "Часть договоренностей (Non-Compete, займы, передача IP) не отражена в действующих документах.",
-            WhyItMatters = "Неурегулированные вопросы становятся триггерами споров при первом успехе компании или при привлечении раунда.",
-            Recommendation = "Дополнить действующие соглашения недостающими пунктами (Non-Compete, учет личных вложений).",
+            Title = "Последствия разных сценариев ухода основателя определены не полностью",
+            Finding = "Компания не полностью различает обычный добровольный уход и уход вследствие серьезного нарушения обязательств.",
+            WhyItMatters = "Без заранее согласованных правил один и тот же механизм может применяться к существенно разным ситуациям и стать источником спора.",
+            Recommendation = "Определить основные сценарии ухода и зафиксировать правила в документах.",
             Recommendations = new() {
-                "Провести ревизию всех договоренностей и свести их в единый понятный документ."
+                "Определить основные сценарии ухода.",
+                "Согласовать последствия для доли, полномочий и передачи дел.",
+                "Закрепить правила в документах."
+            },
+            LawyerRequired = false,
+            Resolution = "check_with_lawyer",
+            ServiceCode = "FOUNDERS_REVIEW"
+        },
+        new() {
+            Code = "FND_GOVERNANCE_AMBIGUITY",
+            RootCauseGroup = "FOUNDER_GOVERNANCE",
+            Severity = "HIGH",
+            Priority = "NOW",
+            SectionId = "founders",
+            Modules = new() { "founders" },
+            Title = "Правила принятия решений между основателями определены не полностью",
+            Finding = "Не по всем существенным вопросам понятно, кто может решать самостоятельно и где требуется совместное согласие.",
+            WhyItMatters = "При росте числа решений и обязательств это повышает риск споров о полномочиях и замедляет управление.",
+            Recommendation = "Разделить операционные и ключевые совместные решения и определить пороги согласования.",
+            Recommendations = new() {
+                "Разделить операционные и ключевые совместные решения.",
+                "Определить пороги согласования.",
+                "Синхронизировать договоренности с корпоративными полномочиями."
+            },
+            LawyerRequired = true,
+            Resolution = "lawyer_required",
+            ServiceCode = "FOUNDERS_REVIEW"
+        },
+        new() {
+            Code = "FND_NO_DEADLOCK_PROTECTION",
+            RootCauseGroup = "FOUNDER_CONTROL",
+            Severity = "HIGH",
+            Priority = "NOW",
+            SectionId = "founders",
+            Modules = new() { "founders" },
+            Title = "Не определен порядок действий при серьезном тупике между основателями",
+            Finding = "По вашим ответам специального механизма на случай, если основатели не смогут договориться, нет либо он не доводит ситуацию до окончательного решения.",
+            WhyItMatters = "При реальном конфликте переговоров может оказаться недостаточно для продолжения работы компании.",
+            Recommendation = "Определить этапы эскалации и закрепить механизм разрешения тупика письменно.",
+            Recommendations = new() {
+                "Определить этапы эскалации.",
+                "Согласовать финальный способ выхода из тупика.",
+                "Закрепить механизм письменно."
+            },
+            LawyerRequired = true,
+            Resolution = "lawyer_required",
+            ServiceCode = "FOUNDERS_REVIEW"
+        },
+        new() {
+            Code = "FND_EXIT_RULES_MISSING",
+            RootCauseGroup = "FOUNDER_EXIT",
+            Severity = "MEDIUM",
+            Priority = "30_DAYS",
+            SectionId = "founders",
+            Modules = new() { "founders" },
+            Title = "Правила выхода основателя определены не полностью",
+            Finding = "Заранее не определены все ключевые действия при уходе основателя: уведомление, передача дел, полномочия и судьба доли.",
+            WhyItMatters = "Уход в таком случае приходится урегулировать уже после возникновения интересов сторон, что повышает вероятность конфликта.",
+            Recommendation = "Определить процедуру выхода, связать ее с долей и предусмотреть передачу дел.",
+            Recommendations = new() {
+                "Определить процедуру выхода.",
+                "Связать ее с долей и полномочиями.",
+                "Предусмотреть передачу дел и доступов."
+            },
+            LawyerRequired = false,
+            Resolution = "check_with_lawyer",
+            ServiceCode = "FOUNDERS_REVIEW"
+        },
+        new() {
+            Code = "FND_CONTRIBUTION_AMBIGUITY",
+            RootCauseGroup = "FOUNDER_FINANCING",
+            Severity = "MEDIUM",
+            Priority = "30_DAYS",
+            SectionId = "founders",
+            Modules = new() { "founders" },
+            Title = "Личные вложения основателей учитываются неоднозначно",
+            Finding = "В компанию вложены личные средства, но их статус как займа, вклада или расходов определен не полностью.",
+            WhyItMatters = "В дальнейшем это может создать разные ожидания о возврате денег и правах основателей.",
+            Recommendation = "Собрать историю вложений и оформить подтверждающие решения или договоры займа/вклада.",
+            Recommendations = new() {
+                "Собрать историю личных вложений.",
+                "Определить юридический статус каждой существенной суммы.",
+                "Оформить подтверждающие решения или договоры."
+            },
+            LawyerRequired = false,
+            Resolution = "check_with_lawyer",
+            ServiceCode = "FOUNDERS_REVIEW"
+        },
+        new() {
+            Code = "FND_STRATEGIC_MISALIGNMENT",
+            RootCauseGroup = "FOUNDER_STRATEGY",
+            Severity = "MEDIUM",
+            Priority = "30_DAYS",
+            SectionId = "founders",
+            Modules = new() { "founders" },
+            Title = "У основателей различаются ожидания относительно будущего компании",
+            Finding = "По вашим ответам есть существенные различия во взглядах на инвестиции, темп роста или возможную продажу компании.",
+            WhyItMatters = "Такие различия способны перейти из стратегической дискуссии в спор о финансировании и управлении.",
+            Recommendation = "Обсудить ключевые сценарии роста и зафиксировать договоренности, влияющие на управление.",
+            Recommendations = new() {
+                "Обсудить ключевые сценарии роста и финансирования.",
+                "Определить решения, требующие общего согласия.",
+                "Зафиксировать договоренности, влияющие на управление и выход."
+            },
+            LawyerRequired = false,
+            Resolution = "check_with_lawyer",
+            ServiceCode = "FOUNDERS_REVIEW"
+        },
+        new() {
+            Code = "FND_DOCUMENTATION_GAP",
+            RootCauseGroup = "FOUNDER_DOCUMENTATION",
+            Severity = "MEDIUM",
+            Priority = "30_DAYS",
+            SectionId = "founders",
+            Modules = new() { "founders" },
+            Title = "Правила между основателями существуют, но закреплены не полностью",
+            Finding = "Основные договоренности могут быть понятны участникам, однако система не видит подтверждения, что они собраны в подписанных документах.",
+            WhyItMatters = "При изменении отношений доказать содержание устной договоренности или переписки сложнее, чем заранее оформленные правила.",
+            Recommendation = "Собрать действующие договоренности и оформить единый согласованный набор правил.",
+            Recommendations = new() {
+                "Собрать действующие договоренности.",
+                "Устранить противоречия между документами и перепиской.",
+                "Оформить единый согласованный набор правил."
             },
             LawyerRequired = false,
             Resolution = "check_with_lawyer",
