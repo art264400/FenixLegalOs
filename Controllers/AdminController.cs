@@ -16,6 +16,7 @@ public class AdminController : ControllerBase
     private readonly QuestionRepository _questionRepo;
     private readonly ScoringEngine _scoringEngine;
     private readonly AiReportService _aiReportService;
+    private readonly SettingsRepository _settings;
     private const string AdminTokenCookieName = "fenix_admin";
     private static readonly HashSet<string> AdminTokens = new();
     private static readonly string AdminPassword = Environment.GetEnvironmentVariable("FENIX_ADMIN_PASSWORD") ?? "fenix2026";
@@ -24,12 +25,14 @@ public class AdminController : ControllerBase
         LeadRepository leads,
         QuestionRepository questionRepo,
         ScoringEngine scoringEngine,
-        AiReportService aiReportService)
+        AiReportService aiReportService,
+        SettingsRepository settings)
     {
         _leads = leads;
         _questionRepo = questionRepo;
         _scoringEngine = scoringEngine;
         _aiReportService = aiReportService;
+        _settings = settings;
     }
 
     private bool IsAdmin()
@@ -60,6 +63,25 @@ public class AdminController : ControllerBase
     {
         if (!IsAdmin()) return Unauthorized();
         return Ok(_leads.GetOverviewStats());
+    }
+
+    [HttpGet("settings/pricing")]
+    public IActionResult GetPricingSettings()
+    {
+        if (!IsAdmin()) return Unauthorized();
+        return Ok(_settings.GetPricing());
+    }
+
+    [HttpPost("settings/pricing")]
+    public IActionResult UpdatePricingSettings([FromBody] JsonElement body)
+    {
+        if (!IsAdmin()) return Unauthorized();
+        int price = body.TryGetProperty("priceKzt", out var pProp) ? pProp.GetInt32() : 19999;
+        int oldPrice = body.TryGetProperty("oldPriceKzt", out var oProp) ? oProp.GetInt32() : 49990;
+
+        _settings.UpdatePricing(price, oldPrice);
+        _leads.AuditLog("admin", "pricing_updated", $"New Price: {price} KZT, Old: {oldPrice} KZT");
+        return Ok(new { ok = true, pricing = _settings.GetPricing() });
     }
 
     [HttpGet("leads")]

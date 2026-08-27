@@ -68,6 +68,7 @@
   const TABS = [
     ['overview', 'Overview'],
     ['leads', 'Leads'],
+    ['pricing', '💰 Тариф & Цены'],
     ['testbench', '🧪 QA Simulator & Test Bench'],
     ['questions', 'Question Bank'],
     ['risks', 'Risk Library'],
@@ -84,9 +85,74 @@
     const content = document.getElementById('tab-content');
     if (active === 'overview') loadOverview(content);
     if (active === 'leads') detailId ? loadLeadDetail(content, detailId) : loadLeads(content);
+    if (active === 'pricing') loadPricingSettings(content);
     if (active === 'testbench') loadTestBench(content);
     if (active === 'questions') loadQuestions(content);
     if (active === 'risks') loadRisks(content);
+  }
+
+  async function loadPricingSettings(el) {
+    el.innerHTML = '<p style="color:var(--ink-faint)">Загрузка настроек тарифа…</p>';
+    try {
+      const data = await api('GET', '/api/admin/settings/pricing');
+      el.innerHTML =
+        '<section class="admin-card" style="max-width:560px;margin:20px 0;background:var(--bg-elev);border:1px solid var(--line);border-radius:var(--radius);padding:28px">' +
+          '<h2 style="font-size:22px;color:var(--ink);margin-bottom:8px">💰 Управление стоимостью отчёта</h2>' +
+          '<p style="color:var(--ink-soft);font-size:14px;margin-bottom:24px;line-height:1.5">Здесь вы можете изменить цену разблокировки полного юридического отчёта в тенге. Изменение мгновенно применится на сайте, в форме оплаты и на кнопке Kaspi Pay.</p>' +
+          '<form id="pricing-form" style="display:grid;gap:18px">' +
+            '<div class="field">' +
+              '<label for="p-price" style="font-weight:600">Актуальная цена отчёта (₸ KZT)</label>' +
+              '<input id="p-price" type="number" step="100" required value="' + data.priceKzt + '" style="font-size:18px;font-weight:700;color:var(--accent)">' +
+            '</div>' +
+            '<div class="field">' +
+              '<label for="p-old-price" style="font-weight:600">Зачёркнутая базовая цена (₸ KZT) — для скидки</label>' +
+              '<input id="p-old-price" type="number" step="100" required value="' + data.oldPriceKzt + '" style="font-size:16px">' +
+            '</div>' +
+            '<div id="pricing-calc" style="background:var(--bg-card);border:1px solid var(--line);border-radius:8px;padding:14px;font-size:13.5px;color:var(--ink-2)">' +
+              'Текущая скидка: <strong style="color:var(--positive)">' + data.discountPercent + '%</strong> (Пользователь платит ' + data.priceKzt.toLocaleString('ru') + ' ₸ вместо ' + data.oldPriceKzt.toLocaleString('ru') + ' ₸)' +
+            '</div>' +
+            '<div class="form-error" id="pricing-err" hidden></div>' +
+            '<div class="form-success" id="pricing-ok" hidden style="color:var(--positive);font-weight:600">✓ Стоимость успешно обновлена и сохранена в системе!</div>' +
+            '<button class="btn" type="submit" style="margin-top:6px">💾 Сохранить изменения стоимости</button>' +
+          '</form>' +
+        '</section>';
+
+      const form = document.getElementById('pricing-form');
+      const priceIn = document.getElementById('p-price');
+      const oldPriceIn = document.getElementById('p-old-price');
+      const calcEl = document.getElementById('pricing-calc');
+      const errEl = document.getElementById('pricing-err');
+      const okEl = document.getElementById('pricing-ok');
+
+      function updateCalc() {
+        const p = parseInt(priceIn.value, 10) || 0;
+        const o = parseInt(oldPriceIn.value, 10) || 0;
+        const disc = o > p ? Math.round((1 - p / o) * 100) : 0;
+        calcEl.innerHTML = 'Текущая скидка: <strong style="color:var(--positive)">' + disc + '%</strong> (Пользователь платит ' + p.toLocaleString('ru') + ' ₸ вместо ' + o.toLocaleString('ru') + ' ₸)';
+      }
+
+      priceIn.addEventListener('input', updateCalc);
+      oldPriceIn.addEventListener('input', updateCalc);
+
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        errEl.hidden = true;
+        okEl.hidden = true;
+        try {
+          const res = await api('POST', '/api/admin/settings/pricing', {
+            priceKzt: parseInt(priceIn.value, 10),
+            oldPriceKzt: parseInt(oldPriceIn.value, 10)
+          });
+          okEl.hidden = false;
+          setTimeout(function () { okEl.hidden = true; }, 3500);
+        } catch (err) {
+          errEl.textContent = 'Ошибка сохранения: ' + err.message;
+          errEl.hidden = false;
+        }
+      });
+    } catch (err) {
+      el.innerHTML = '<p style="color:var(--critical)">Ошибка загрузки настроек: ' + esc(err.message) + '</p>';
+    }
   }
 
   // -----------------------------------------------------------------------

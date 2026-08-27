@@ -153,6 +153,19 @@ public class DbInitializer
                 version TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS system_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+        ");
+
+        // Seed initial pricing
+        conn.Execute(@"
+            INSERT OR IGNORE INTO system_settings (key, value, updated_at)
+            VALUES ('report_price_kzt', '19999', datetime('now')),
+                   ('report_old_price_kzt', '49990', datetime('now'));
         ");
 
         // Safe migrations

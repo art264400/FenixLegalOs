@@ -15,19 +15,28 @@ public class SessionsController : ControllerBase
     private readonly ScoringEngine _scoringEngine;
     private readonly TypstPdfService _pdfService;
     private readonly AiReportService _aiReportService;
+    private readonly SettingsRepository _settings;
 
     public SessionsController(
         SessionRepository sessions,
         LeadRepository leads,
         ScoringEngine scoringEngine,
         TypstPdfService pdfService,
-        AiReportService aiReportService)
+        AiReportService aiReportService,
+        SettingsRepository settings)
     {
         _sessions = sessions;
         _leads = leads;
         _scoringEngine = scoringEngine;
         _pdfService = pdfService;
         _aiReportService = aiReportService;
+        _settings = settings;
+    }
+
+    [HttpGet("pricing")]
+    public IActionResult GetPricing()
+    {
+        return Ok(_settings.GetPricing());
     }
 
     [HttpPost]
@@ -134,8 +143,8 @@ public class SessionsController : ControllerBase
         var session = _sessions.GetSession(id);
         if (session == null) return NotFound(new { error = "session_not_found" });
 
-        int amount = body.TryGetProperty("amount", out var amProp) ? amProp.GetInt32() : 9900;
-        string method = body.TryGetProperty("method", out var mProp) ? mProp.GetString() ?? "kaspi_qr" : "kaspi_qr";
+        int amount = body.TryGetProperty("amount", out var amProp) ? amProp.GetInt32() : 19999;
+        string method = body.TryGetProperty("method", out var mProp) ? mProp.GetString() ?? "kaspi_pay" : "kaspi_pay";
 
         _sessions.MarkSessionPaid(id, amount, method);
         _leads.RecordEvent("payment_completed", id, new { amount, method });
@@ -150,6 +159,11 @@ public class SessionsController : ControllerBase
         var session = _sessions.GetSession(id);
         if (session == null || string.IsNullOrEmpty(session.ResultJson))
             return NotFound(new { error = "session_not_found" });
+
+        if (!session.Paid)
+        {
+            return Ok(new { summary = "🔒 **AI-заключение доступно после оплаты**\n\nРазблокируйте полный отчёт Fenix Legal OS, чтобы получить персональный юридический меморандум венчурного юриста и пошаговый Action Plan." });
+        }
 
         var result = JsonSerializer.Deserialize<ScoreResult>(session.ResultJson);
         if (result == null) return BadRequest(new { error = "invalid_result" });

@@ -15,6 +15,7 @@ builder.Services.AddSingleton<DbInitializer>();
 builder.Services.AddSingleton<QuestionRepository>();
 builder.Services.AddSingleton<SessionRepository>();
 builder.Services.AddSingleton<LeadRepository>();
+builder.Services.AddSingleton<SettingsRepository>();
 builder.Services.AddSingleton<ScoringEngine>();
 builder.Services.AddSingleton<TypstPdfService>();
 builder.Services.AddSingleton<AiReportService>();
