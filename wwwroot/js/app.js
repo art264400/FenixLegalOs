@@ -186,21 +186,21 @@
           '<div class="flow-title">Как работает FENIX SLS</div>' +
           '<div class="flow-grid">' +
             '<div class="flow-step">' +
-              '<div class="step-tag">ШАГ 01</div>' +
-              '<h3>Ваши ответы</h3>' +
-              '<p>10 минут без юристов и сложных терминов</p>' +
+              '<div class="step-tag">ШАГ 01 · ВАШИ ДАННЫЕ</div>' +
+              '<h3>Ответьте на вопросы</h3>' +
+              '<p>Около 15 минут. Без сложных юридических терминов.</p>' +
             '</div>' +
             '<div class="flow-arrow">→</div>' +
             '<div class="flow-step active">' +
-              '<div class="step-tag" style="color:var(--gold)">ШАГ 02 · АЛГОРИТМ</div>' +
-              '<h3>Синтез связей</h3>' +
-              '<p>SLS анализирует всю юридическую конструкцию компании</p>' +
+              '<div class="step-tag" style="color:var(--gold)">ШАГ 02 · АНАЛИЗ</div>' +
+              '<h3>SLS распознает юридическую конструкцию бизнеса</h3>' +
+              '<p>Система связывает ваши ответы между собой и выявляет риски, которые невозможно увидеть по одному вопросу.</p>' +
             '</div>' +
             '<div class="flow-arrow">→</div>' +
             '<div class="flow-step">' +
-              '<div class="step-tag" style="color:var(--positive)">ШАГ 03</div>' +
-              '<h3>Legal Roadmap</h3>' +
-              '<p>Legal Score, карта рисков и пошаговый план</p>' +
+              '<div class="step-tag" style="color:var(--positive)">ШАГ 03 · РЕЗУЛЬТАТ</div>' +
+              '<h3>Получите персональный отчет</h3>' +
+              '<p>Оценка юридической готовности, карта рисков и пошаговый план действий.</p>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -214,7 +214,7 @@
             '<div><div class="d-num">05</div><div class="d-title">Продукт и пользователи</div><small>оферта · оплаты · ответственность</small></div>' +
             '<div><div class="d-num">06</div><div class="d-title">Данные и ИИ</div><small>персональные данные · сбор · модели ИИ</small></div>' +
             '<div><div class="d-num">07</div><div class="d-title">Договоры</div><small>клиенты · партнеры · обязательства</small></div>' +
-            '<div><div class="d-num">08</div><div class="d-title">Инвестиционная готовность</div><small>раунд · SAFE / КИС · проверка</small></div>' +
+            '<div><div class="d-num">08</div><div class="d-title">Инвестиционная готовность</div><small>раунд · SAFE · дата-рум</small></div>' +
           '</div>' +
         '</div>' +
         '<div class="method">' +
