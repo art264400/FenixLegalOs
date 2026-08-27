@@ -130,11 +130,19 @@
     window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
   }
 
-  const SEV_LABEL = { critical: 'Critical', high: 'High', medium: 'Medium' };
+  const SEV_LABEL = {
+    critical: 'CRITICAL', CRITICAL: 'CRITICAL', blocker: 'CRITICAL', BLOCKER: 'CRITICAL',
+    high: 'HIGH', HIGH: 'HIGH',
+    medium: 'MEDIUM', MEDIUM: 'MEDIUM',
+    low: 'LOW', LOW: 'LOW'
+  };
   const RESOLUTION_LABEL = {
     self: 'Можно решить самостоятельно',
     check_with_lawyer: 'Желательно проверить с юристом',
     lawyer_required: 'Требуется индивидуальная юридическая работа',
+    lawyer: 'Требуется индивидуальная юридическая работа',
+    template: 'Типовой документ / шаблон',
+    expert: 'Экспертная проверка',
   };
 
   // ---------------------------------------------------------------------
@@ -800,10 +808,16 @@
   }
 
   function riskCard(r, index, withCta) {
+    const s = (r.severity || 'medium').toLowerCase();
+    const sevClass = (s === 'critical' || s === 'blocker') ? 'critical' : (s === 'high' ? 'high' : 'medium');
+    const sevText = SEV_LABEL[s] || s.toUpperCase();
+    const resKey = (r.resolution || '').toLowerCase();
+    const resText = RESOLUTION_LABEL[resKey] || (r.lawyerRequired ? 'Требуется индивидуальная юридическая работа' : 'Желательно проверить с юристом');
+
     return (
-      '<article class="risk-card rc-' + r.severity + '">' +
+      '<article class="risk-card rc-' + sevClass + '">' +
         '<div class="head"><h3>' + esc(r.title) + '</h3>' +
-        '<span class="sev sev-' + r.severity + '">' + SEV_LABEL[r.severity] + '</span></div>' +
+        '<span class="sev sev-' + sevClass + '">' + esc(sevText) + '</span></div>' +
         '<p class="body">' + esc(r.finding) + '</p>' +
         '<div class="sub-label">Почему это важно</div>' +
         '<p class="why">' + esc(r.whyItMatters) + '</p>' +
@@ -811,7 +825,7 @@
         '<p class="action">' + esc(r.recommendation) + '</p>' +
         '<div class="cta-row">' +
           (withCta && r.cta ? '<button class="btn btn-secondary risk-cta" data-code="' + esc(r.code) + '" data-cta="' + esc(r.cta) + '">' + esc(r.cta) + '</button>' : '') +
-          '<span class="resolution-tag">' + RESOLUTION_LABEL[r.resolution] + '</span>' +
+          '<span class="resolution-tag">' + esc(resText) + '</span>' +
         '</div>' +
       '</article>'
     );
