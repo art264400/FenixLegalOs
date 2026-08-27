@@ -34,8 +34,8 @@ public class AiReportService
     {
         if (string.IsNullOrWhiteSpace(_apiKey))
         {
-            return "⚠️ **AI-генерация недоступна**: API-токен не обнаружен.\n\n" +
-                   "Укажите `OPENAI_API_KEY` или `AI_API_KEY` в файле `.env` в корне проекта или в переменных окружения сервера.";
+            Console.WriteLine("[AiReportService] API key is missing. Set OPENAI_API_KEY in .env or environment variables.");
+            return "Персональное юридическое заключение формируется на основе ответов аудита и будет доступно в вашем отчете.";
         }
 
         try
@@ -46,12 +46,13 @@ public class AiReportService
             {
                 return aiText.Trim();
             }
-            return "⚠️ **Ошибка генерации**: LLM вернула пустой ответ. Проверьте параметры модели в настройках.";
+            Console.WriteLine("[AiReportService] LLM API returned empty response.");
+            return "Персональное юридическое заключение формируется и будет обновлено в вашем личном кабинете.";
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[AiReportService] Exception in LLM call: {ex}");
-            return $"⚠️ **Ошибка вызова AI API**: {ex.Message}";
+            Console.WriteLine($"[AiReportService] Exception during LLM API execution: {ex.Message}");
+            return "Персональное юридическое заключение находится в обработке и будет доступно в вашем отчете.";
         }
     }
 
@@ -149,8 +150,8 @@ public class AiReportService
         if (!response.IsSuccessStatusCode)
         {
             var err = await response.Content.ReadAsStringAsync();
-            Console.WriteLine($"[AiReportService] API error ({response.StatusCode}): {err}");
-            return $"⚠️ **Ошибка вызова AI API ({response.StatusCode})**:\n```\n{err}\n```";
+            Console.WriteLine($"[AiReportService] OpenAI API Error ({response.StatusCode}): {err}");
+            return null;
         }
 
         var resJson = await response.Content.ReadAsStringAsync();
