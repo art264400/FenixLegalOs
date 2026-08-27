@@ -1225,7 +1225,7 @@
         r.strongAreas.map(function (s) { return '<span>✓ ' + esc(s) + '</span>'; }).join('') + '</div></section>'
       : '';
 
-    const mainContent = statusBadgeHtml +
+    const mainContent =
       heroBlock(r) +
       '<div style="text-align:center;margin:24px 0">' +
         '<button class="btn" id="download-pdf-btn" style="padding:14px 28px;font-size:15px">📥 Скачать официальный PDF-отчёт</button>' +
