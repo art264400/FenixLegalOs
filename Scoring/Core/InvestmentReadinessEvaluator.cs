@@ -9,7 +9,10 @@ public class InvestmentReadinessEvaluator
         SharedFactStore facts,
         List<RiskFinding> findings)
     {
-        bool applicable = (string)facts.Facts["investment.timing"]! != "none" || (bool)facts.Facts["investment.priorInvestment"]!;
+        var timing = (string?)facts.Facts.GetValueOrDefault("investment.timing");
+        var priorInv = facts.Facts.GetValueOrDefault("investment.priorInvestment");
+        bool applicable = timing is not (null or "none") || priorInv is true;
+
         if (!applicable) return new InvestmentReadinessOverlay { Applicable = false, ReadinessScore = 100 };
 
         var blockers = findings

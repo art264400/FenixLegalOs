@@ -51,41 +51,38 @@ public class FoundersFactNormalizer : IFactNormalizer
                     f["founders.isSolo"] = false;
                     f["founders.inactiveExists"] = true;
                     break;
-                default:
-                    f["founders.count"] = "unknown";
-                    f["founders.activeCount"] = "unknown";
-                    break;
             }
-        }
-        else
-        {
-            f["founders.count"] = "unknown";
-            f["founders.activeCount"] = "unknown";
-            f["founders.inactiveExists"] = false;
         }
 
         if (answers.TryGetValue("FND-C03", out var fndC03Raw) && fndC03Raw != null)
         {
             var fndC03 = fndC03Raw.ToString() ?? "";
-            if (fndC03 is "formal_only" or "departed_unresolved" or "unresolved" or "conflict" or "dispute")
+            switch (fndC03)
             {
-                f["founders.inactiveExists"] = true;
+                case "departed_clean" or "resolved":
+                    f["founders.departedFounderExists"] = true;
+                    f["founders.departedFounderStatus"] = "clean";
+                    break;
+                case "departed_unresolved" or "unresolved":
+                    f["founders.departedFounderExists"] = true;
+                    f["founders.departedFounderStatus"] = "unresolved";
+                    f["founders.inactiveExists"] = true;
+                    break;
+                case "conflict" or "dispute":
+                    f["founders.departedFounderExists"] = true;
+                    f["founders.departedFounderStatus"] = "dispute";
+                    f["founders.inactiveExists"] = true;
+                    break;
+                case "formal_only":
+                    f["founders.departedFounderExists"] = false;
+                    f["founders.departedFounderStatus"] = "formal_only";
+                    f["founders.inactiveExists"] = true;
+                    break;
+                case "none":
+                    f["founders.departedFounderExists"] = false;
+                    f["founders.departedFounderStatus"] = "none";
+                    break;
             }
-            f["founders.departedFounderExists"] = fndC03 is "departed_clean" or "resolved" or "departed_unresolved" or "unresolved" or "conflict" or "dispute";
-            f["founders.departedFounderStatus"] = fndC03 switch
-            {
-                "departed_clean" or "resolved" => "clean",
-                "departed_unresolved" or "unresolved" => "unresolved",
-                "conflict" or "dispute" => "dispute",
-                "formal_only" => "formal_only",
-                "none" => "none",
-                _ => fndC03
-            };
-        }
-        else
-        {
-            f["founders.departedFounderExists"] = false;
-            f["founders.departedFounderStatus"] = "none";
         }
 
         if (answers.TryGetValue("FND-C02", out var fndC02Raw) && fndC02Raw != null)
@@ -148,53 +145,61 @@ public class FoundersFactNormalizer : IFactNormalizer
                 f["founders.isEqual5050"] = is5050;
                 f["founders.nearEqualControl"] = nearEqual;
             }
-            else
-            {
-                f["founders.isEqual5050"] = false;
-                f["founders.nearEqualControl"] = false;
-            }
-        }
-        else
-        {
-            f["founders.isEqual5050"] = false;
-            f["founders.nearEqualControl"] = false;
         }
 
         if (answers.TryGetValue("FND-C04", out var fndC04Raw) && fndC04Raw != null)
         {
-            f["founders.founderAgreementStatus"] = fndC04Raw.ToString() ?? "";
+            var fndC04 = fndC04Raw.ToString() ?? "";
+            if (fndC04 is "signed" or "multiple_docs" or "draft" or "informal" or "none" or "unknown" or "aifc_sha")
+            {
+                f["founders.founderAgreementStatus"] = fndC04;
+            }
         }
 
         if (answers.TryGetValue("FND-01", out var fnd01Raw) && fnd01Raw != null)
         {
             var fnd01 = fnd01Raw.ToString() ?? "";
             f["founders.activeDispute"] = fnd01 is "material" or "active_conflict" or "formal_dispute";
-            f["founders.disputeLevel"] = fnd01 switch
+            var dispLevel = fnd01 switch
             {
                 "none" => "none",
                 "minor" => "minor",
                 "material" => "material",
                 "active_conflict" => "active",
                 "formal_dispute" => "formal",
-                _ => fnd01
+                _ => null
             };
+            if (dispLevel != null)
+            {
+                f["founders.disputeLevel"] = dispLevel;
+            }
         }
 
         if (answers.TryGetValue("FND-02", out var fnd02Raw) && fnd02Raw != null)
         {
-            f["founders.roleClarity"] = fnd02Raw.ToString() ?? "";
+            var fnd02 = fnd02Raw.ToString() ?? "";
+            if (fnd02 is "written" or "clear_oral" or "overlap" or "disputed" or "clear" or "partial" or "ambiguous" or "conflict")
+            {
+                f["founders.roleClarity"] = fnd02;
+            }
         }
 
         if (answers.TryGetValue("FND-03", out var fnd03Raw) && fnd03Raw != null)
         {
             var fnd03 = fnd03Raw.ToString() ?? "";
-            f["founders.commitmentStatus"] = fnd03;
-            if (fnd03 == "stopped")
+            if (fnd03 is "aligned" or "temporary_part_time" or "different_accepted" or "below_expected" or "stopped" or "full_time" or "part_time_aligned" or "part_time_mismatch")
             {
-                f["founders.inactiveExists"] = true;
-                if ((string?)f["founders.departedFounderStatus"] == "none")
+                f["founders.commitmentStatus"] = fnd03;
+                if (fnd03 is "stopped" or "below_expected")
                 {
-                    f["founders.departedFounderStatus"] = "stopped";
+                    if (fnd03 == "stopped")
+                    {
+                        f["founders.inactiveExists"] = true;
+                        if (!f.ContainsKey("founders.departedFounderStatus") || (string?)f["founders.departedFounderStatus"] == "none")
+                        {
+                            f["founders.departedFounderStatus"] = "stopped";
+                        }
+                    }
                 }
             }
         }
@@ -202,67 +207,94 @@ public class FoundersFactNormalizer : IFactNormalizer
         if (answers.TryGetValue("FND-04", out var fnd04Raw) && fnd04Raw != null)
         {
             var fnd04 = fnd04Raw.ToString() ?? "";
-            f["founders.equityClarity"] = fnd04 switch
+            if (fnd04 is "registered" or "written_agreed" or "preliminary" or "verbal" or "ambiguous" or "dispute")
             {
-                "registered" => "registered",
-                "written_agreed" => "written_agreed",
-                "preliminary" => "preliminary",
-                "verbal" => "verbal",
-                "ambiguous" => "ambiguous",
-                "dispute" => "dispute",
-                _ => fnd04
-            };
+                f["founders.equityClarity"] = fnd04;
+            }
         }
 
         if (answers.TryGetValue("FND-05", out var fnd05Raw) && fnd05Raw != null)
         {
             var fnd05 = fnd05Raw.ToString() ?? "";
-            f["founders.vestingStatus"] = fnd05 switch
+            var vStatus = fnd05 switch
             {
                 "vesting" or "reverse_vesting" or "cliff_only" => "vesting_signed",
                 "repurchase" => "repurchase_signed",
                 "verbal_rule" => "verbal_rule",
                 "informal" => "informal",
                 "none" or "not_discussed" or "retains_all" => "none",
-                _ => fnd05
+                _ => null
             };
+            if (vStatus != null)
+            {
+                f["founders.vestingStatus"] = vStatus;
+            }
         }
 
         if (answers.TryGetValue("FND-05A", out var fnd05aRaw) && fnd05aRaw != null)
         {
-            f["founders.leaverRules"] = fnd05aRaw.ToString() ?? "";
+            var fnd05a = fnd05aRaw.ToString() ?? "";
+            if (fnd05a is "defined" or "partial" or "oral" or "none" or "unknown" or "detailed" or "general")
+            {
+                f["founders.leaverRules"] = fnd05a;
+            }
         }
 
         if (answers.TryGetValue("FND-06", out var fnd06Raw) && fnd06Raw != null)
         {
-            f["founders.governanceClarity"] = fnd06Raw.ToString() ?? "";
+            var fnd06 = fnd06Raw.ToString() ?? "";
+            if (fnd06 is "written" or "verbal" or "partial" or "all_together" or "none" or "unknown" or "unanimous" or "majority" or "supermajority" or "ceo_veto")
+            {
+                f["founders.governanceClarity"] = fnd06;
+            }
         }
 
         if (answers.TryGetValue("FND-06A", out var fnd06aRaw) && fnd06aRaw != null)
         {
-            f["founders.keyDecisionMode"] = fnd06aRaw.ToString() ?? "";
+            var fnd06a = fnd06aRaw.ToString() ?? "";
+            if (fnd06a is "different_thresholds" or "majority" or "material_unanimity" or "broad_unanimity" or "undefined" or "unknown" or "unanimous_all" or "majority_simple" or "qualified_75" or "sole_ceo" or "no_formal_rule")
+            {
+                f["founders.keyDecisionMode"] = fnd06a;
+            }
         }
 
         if (answers.TryGetValue("FND-07", out var fnd07Raw) && fnd07Raw != null)
         {
-            f["founders.deadlockMechanism"] = fnd07Raw.ToString() ?? "";
+            var fnd07 = fnd07Raw.ToString() ?? "";
+            if (fnd07 is "full" or "staged" or "casting_vote" or "mediator_only" or "only_agree" or "none" or "unknown" or "buyout_formula" or "escalation" or "external_vote" or "russian_roulette")
+            {
+                f["founders.deadlockMechanism"] = fnd07;
+            }
         }
 
         if (answers.TryGetValue("FND-08", out var fnd08Raw) && fnd08Raw != null)
         {
             var fnd08 = fnd08Raw.ToString() ?? "";
-            f["founders.exitRules"] = fnd08 == "already_unresolved" ? "unresolved_departure" : fnd08;
+            var exStatus = fnd08 switch
+            {
+                "full" or "partial" or "oral" or "none" or "clear_procedure" or "general_clause" => fnd08,
+                "already_unresolved" => "unresolved_departure",
+                _ => null
+            };
+            if (exStatus != null)
+            {
+                f["founders.exitRules"] = exStatus;
+            }
         }
 
         if (answers.TryGetValue("FND-09", out var fnd09Raw) && fnd09Raw != null)
         {
-            f["founders.personalContributions"] = fnd09Raw.ToString() ?? "";
+            var fnd09 = fnd09Raw.ToString() ?? "";
+            if (fnd09 is "none" or "documented" or "small_partial" or "material_unclear" or "dispute" or "unknown" or "documented_equal" or "documented_unbalanced" or "informal_valued")
+            {
+                f["founders.personalContributions"] = fnd09;
+            }
         }
 
         if (answers.TryGetValue("FND-10", out var fnd10Raw) && fnd10Raw != null)
         {
             var fnd10 = fnd10Raw.ToString() ?? "";
-            f["founders.externalActivity"] = fnd10 switch
+            var extAct = fnd10 switch
             {
                 "none" => "none",
                 "unrelated" or "no_overlap" => "unrelated",
@@ -270,15 +302,24 @@ public class FoundersFactNormalizer : IFactNormalizer
                 "potential_competitor" or "competing" => "potential_competitor",
                 "employer_same_field" or "employer" => "employer_same_field",
                 "active_competition" => "active_competition",
-                _ => "unknown"
+                "unknown" => "unknown",
+                _ => null
             };
-            f["founders.externalEmployerSameField"] = fnd10 is "employer_same_field" or "employer" or "active_competition";
-            f["founders.hasConflictOfInterest"] = fnd10 is "potential_competitor" or "competing" or "employer_same_field" or "employer" or "active_competition";
+            if (extAct != null)
+            {
+                f["founders.externalActivity"] = extAct;
+                f["founders.externalEmployerSameField"] = fnd10 is "employer_same_field" or "employer" or "active_competition";
+                f["founders.hasConflictOfInterest"] = fnd10 is "potential_competitor" or "competing" or "employer_same_field" or "employer" or "active_competition";
+            }
         }
 
         if (answers.TryGetValue("FND-11", out var fnd11Raw) && fnd11Raw != null)
         {
-            f["founders.strategicAlignment"] = fnd11Raw.ToString() ?? "";
+            var fnd11 = fnd11Raw.ToString() ?? "";
+            if (fnd11 is "aligned" or "differences_discussed" or "not_discussed" or "material_difference" or "conflict" or "partial" or "divergent")
+            {
+                f["founders.strategicAlignment"] = fnd11;
+            }
         }
 
         // Module-specific normative scoring policy (§22.1 & §23.1):

@@ -16,6 +16,7 @@ public class SessionsController : ControllerBase
     private readonly TypstPdfService _pdfService;
     private readonly AiReportService _aiReportService;
     private readonly SettingsRepository _settings;
+    private readonly QuestionRepository _questionRepo;
 
     public SessionsController(
         SessionRepository sessions,
@@ -23,7 +24,8 @@ public class SessionsController : ControllerBase
         ScoringEngine scoringEngine,
         TypstPdfService pdfService,
         AiReportService aiReportService,
-        SettingsRepository settings)
+        SettingsRepository settings,
+        QuestionRepository questionRepo)
     {
         _sessions = sessions;
         _leads = leads;
@@ -31,6 +33,7 @@ public class SessionsController : ControllerBase
         _pdfService = pdfService;
         _aiReportService = aiReportService;
         _settings = settings;
+        _questionRepo = questionRepo;
     }
 
     [HttpGet("pricing")]
@@ -54,6 +57,14 @@ public class SessionsController : ControllerBase
             return BadRequest(new { error = "invalid_answers" });
 
         var answersJson = answersProp.GetRawText();
+        var answersDict = JsonSerializer.Deserialize<Dictionary<string, object>>(answersJson) ?? new();
+
+        var validationResult = FenixLegalOs.Scoring.Validation.AnswerValidator.Validate(answersDict, _questionRepo.GetQuestions());
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new { error = "validation_failed", details = validationResult.Errors });
+        }
+
         string? lastSectionId = body.TryGetProperty("lastSectionId", out var secProp) ? secProp.GetString() : null;
 
         bool ok = _sessions.SaveAnswers(id, answersJson, lastSectionId);
@@ -78,6 +89,12 @@ public class SessionsController : ControllerBase
 
         string answersJson = body.TryGetProperty("answers", out var aProp) ? aProp.GetRawText() : session.AnswersJson;
         var answersDict = JsonSerializer.Deserialize<Dictionary<string, object>>(answersJson) ?? new();
+
+        var validationResult = FenixLegalOs.Scoring.Validation.AnswerValidator.Validate(answersDict, _questionRepo.GetQuestions());
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new { error = "validation_failed", details = validationResult.Errors });
+        }
 
         var result = _scoringEngine.ComputeResult(answersDict);
         _sessions.CompleteSession(id, answersJson, result);
