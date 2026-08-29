@@ -600,7 +600,12 @@ code { color: var(--accent); }
   white-space: nowrap;
 }
 
-.pricing-card-top { display: flex; flex-direction: column; gap: 6px; }
+.pricing-card-top { 
+  display: flex; 
+  flex-direction: column; 
+  gap: 6px; 
+  min-height: 115px; 
+}
 
 .pricing-plan {
   font-size: 13px;
@@ -641,6 +646,7 @@ code { color: var(--accent); }
   gap: 10px;
   border-top: 1px solid var(--line);
   padding-top: 20px;
+  flex-grow: 1;
 }
 
 .pricing-features li {

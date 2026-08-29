@@ -291,7 +291,7 @@
               '</ul>' +
               '<div class="pricing-cta">' +
                 '<button class="btn btn-secondary pricing-btn" id="start-btn-2">Проверить компанию</button>' +
-                '<div class="pricing-note">Около 10 минут · Без загрузки документов</div>' +
+                '<div class="pricing-note">Около 15 минут · Без загрузки документов</div>' +
               '</div>' +
             '</div>' +
             '<div class="pricing-card pricing-card--accent">' +
@@ -309,6 +309,7 @@
               '</ul>' +
               '<div class="pricing-cta">' +
                 '<button class="btn pricing-btn" id="start-btn-3">Проверить компанию</button>' +
+                '<div class="pricing-note">Около 15 минут · Без загрузки документов</div>' +
               '</div>' +
             '</div>' +
           '</div>' +
