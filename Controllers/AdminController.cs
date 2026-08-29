@@ -78,9 +78,10 @@ public class AdminController : ControllerBase
         if (!IsAdmin()) return Unauthorized();
         int price = body.TryGetProperty("priceKzt", out var pProp) ? pProp.GetInt32() : 19999;
         int oldPrice = body.TryGetProperty("oldPriceKzt", out var oProp) ? oProp.GetInt32() : 49990;
+        int consultationPrice = body.TryGetProperty("consultationPriceKzt", out var cProp) ? cProp.GetInt32() : 79900;
 
-        _settings.UpdatePricing(price, oldPrice);
-        _leads.AuditLog("admin", "pricing_updated", $"New Price: {price} KZT, Old: {oldPrice} KZT");
+        _settings.UpdatePricing(price, oldPrice, consultationPrice);
+        _leads.AuditLog("admin", "pricing_updated", $"New Price: {price} KZT, Old: {oldPrice} KZT, Consultation: {consultationPrice} KZT");
         return Ok(new { ok = true, pricing = _settings.GetPricing() });
     }
 
