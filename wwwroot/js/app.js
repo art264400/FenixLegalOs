@@ -309,7 +309,7 @@
               '</ul>' +
               '<div class="pricing-cta">' +
                 '<button class="btn pricing-btn" id="start-btn-3">Проверить компанию</button>' +
-                '<div class="pricing-note">Около 15 минут · Без загрузки документов</div>' +
+                '<div class="pricing-note" style="visibility:hidden" aria-hidden="true">&nbsp;</div>' +
               '</div>' +
             '</div>' +
           '</div>' +
