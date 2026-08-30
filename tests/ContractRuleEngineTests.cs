@@ -251,10 +251,10 @@ public class ContractRuleEngineTests
     }
 
     // --- CONTRACT_LARGE_DEAL_REVIEW ---
-    [Theory(DisplayName = "23-26. CONTRACT_LARGE_DEAL_REVIEW trigger, reviewed, not_applicable NEVER triggers")]
+    [Theory(DisplayName = "23-26. CONTRACT_LARGE_DEAL_REVIEW trigger, reviewed, unknown non-trigger, not_applicable NEVER triggers")]
     [InlineData("sometimes", true)]
     [InlineData("often_unreviewed", true)]
-    [InlineData("unknown", true)]
+    [InlineData("unknown", false)]
     [InlineData("reviewed", false)]
     [InlineData("not_applicable", false)]
     public void ContractLargeDealReview_Triggers(string review, bool expectedFinding)
@@ -404,29 +404,24 @@ public class ContractRuleEngineTests
         Assert.DoesNotContain(result.Risks, r => r.Code == "CONTRACT_LARGE_DEAL_REVIEW");
     }
 
-    [Fact(DisplayName = "40. Explicit unknown != absent in fact evaluation")]
-    public void Explicit_Unknown_Not_Equal_To_Absent()
+    [Fact(DisplayName = "40. CONTRACT-07 = unknown lowers confidence without emitting CONTRACT_LARGE_DEAL_REVIEW")]
+    public void Contract07_Unknown_Lowers_Confidence_Without_Finding()
     {
-        var absentFacts = new SharedFactStore
+        var rawAnswers = new Dictionary<string, object>
         {
-            Facts = new Dictionary<string, object?>
-            {
-                ["contracts.b2bRelevant"] = true
-            }
+            ["CONTRACT-01"] = new List<string> { "clients" },
+            ["CONTRACT-02"] = "always",
+            ["CONTRACT-03"] = "clear",
+            ["CONTRACT-04"] = "clear",
+            ["CONTRACT-05"] = "clear",
+            ["CONTRACT-06"] = "custom",
+            ["CONTRACT-07"] = "unknown", // Lowers confidence, but NO finding
+            ["CONTRACT-08"] = "no"
         };
-        var resAbsent = _ruleEngine.Evaluate(absentFacts, DataBank.Risks);
-        Assert.Empty(resAbsent);
 
-        var unknownFacts = new SharedFactStore
-        {
-            Facts = new Dictionary<string, object?>
-            {
-                ["contracts.b2bRelevant"] = true,
-                ["contracts.largeDealReview"] = "unknown"
-            }
-        };
-        var resUnknown = _ruleEngine.Evaluate(unknownFacts, DataBank.Risks);
-        Assert.Contains(resUnknown, r => r.Code == "CONTRACT_LARGE_DEAL_REVIEW");
+        var result = _engine.ComputeResult(rawAnswers);
+        Assert.True(result.Confidence < 100);
+        Assert.DoesNotContain(result.Risks, r => r.Code == "CONTRACT_LARGE_DEAL_REVIEW");
     }
 
     [Fact(DisplayName = "41. Payment_termination can be weak without invented finding")]

@@ -93,9 +93,9 @@ public class ContractRuleEngine : IModuleRuleEngine
         }
 
         // ─── 6. CONTRACT_LARGE_DEAL_REVIEW (§25) ─────────────────────────────
-        // contracts.largeDealReview in [sometimes, often_unreviewed, unknown] -> MEDIUM
-        // (CRITICAL INVARIANT: not_applicable NEVER triggers)
-        if (largeDealReview is "sometimes" or "often_unreviewed" or "unknown")
+        // contracts.largeDealReview in [sometimes, often_unreviewed] -> MEDIUM
+        // (CRITICAL INVARIANT: not_applicable NEVER triggers; unknown lowers confidence only)
+        if (largeDealReview is "sometimes" or "often_unreviewed")
         {
             AddFinding(list, allRisks, "CONTRACT_LARGE_DEAL_REVIEW", "CONTRACT-07", largeDealReview, RiskSeverity.Medium);
         }
