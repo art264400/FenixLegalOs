@@ -36,12 +36,11 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const s = JSON.parse(raw);
-        // Migrate old state shape (idx → currentQuestionId)
-        if (s.idx !== undefined && s.currentQuestionId === undefined) {
-          s.currentQuestionId = null;
-          delete s.idx;
-        }
-        return s;
+        return {
+          sessionId: s.sessionId || null,
+          answers: (typeof s.answers === 'object' && s.answers !== null) ? s.answers : {},
+          currentQuestionId: s.currentQuestionId || null
+        };
       }
     } catch (e) { /* ignore */ }
     return { sessionId: null, answers: {}, currentQuestionId: null };
@@ -119,7 +118,6 @@
     });
     serverNav = nav;
     state.currentQuestionId = nav.currentQuestionId;
-    state.idx = nav.current > 0 ? nav.current - 1 : 0;
     saveState();
     return nav;
   }
@@ -354,46 +352,46 @@
         '</div>' +
       '</section>'
     );
-    document.getElementById('start-btn').addEventListener('click', async function () {
+    async function startDiagnosticSession() {
+      render(
+        '<section class="q-screen wrap-narrow">' +
+          '<div class="spinner" style="margin:50px auto"></div>' +
+        '</section>'
+      );
       try {
         const created = await api('POST', '/api/sessions');
         state.sessionId = created.id;
+        state.answers = {};
+        state.currentQuestionId = null;
+        serverNav = null;
+        lastResult = null;
+        unlocked = false;
+        isPaid = false;
+        saveState();
+        location.hash = '#/diagnostic';
       } catch (e) {
-        state.sessionId = 'local_' + Date.now();
+        render(
+          '<section class="q-screen wrap-narrow">' +
+            '<h2 style="color:var(--critical); font-size:24px;">Ошибка создания сессии</h2>' +
+            '<p style="color:var(--ink-soft); margin:12px 0 24px;">Не удалось подключиться к серверу для начала диагностики. Проверьте подключение к сети.</p>' +
+            '<div class="q-nav">' +
+              '<button class="btn" id="retry-session-btn">Повторить</button>' +
+              '<button class="btn-ghost" id="cancel-session-btn">На главную</button>' +
+            '</div>' +
+          '</section>'
+        );
+        const retryBtn = document.getElementById('retry-session-btn');
+        if (retryBtn) retryBtn.addEventListener('click', startDiagnosticSession);
+        const cancelBtn = document.getElementById('cancel-session-btn');
+        if (cancelBtn) cancelBtn.addEventListener('click', function () { location.hash = '#/'; });
       }
-      state.answers = {};
-      state.currentQuestionId = null;
-      state.idx = 0;
-      serverNav = null;
-      lastResult = null;
-      unlocked = false;
-      isPaid = false;
-      saveState();
-      location.hash = '#/diagnostic';
-    });
-
-    async function startDiagnostic() {
-      try {
-        const created = await api('POST', '/api/sessions');
-        state.sessionId = created.id;
-      } catch (e) {
-        state.sessionId = 'local_' + Date.now();
-      }
-      state.answers = {};
-      state.currentQuestionId = null;
-      state.idx = 0;
-      serverNav = null;
-      lastResult = null;
-      unlocked = false;
-      isPaid = false;
-      saveState();
-      location.hash = '#/diagnostic';
     }
 
+    document.getElementById('start-btn').addEventListener('click', startDiagnosticSession);
     const btn2 = document.getElementById('start-btn-2');
-    if (btn2) btn2.addEventListener('click', startDiagnostic);
+    if (btn2) btn2.addEventListener('click', startDiagnosticSession);
     const btn3 = document.getElementById('start-btn-3');
-    if (btn3) btn3.addEventListener('click', startDiagnostic);
+    if (btn3) btn3.addEventListener('click', startDiagnosticSession);
 
     // Обновляем цены из БД
     fetchPricing().then(function () {
@@ -425,23 +423,7 @@
         '</div>' +
       '</section>'
     );
-    document.getElementById('continue-btn').addEventListener('click', async function () {
-      try {
-        const created = await api('POST', '/api/sessions');
-        state.sessionId = created.id;
-      } catch (e) {
-        state.sessionId = 'local_' + Date.now();
-      }
-      state.answers = {};
-      state.currentQuestionId = null;
-      state.idx = 0;
-      serverNav = null;
-      lastResult = null;
-      unlocked = false;
-      isPaid = false;
-      saveState();
-      location.hash = '#/diagnostic';
-    });
+    document.getElementById('continue-btn').addEventListener('click', startDiagnosticSession);
   }
 
   function syncAnswers(sectionId) {
@@ -852,7 +834,6 @@
         if (res && res.navigation) {
           serverNav = res.navigation;
           state.currentQuestionId = res.navigation.currentQuestionId;
-          state.idx = res.navigation.current > 0 ? res.navigation.current - 1 : 0;
           saveState();
         } else {
           await syncNav(state.answers, serverNav.nextQuestionId);

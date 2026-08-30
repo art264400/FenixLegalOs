@@ -1,4 +1,4 @@
-﻿using FenixLegalOs.Data;
+using FenixLegalOs.Data;
 using FenixLegalOs.Models;
 using FenixLegalOs.Models.Enums;
 using FenixLegalOs.Repositories;
@@ -256,5 +256,43 @@ public class ArchitectureAFinalizationTests
         var result = _engine.ComputeResult(answers);
 
         Assert.DoesNotContain(result.Risks, r => r.Code == "TEAM_FOREIGN_TEAM_REVIEW");
+    }
+
+    // ─── 6. Progress and Navigation Invariants ────────────────────────────
+
+    [Fact(DisplayName = "Nav.26 Progress invariant: Current and TotalVisible are exact and 1-based")]
+    public void Navigation_Progress_Current_And_TotalVisible_Are_Exact()
+    {
+        var answers = new Dictionary<string, object>
+        {
+            ["TEAM-01"] = new List<string> { "employees" }
+        };
+        var navFirst = _engine.GetNavigationState(answers);
+        Assert.Equal(1, navFirst.Current);
+        Assert.True(navFirst.TotalVisible > 0);
+
+        var thirdId = navFirst.VisibleQuestionIds[2];
+        var navThird = _engine.GetNavigationState(answers, thirdId);
+        Assert.Equal(3, navThird.Current);
+        Assert.Equal(navFirst.TotalVisible, navThird.TotalVisible);
+        Assert.Equal(thirdId, navThird.CurrentQuestionId);
+        Assert.Equal(navFirst.VisibleQuestionIds[1], navThird.PreviousQuestionId);
+        Assert.Equal(navFirst.VisibleQuestionIds[3], navThird.NextQuestionId);
+    }
+
+    [Fact(DisplayName = "Nav.27 Last question has null NextQuestionId indicating completion")]
+    public void Navigation_Last_Question_Has_Null_Next()
+    {
+        var answers = new Dictionary<string, object>
+        {
+            ["TEAM-01"] = new List<string> { "none" }
+        };
+        var nav = _engine.GetNavigationState(answers);
+        var lastId = nav.VisibleQuestionIds.Last();
+
+        var navLast = _engine.GetNavigationState(answers, lastId);
+        Assert.Equal(lastId, navLast.CurrentQuestionId);
+        Assert.Null(navLast.NextQuestionId);
+        Assert.Equal(navLast.TotalVisible, navLast.Current);
     }
 }
