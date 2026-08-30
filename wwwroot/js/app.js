@@ -829,14 +829,14 @@
         const res = await api('PUT', '/api/sessions/' + state.sessionId + '/answers', {
           answers: state.answers,
           lastSectionId: prevSection,
-          currentQuestionId: serverNav.nextQuestionId
+          answeredQuestionId: q.id
         });
         if (res && res.navigation) {
           serverNav = res.navigation;
           state.currentQuestionId = res.navigation.currentQuestionId;
           saveState();
         } else {
-          await syncNav(state.answers, serverNav.nextQuestionId);
+          await syncNav(state.answers, state.currentQuestionId);
         }
 
         if (!serverNav || !serverNav.currentQuestionId) {

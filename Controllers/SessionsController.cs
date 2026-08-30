@@ -67,12 +67,13 @@ public class SessionsController : ControllerBase
 
         string? lastSectionId = body.TryGetProperty("lastSectionId", out var secProp) ? secProp.GetString() : null;
         string? currentQuestionId = body.TryGetProperty("currentQuestionId", out var cqProp) ? cqProp.GetString() : null;
+        string? answeredQuestionId = body.TryGetProperty("answeredQuestionId", out var aqProp) ? aqProp.GetString() : null;
 
         bool ok = _sessions.SaveAnswers(id, answersJson, lastSectionId);
         if (!ok) return NotFound(new { error = "not_found" });
 
         // Architecture A: Return authoritative navigation state alongside save acknowledgement.
-        var navigation = _scoringEngine.GetNavigationState(answersDict, currentQuestionId);
+        var navigation = _scoringEngine.GetNavigationState(answersDict, currentQuestionId, answeredQuestionId);
         return Ok(new { accepted = true, navigation });
     }
 

@@ -144,7 +144,8 @@ public class ScoringEngine
     /// </summary>
     public NavigationState GetNavigationState(
         Dictionary<string, object> answers,
-        string? currentQuestionId = null)
+        string? currentQuestionId = null,
+        string? answeredQuestionId = null)
     {
         var allQuestions = _repository.GetQuestions();
         var (visibleQs, _, _) = ResolveEffectiveState(allQuestions, answers);
@@ -165,12 +166,42 @@ public class ScoringEngine
             };
         }
 
-        // Find current index: use requested currentQuestionId, or snap to first.
-        int currentIndex = currentQuestionId != null
-            ? visibleIds.IndexOf(currentQuestionId)
-            : -1;
+        int currentIndex = -1;
 
-        // Snap to first if not found in visible list (question became hidden after earlier answer change).
+        // 1. If answeredQuestionId is provided, advance to the question strictly following it in the updated visible list
+        if (!string.IsNullOrEmpty(answeredQuestionId))
+        {
+            int answeredIndex = visibleIds.IndexOf(answeredQuestionId);
+            if (answeredIndex >= 0)
+            {
+                int nextIdx = answeredIndex + 1;
+                if (nextIdx < total)
+                {
+                    currentIndex = nextIdx;
+                }
+                else
+                {
+                    // Questionnaire completed!
+                    return new NavigationState
+                    {
+                        VisibleQuestionIds = visibleIds,
+                        CurrentQuestionId = null,
+                        PreviousQuestionId = visibleIds[total - 1],
+                        NextQuestionId = null,
+                        Current = total + 1,
+                        TotalVisible = total
+                    };
+                }
+            }
+        }
+
+        // 2. If currentQuestionId is provided, look it up in visibleIds
+        if (currentIndex < 0 && !string.IsNullOrEmpty(currentQuestionId))
+        {
+            currentIndex = visibleIds.IndexOf(currentQuestionId);
+        }
+
+        // 3. Fallback: snap to first visible question
         if (currentIndex < 0) currentIndex = 0;
 
         return new NavigationState

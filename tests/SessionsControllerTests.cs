@@ -96,4 +96,21 @@ public class SessionsControllerTests
         Assert.True(ipIndices.Max() < teamIndices.Min(), "All IP questions must precede Team questions");
         Assert.True(teamIndices.Max() < prodIndices.Min(), "All Team questions must precede Product questions");
     }
+
+    [Fact(DisplayName = "3. Answering FND-C01 as solo advances directly to COR-C01 without looping or snapping back")]
+    public void Answering_Solo_Advances_Directly_To_Corporate()
+    {
+        var createResult = _controller.CreateSession() as OkObjectResult;
+        var sessionId = createResult?.Value?.GetType().GetProperty("id")?.GetValue(createResult.Value)?.ToString()!;
+
+        // Save answers: FND-C01 = solo with answeredQuestionId = FND-C01
+        var body = JsonDocument.Parse("{\"answers\":{\"FND-C01\":\"solo\"},\"answeredQuestionId\":\"FND-C01\",\"lastSectionId\":\"founders\"}").RootElement;
+        var saveResult = _controller.SaveAnswers(sessionId, body) as OkObjectResult;
+        Assert.NotNull(saveResult);
+
+        var navProp = saveResult.Value?.GetType().GetProperty("navigation")?.GetValue(saveResult.Value) as NavigationState;
+        Assert.NotNull(navProp);
+        Assert.Equal("COR-C01", navProp.CurrentQuestionId);
+        Assert.DoesNotContain("FND-C02", navProp.VisibleQuestionIds);
+    }
 }

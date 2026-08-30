@@ -58,7 +58,7 @@ public class ConditionsEvaluator
         }
 
         if (!answers.TryGetValue(rule.QuestionId, out var rawVal) || rawVal == null)
-            return op is ConditionalOperator.Neq or ConditionalOperator.NotIn or ConditionalOperator.NotContains;
+            return false;
 
         if (rawVal is JsonElement je && je.ValueKind == JsonValueKind.Array)
         {
