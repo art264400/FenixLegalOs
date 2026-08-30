@@ -13,6 +13,7 @@ public class ModuleScorer
             "corporate" => (string?)f.GetValueOrDefault("company.entityStatus") is "incorporated" or "registering",
             "ip" => true,
             "team" => GetBoolFact(f, "team.hasNonFounderTeam"),
+            "product" => true,
             "data" => GetBoolFact(f, "data.personalDataProcessed") || GetBoolFact(f, "ai.used"),
             "contracts" => GetBoolFact(f, "contracts.b2bRelevant"),
             "investment" => (string?)f.GetValueOrDefault("investment.timing") != "none" || GetBoolFact(f, "investment.priorInvestment"),

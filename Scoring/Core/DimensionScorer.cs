@@ -38,11 +38,11 @@ public class DimensionScorer
             {
                 if (!answers.TryGetValue(q.Id, out var ansVal) || ansVal == null) continue;
                 var opt = q.Options?.FirstOrDefault(o => o.Id == ansVal.ToString());
-                if (opt == null) continue;
+                if (opt == null || !opt.Score.HasValue) continue;
 
                 double withinWeight = q.WithinDimensionWeight > 0 ? q.WithinDimensionWeight : 100.0;
                 applicableWithinDimWeightSum += withinWeight;
-                weightedQuestionScoreSum += opt.Score * withinWeight;
+                weightedQuestionScoreSum += opt.Score.Value * withinWeight;
 
                 // Track question-level confidence
                 confidenceTracker?.TrackQuestion(opt.ConfidenceClass, firstDimWeight, withinWeight);

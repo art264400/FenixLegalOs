@@ -4,6 +4,7 @@ using FenixLegalOs.Scoring.Interfaces;
 using FenixLegalOs.Scoring.Modules.Corporate;
 using FenixLegalOs.Scoring.Modules.Founders;
 using FenixLegalOs.Scoring.Modules.IP;
+using FenixLegalOs.Scoring.Modules.Product;
 using FenixLegalOs.Scoring.Modules.Team;
 
 namespace FenixLegalOs.Scoring.Core;
@@ -18,7 +19,8 @@ public class FactNormalizer
         new FoundersFactNormalizer(),
         new CorporateFactNormalizer(),
         new IpFactNormalizer(),
-        new TeamFactNormalizer()
+        new TeamFactNormalizer(),
+        new ProductFactNormalizer()
     };
 
     public static SharedFactStore NormalizeFacts(Dictionary<string, object> answers)

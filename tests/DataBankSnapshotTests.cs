@@ -24,14 +24,15 @@ public class DataBankSnapshotTests
     public void DataBank_Counts_And_Module_Integrity()
     {
         // 1. Sections
-        Assert.Equal(4, DataBank.Sections.Count);
+        Assert.Equal(5, DataBank.Sections.Count);
 
         // 2. Questions Total & by Module
-        Assert.Equal(66, DataBank.Questions.Count);
+        Assert.Equal(94, DataBank.Questions.Count);
         Assert.Equal(17, FoundersQuestions.All.Count);
         Assert.Equal(15, CorporateQuestions.All.Count);
         Assert.Equal(17, IpQuestions.All.Count);
         Assert.Equal(17, TeamQuestions.All.Count);
+        Assert.Equal(28, ProductQuestions.All.Count);
 
         // 3. Risks Total & by Module
         Assert.Equal(54, DataBank.Risks.Count);
@@ -46,6 +47,7 @@ public class DataBankSnapshotTests
         aggregatedQuestions.AddRange(CorporateQuestions.All);
         aggregatedQuestions.AddRange(IpQuestions.All);
         aggregatedQuestions.AddRange(TeamQuestions.All);
+        aggregatedQuestions.AddRange(ProductQuestions.All);
 
         Assert.Equal(aggregatedQuestions.Count, DataBank.Questions.Count);
         for (int i = 0; i < aggregatedQuestions.Count; i++)

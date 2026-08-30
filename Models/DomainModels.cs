@@ -14,7 +14,7 @@ public record DiagnosticSection(
 public record AnswerOption(
     string Id,
     string Label,
-    double Score,
+    double? Score = 1.0,
     string? Severity = null,
     string? RiskCode = null,
     bool Exclusive = false,
