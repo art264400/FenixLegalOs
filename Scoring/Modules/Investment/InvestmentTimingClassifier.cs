@@ -22,8 +22,8 @@ public static class InvestmentTimingClassifier
         return timing switch
         {
             "terms_received" or "specific_investor" or "active_search" => FundraisingTimingBucket.ActiveRound,
-            "3_6m" or "6_12m" or "within_12m" => FundraisingTimingBucket.MidTerm,
-            _ => FundraisingTimingBucket.None
+            "3_6m" or "6_12m" => FundraisingTimingBucket.MidTerm,
+            _ => FundraisingTimingBucket.None // "within_12m", "none", null -> fail-closed (no matrix escalation)
         };
     }
 

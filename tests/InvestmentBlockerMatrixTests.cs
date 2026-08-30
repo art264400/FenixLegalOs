@@ -221,4 +221,95 @@ public class InvestmentBlockerMatrixTests : IDisposable
         Assert.NotNull(finding);
         Assert.Equal(RiskSeverity.Critical, finding.Severity);
     }
+
+    // =========================================================================
+    // 10. materialDDIssue Domain (Rows 1-5 -> true, Rows 6-9 -> false)
+    // =========================================================================
+
+    [Theory(DisplayName = "10. materialDDIssue domain: Rows 1-5 trigger materialDDIssue=true, Rows 6-9 trigger false")]
+    [InlineData("INVEST_PRIOR_INVESTMENT_UNCLEAR", true)]
+    [InlineData("FND_EQUITY_DISPUTE", true)]
+    [InlineData("COR_OWNERSHIP_MISMATCH", true)]
+    [InlineData("IP_PRODUCT_RIGHTS_UNCONFIRMED", true)]
+    [InlineData("FND_DEPARTED_UNRESOLVED", true)]
+    [InlineData("INVEST_METRICS_UNVERIFIABLE", false)]
+    [InlineData("INVEST_DD_DOCS_NOT_READY", false)]
+    [InlineData("INVEST_FIN_MODEL_WEAK", false)]
+    [InlineData("INVEST_TERMS_NOT_UNDERSTOOD", false)]
+    public void MaterialDDIssue_Domain_Evaluation(string riskCode, bool expectedMaterial)
+    {
+        var facts = new SharedFactStore();
+        facts.Facts["investment.timing"] = "active_search";
+
+        var findings = new List<RiskFinding>
+        {
+            new()
+            {
+                Code = riskCode,
+                Severity = RiskSeverity.Critical,
+                RootCauseGroup = "TEST_GROUP",
+                Title = "Test Finding"
+            }
+        };
+
+        var eval = Scoring.Modules.Investment.MaterialDdIssueEvaluator.Evaluate(findings, facts);
+        Assert.Equal(expectedMaterial, eval.HasMaterialDDIssue);
+    }
+
+    // =========================================================================
+    // 11. within_12m Fail-Closed Policy
+    // =========================================================================
+
+    [Fact(DisplayName = "11. within_12m fail-closed: does not trigger ROUND_BLOCKER or premature matrix escalation")]
+    public void Within_12m_Fail_Closed_Policy()
+    {
+        var raw = new Dictionary<string, object>
+        {
+            ["COR-C01"] = "one",
+            ["COR-01"] = "nominal", // Material mismatch
+            ["INVEST-01"] = "possible_year", // within_12m
+            ["INVEST-02"] = "no"
+        };
+
+        var result = _engine.ComputeResult(raw);
+
+        // Does NOT trigger INVEST_ROUND_BLOCKER (§27.2 requires timing in [3_6m, active_search, specific_investor, terms_received])
+        Assert.DoesNotContain(result.Risks, f => f.Code == "INVEST_ROUND_BLOCKER");
+
+        // COR_OWNERSHIP_MISMATCH retains its base High severity (not escalated to Critical/Blocker)
+        var mismatch = result.Risks.First(f => f.Code == "COR_OWNERSHIP_MISMATCH");
+        Assert.Equal(RiskSeverity.High, mismatch.Severity);
+    }
+
+    // =========================================================================
+    // 12. BEFORE_ROUND vs NOW Priority
+    // =========================================================================
+
+    [Fact(DisplayName = "12. DD-sensitive High finding receives BEFORE_ROUND priority in close round and normal priority otherwise")]
+    public void Priority_BeforeRound_Distinct_From_Now()
+    {
+        Assert.NotEqual(RiskPriority.Now, RiskPriority.BeforeRound);
+
+        // 1. Without close fundraising (timing = 6_12m, i.e. not within 6 months)
+        var rawRemote = new Dictionary<string, object>
+        {
+            ["INVEST-01"] = "6_12",
+            ["INVEST-02"] = "no",
+            ["INVEST-07"] = "none" // INVEST_FIN_MODEL_WEAK (High)
+        };
+        var resRemote = _engine.ComputeResult(rawRemote);
+        var finRemote = resRemote.Risks.First(f => f.Code == "INVEST_FIN_MODEL_WEAK");
+        Assert.Equal(RiskPriority.ThirtyDays, finRemote.Priority);
+
+        // 2. With close fundraising (timing = 3_6m, within 6 months)
+        var rawClose = new Dictionary<string, object>
+        {
+            ["INVEST-01"] = "3_6",
+            ["INVEST-02"] = "no",
+            ["INVEST-07"] = "none"
+        };
+        var resClose = _engine.ComputeResult(rawClose);
+        var finClose = resClose.Risks.First(f => f.Code == "INVEST_FIN_MODEL_WEAK");
+        Assert.Equal(RiskPriority.BeforeRound, finClose.Priority);
+    }
 }

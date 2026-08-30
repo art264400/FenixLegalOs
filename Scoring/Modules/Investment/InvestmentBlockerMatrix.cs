@@ -154,8 +154,11 @@ public static class InvestmentBlockerMatrix
             var updatedPriority = finding.Priority;
             if (isCloseOrActive && (updatedSev is RiskSeverity.High or RiskSeverity.Critical or RiskSeverity.Blocker))
             {
-                // §18: fundraising within 6 months: DD-sensitive High issues get priority BEFORE_ROUND / Now
-                updatedPriority = RiskPriority.Now;
+                // §18: fundraising within 6 months: DD-sensitive High issues get priority BEFORE_ROUND (unless already Now)
+                if (updatedPriority != RiskPriority.Now)
+                {
+                    updatedPriority = RiskPriority.BeforeRound;
+                }
             }
 
             result.Add(new RiskFinding
