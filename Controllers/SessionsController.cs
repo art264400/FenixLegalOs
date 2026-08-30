@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using FenixLegalOs.Models;
 using FenixLegalOs.Repositories;
 using FenixLegalOs.Services;
@@ -118,19 +118,19 @@ public class SessionsController : ControllerBase
     public IActionResult Navigate(string id, [FromBody] JsonElement body)
     {
         Dictionary<string, object> answers = new();
+        string? currentQuestionId = null;
 
         if (body.TryGetProperty("answers", out var answersProp))
         {
             answers = JsonSerializer.Deserialize<Dictionary<string, object>>(answersProp.GetRawText()) ?? new();
         }
-
-        var visibleIds = _scoringEngine.GetVisibleQuestionIds(answers);
-
-        return Ok(new
+        if (body.TryGetProperty("currentQuestionId", out var cqProp) && cqProp.ValueKind == JsonValueKind.String)
         {
-            visibleQuestionIds = visibleIds,
-            totalVisible = visibleIds.Count
-        });
+            currentQuestionId = cqProp.GetString();
+        }
+
+        var nav = _scoringEngine.GetNavigationState(answers, currentQuestionId);
+        return Ok(nav);
     }
 
     [HttpGet("{id}/result")]
