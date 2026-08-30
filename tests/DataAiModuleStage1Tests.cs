@@ -235,24 +235,84 @@ public class DataAiModuleStage1Tests
         Assert.True(ConditionsEvaluator.IsVisible(q18.ShowIf, answers, facts));
     }
 
-    // 17. DATA-19 reuse/skip condition exact (deferred cross-module requirement)
-    [Fact(DisplayName = "17. DATA-19 shows when team.offboardingProcess is unknown and skips when known")]
-    public void Data19_Skip_When_Team_Offboarding_Known()
+    // 17. DATA-19 reuse/skip condition exact across all 5 canonical states
+    [Fact(DisplayName = "17A. DATA-19 visible when team.offboardingProcess is absent")]
+    public void Data19_Visible_When_Offboarding_Absent()
     {
         var q19 = DataAiQuestions.All.First(x => x.Id == "DATA-19");
+        var answers = new Dictionary<string, object>
+        {
+            ["DATA-01"] = "yes",
+            ["TEAM-01"] = new List<string> { "employees" }
+            // TEAM-11 and TEAM-12 not answered / absent
+        };
+        var facts = FactNormalizer.NormalizeFacts(answers);
+        Assert.True(ConditionsEvaluator.IsVisible(q19.ShowIf, answers, facts));
+    }
 
+    [Fact(DisplayName = "17B. DATA-19 visible when team.offboardingProcess is explicit 'unknown'")]
+    public void Data19_Visible_When_Offboarding_Explicit_Unknown()
+    {
+        var q19 = DataAiQuestions.All.First(x => x.Id == "DATA-19");
+        var answers = new Dictionary<string, object>
+        {
+            ["DATA-01"] = "yes",
+            ["TEAM-01"] = new List<string> { "employees" },
+            ["TEAM-11"] = "unknown"
+        };
+        var facts = FactNormalizer.NormalizeFacts(answers);
+        Assert.True(ConditionsEvaluator.IsVisible(q19.ShowIf, answers, facts));
+    }
+
+    [Fact(DisplayName = "17C. DATA-19 visible when offboardingProcess is known but formerAccessStatus is absent")]
+    public void Data19_Visible_When_FormerAccessStatus_Absent()
+    {
+        var q19 = DataAiQuestions.All.First(x => x.Id == "DATA-19");
         var answers = new Dictionary<string, object>
         {
             ["DATA-01"] = "yes",
             ["TEAM-01"] = new List<string> { "employees" },
             ["TEAM-11"] = "systematic"
+            // TEAM-12 absent
+        };
+        var facts = FactNormalizer.NormalizeFacts(answers);
+        Assert.True(ConditionsEvaluator.IsVisible(q19.ShowIf, answers, facts));
+    }
+
+    [Fact(DisplayName = "17D. DATA-19 skipped when both offboardingProcess and formerAccessStatus are known")]
+    public void Data19_Skipped_When_Both_Team_Facts_Known()
+    {
+        var q19 = DataAiQuestions.All.First(x => x.Id == "DATA-19");
+        var answers = new Dictionary<string, object>
+        {
+            ["DATA-01"] = "yes",
+            ["TEAM-01"] = new List<string> { "employees" },
+            ["TEAM-11"] = "systematic",
+            ["TEAM-12"] = "closed"
         };
         var facts = FactNormalizer.NormalizeFacts(answers);
         Assert.False(ConditionsEvaluator.IsVisible(q19.ShowIf, answers, facts));
+    }
 
-        answers["TEAM-11"] = "unknown";
-        facts = FactNormalizer.NormalizeFacts(answers);
-        Assert.True(ConditionsEvaluator.IsVisible(q19.ShowIf, answers, facts));
+    [Fact(DisplayName = "17E. DATA-19 stale answers isolation: hidden TEAM answers do not cause DATA-19 to be skipped")]
+    public void Data19_Stale_Team_Answers_Do_Not_Cause_Skip()
+    {
+        var rawAnswers = new Dictionary<string, object>
+        {
+            ["DATA-01"] = "yes",
+            ["TEAM-01"] = new List<string> { "none" }, // Non-founder team is false
+            ["TEAM-11"] = "systematic",
+            ["TEAM-12"] = "closed"
+        };
+
+        var allQs = DataBank.Questions;
+        var (visibleQs, effectiveAnswers, factStore) = ScoringEngine.ResolveEffectiveState(allQs, rawAnswers);
+
+        // Under EffectiveAnswers, TEAM-11 and TEAM-12 are filtered out because TEAM-01=none hides them
+        Assert.DoesNotContain("TEAM-11", effectiveAnswers.Keys);
+        Assert.DoesNotContain("TEAM-12", effectiveAnswers.Keys);
+        Assert.False(factStore.Facts.ContainsKey("team.offboardingProcess"));
+        Assert.False(factStore.Facts.ContainsKey("team.formerAccessStatus"));
     }
 
     // 18. AI-01 no hides AI external branch
@@ -315,19 +375,46 @@ public class DataAiModuleStage1Tests
         Assert.True(ConditionsEvaluator.IsVisible(q06.ShowIf, answers, facts));
     }
 
-    // 22. AI-06A routing exact
-    [Fact(DisplayName = "22. AI-06A shows when trainingUse is active")]
-    public void Ai06A_Shows_When_Training_Active()
+    // 22. AI-06A routing exact & Boolean true vs string "true" verification
+    [Fact(DisplayName = "22A. AI-06=user_data produces boolean true and makes AI-06A visible")]
+    public void Ai06_UserData_Produces_Boolean_True_And_Shows_Ai06A()
     {
         var q06a = DataAiQuestions.All.First(x => x.Id == "AI-06A");
-
         var answers = new Dictionary<string, object> { ["AI-06"] = "user_data" };
         var facts = FactNormalizer.NormalizeFacts(answers);
-        Assert.True(ConditionsEvaluator.IsVisible(q06a.ShowIf, answers, facts));
 
-        answers["AI-06"] = "no";
-        facts = FactNormalizer.NormalizeFacts(answers);
-        Assert.False(ConditionsEvaluator.IsVisible(q06a.ShowIf, answers, facts));
+        var val = facts.Facts["ai.trainingUse"];
+        Assert.IsType<bool>(val);
+        Assert.True((bool)val);
+        Assert.True(ConditionsEvaluator.IsVisible(q06a.ShowIf, answers, facts));
+    }
+
+    [Fact(DisplayName = "22B. DATA-08=ai_training produces boolean true and makes AI-06A visible")]
+    public void Data08_Ai_Training_Produces_Boolean_True_And_Shows_Ai06A()
+    {
+        var q06a = DataAiQuestions.All.First(x => x.Id == "AI-06A");
+        var answers = new Dictionary<string, object>
+        {
+            ["DATA-08"] = new List<string> { "ai_training" }
+        };
+        var facts = FactNormalizer.NormalizeFacts(answers);
+
+        var val = facts.Facts["ai.trainingUse"];
+        Assert.IsType<bool>(val);
+        Assert.True((bool)val);
+        Assert.True(ConditionsEvaluator.IsVisible(q06a.ShowIf, answers, facts));
+    }
+
+    [Fact(DisplayName = "22C. Fact normalizer never produces string 'true' for ai.trainingUse")]
+    public void FactNormalizer_Never_Produces_String_True_For_AiTrainingUse()
+    {
+        var answers1 = new Dictionary<string, object> { ["AI-06"] = "user_data" };
+        var facts1 = FactNormalizer.NormalizeFacts(answers1);
+        Assert.IsNotType<string>(facts1.Facts["ai.trainingUse"]);
+
+        var answers2 = new Dictionary<string, object> { ["DATA-08"] = new List<string> { "ai_training" } };
+        var facts2 = FactNormalizer.NormalizeFacts(answers2);
+        Assert.IsNotType<string>(facts2.Facts["ai.trainingUse"]);
     }
 
     // 23. AI-07A only automatic

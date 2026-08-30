@@ -422,7 +422,12 @@ public static class DataAiQuestions
             ShowIf = new() {
                 new() { QuestionId = "data.personalDataProcessed", Op = ConditionalOperator.Eq, Value = "true" },
                 new() { QuestionId = "team.hasNonFounderTeam", Op = ConditionalOperator.Eq, Value = "true" },
-                new() { QuestionId = "team.offboardingProcess", Op = ConditionalOperator.In, Value = new List<string> { "unknown" } }
+                new() {
+                    Any = new List<ConditionalRule> {
+                        new() { QuestionId = "team.offboardingProcess", Op = ConditionalOperator.NotIn, Value = new List<string> { "systematic", "informal", "case_by_case", "none" } },
+                        new() { QuestionId = "team.formerAccessStatus", Op = ConditionalOperator.NotIn, Value = new List<string> { "closed", "not_sure", "retained" } }
+                    }
+                }
             },
             Question = "Осуществляется ли отзыв доступов к базам данных при прекращении работы с сотрудниками?",
             Explanation = "Вопрос отображается, если процесс офбординга команды не был определен в блоке Team.",
@@ -561,7 +566,7 @@ public static class DataAiQuestions
         new() {
             Id = "AI-06A", SectionId = "data", DimensionId = "ai_training", Order = 27, Type = QuestionType.Single, ScoreMode = ScoreMode.Diagnostic, Weight = 6, DimensionWeight = 6, WithinDimensionWeight = 60,
             ShowIf = new() {
-                new() { QuestionId = "ai.trainingUse", Op = ConditionalOperator.In, Value = new List<string> { "deidentified", "true", "possible_undefined", "unknown" } }
+                new() { QuestionId = "ai.trainingUse", Op = ConditionalOperator.In, Value = new List<object> { "deidentified", true, "possible_undefined", "unknown" } }
             },
             Question = "Раскрыт ли пользователям факт обучения моделей на их данных и предусмотрен ли отказ (Opt-Out)?",
             Explanation = "Пользователи должны иметь возможность запретить использование своих материалов для трейнинга AI.",

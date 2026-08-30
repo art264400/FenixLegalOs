@@ -27,16 +27,31 @@ public class ConditionsEvaluator
         // Check if QuestionId refers to a FactStore key
         if (factStore != null && (rule.QuestionId.Contains('.') || factStore.Facts.ContainsKey(rule.QuestionId)))
         {
-            if (factStore.Facts.TryGetValue(rule.QuestionId, out var factVal))
+            if (factStore.Facts.TryGetValue(rule.QuestionId, out var factVal) && factVal != null)
             {
-                if (factVal is bool b && bool.TryParse(rule.Value?.ToString(), out var targetBool))
+                if (factVal is bool b)
                 {
-                    return op switch
+                    if (op == ConditionalOperator.In)
+                        return RuleValueContains(rule.Value, b);
+                    if (op == ConditionalOperator.NotIn)
+                        return !RuleValueContains(rule.Value, b);
+
+                    bool targetBool = false;
+                    bool isBool = rule.Value is bool rb ? (targetBool = rb, true).Item2 : bool.TryParse(rule.Value?.ToString(), out targetBool);
+
+                    if (isBool)
                     {
-                        ConditionalOperator.Eq => b == targetBool,
-                        ConditionalOperator.Neq => b != targetBool,
-                        _ => throw new InvalidOperationException($"Unsupported boolean conditional operator: '{op}' for key '{rule.QuestionId}'")
-                    };
+                        if (op == ConditionalOperator.Eq) return b == targetBool;
+                        if (op == ConditionalOperator.Neq) return b != targetBool;
+                    }
+                    else
+                    {
+                        var bStr = b ? "true" : "false";
+                        var rStr = rule.Value?.ToString() ?? "";
+                        if (op == ConditionalOperator.Eq) return bStr.Equals(rStr, StringComparison.OrdinalIgnoreCase);
+                        if (op == ConditionalOperator.Neq) return !bStr.Equals(rStr, StringComparison.OrdinalIgnoreCase);
+                    }
+                    return false;
                 }
                 if (factVal is IEnumerable<string> strList)
                 {
@@ -49,15 +64,25 @@ public class ConditionsEvaluator
                         _ => throw new InvalidOperationException($"Unsupported collection conditional operator: '{op}' for key '{rule.QuestionId}'")
                     };
                 }
-                if (factVal != null)
-                {
-                    return EvaluateOp(op, factVal.ToString() ?? "", rule.Value, factVal, rule.QuestionId);
-                }
+                return EvaluateOp(op, factVal.ToString() ?? "", rule.Value, factVal, rule.QuestionId);
             }
+
+            // Fact is absent (null) in factStore
+            return op switch
+            {
+                ConditionalOperator.Neq or ConditionalOperator.NotIn or ConditionalOperator.NotContains => true,
+                _ => false
+            };
         }
 
         if (!answers.TryGetValue(rule.QuestionId, out var rawVal) || rawVal == null)
-            return false;
+        {
+            return op switch
+            {
+                ConditionalOperator.Neq or ConditionalOperator.NotIn or ConditionalOperator.NotContains => true,
+                _ => false
+            };
+        }
 
         if (rawVal is JsonElement je && je.ValueKind == JsonValueKind.Array)
         {
@@ -106,15 +131,44 @@ public class ConditionsEvaluator
         };
     }
 
-    private static bool RuleValueContains(object? ruleVal, string val)
+    private static bool RuleValueContains(object? ruleVal, object? val)
     {
+        if (ruleVal == null || val == null) return false;
+
+        if (ruleVal is IEnumerable<object> objEnum && ruleVal is not string)
+        {
+            foreach (var item in objEnum)
+            {
+                if (item is bool itemBool && val is bool valBool)
+                {
+                    if (itemBool == valBool) return true;
+                }
+                else if (string.Equals(item?.ToString(), val.ToString(), StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (ruleVal is IEnumerable<string> strEnum && ruleVal is not string)
+        {
+            var valStr = val.ToString() ?? "";
+            return strEnum.Any(x => x.Equals(valStr, StringComparison.OrdinalIgnoreCase));
+        }
         if (ruleVal is JsonElement je)
         {
             if (je.ValueKind == JsonValueKind.Array)
             {
                 foreach (var item in je.EnumerateArray())
                 {
-                    if (item.ToString().Equals(val, StringComparison.OrdinalIgnoreCase)) return true;
+                    if (val is bool b && (item.ValueKind == JsonValueKind.True || item.ValueKind == JsonValueKind.False))
+                    {
+                        if (item.GetBoolean() == b) return true;
+                    }
+                    else if (item.ToString().Equals(val.ToString(), StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
                 }
                 return false;
             }
@@ -124,23 +178,19 @@ public class ConditionsEvaluator
                 if (str.Contains(','))
                 {
                     return str.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-                        .Any(x => x.Equals(val, StringComparison.OrdinalIgnoreCase));
+                        .Any(x => x.Equals(val.ToString(), StringComparison.OrdinalIgnoreCase));
                 }
-                return str.Equals(val, StringComparison.OrdinalIgnoreCase);
+                return str.Equals(val.ToString(), StringComparison.OrdinalIgnoreCase);
             }
-        }
-        if (ruleVal is List<string> list)
-        {
-            return list.Any(x => x.Equals(val, StringComparison.OrdinalIgnoreCase));
         }
         if (ruleVal is string s)
         {
             if (s.Contains(','))
             {
                 return s.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-                    .Any(x => x.Equals(val, StringComparison.OrdinalIgnoreCase));
+                    .Any(x => x.Equals(val.ToString(), StringComparison.OrdinalIgnoreCase));
             }
-            return s.Equals(val, StringComparison.OrdinalIgnoreCase);
+            return s.Equals(val.ToString(), StringComparison.OrdinalIgnoreCase);
         }
         return false;
     }
