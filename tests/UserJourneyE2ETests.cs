@@ -192,17 +192,19 @@ public class UserJourneyE2ETests
             ["PROD-22"] = new List<string> { "none" },
             ["DATA-01"] = "no",
             ["DATA-02"] = new List<string> { "none" },
-            ["AI-01"] = "no"
+            ["AI-01"] = "no",
+            ["CONTRACT-01"] = new List<string> { "none" }
         };
 
         var journey = await RunUserJourneyAsync(soloAnswers);
 
-        // Verify that journey was short (~18 questions instead of 124)
-        Assert.True(journey.StepCount <= 22, $"Expected <= 22 steps, got {journey.StepCount}");
+        // Verify that journey was short (~19 questions instead of 133)
+        Assert.True(journey.StepCount <= 25, $"Expected <= 25 steps, got {journey.StepCount}");
         Assert.Contains("FND-C01", journey.VisitedQuestionIds);
         Assert.Contains("COR-C01", journey.VisitedQuestionIds);
         Assert.Contains("IP-01", journey.VisitedQuestionIds);
         Assert.Contains("TEAM-01", journey.VisitedQuestionIds);
+        Assert.Contains("CONTRACT-01", journey.VisitedQuestionIds);
         Assert.Contains("PROD-01", journey.VisitedQuestionIds);
         Assert.Contains("DATA-01", journey.VisitedQuestionIds);
         Assert.Contains("AI-01", journey.VisitedQuestionIds);

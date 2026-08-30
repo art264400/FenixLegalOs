@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  fenix-legal-os:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fenix-legal-os
+    restart: unless-stopped
+    ports:
+      - "5050:5050"
+    environment:
+      - PORT=5050
+      - FENIX_DB_PATH=/data/fenix.db
+      - ASPNETCORE_ENVIRONMENT=Production
+    volumes:
+      - fenix_data:/data
+
+volumes:
+  fenix_data:
+    driver: local

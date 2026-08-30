@@ -31,4 +31,5 @@ Thumbs.db
 Properties/launchSettings.json
 appsettings.Development.json
 deploy.ps1
+publish/
 

@@ -1,6 +1,7 @@
 using FenixLegalOs.Models;
 using FenixLegalOs.Models.Enums;
 using FenixLegalOs.Scoring.Interfaces;
+using FenixLegalOs.Scoring.Modules.Contracts;
 using FenixLegalOs.Scoring.Modules.Corporate;
 using FenixLegalOs.Scoring.Modules.DataAi;
 using FenixLegalOs.Scoring.Modules.Founders;
@@ -22,7 +23,8 @@ public class FactNormalizer
         new IpFactNormalizer(),
         new TeamFactNormalizer(),
         new ProductFactNormalizer(),
-        new DataAiFactNormalizer()
+        new DataAiFactNormalizer(),
+        new ContractFactNormalizer()
     };
 
     public static SharedFactStore NormalizeFacts(Dictionary<string, object> answers)
@@ -56,7 +58,7 @@ public class FactNormalizer
 
         // =========================================================================
         // TEMPORARY MIGRATION DEBT (§24 Baseline signals)
-        // To be extracted into Contracts, Investment modules
+        // To be extracted into Investment module
         // in subsequent module extraction passes.
         // =========================================================================
         var f = store.Facts;
@@ -74,12 +76,6 @@ public class FactNormalizer
             bool hasRev = (rev01 != "none" && !string.IsNullOrEmpty(rev01)) || (revC01 != "none" && !string.IsNullOrEmpty(revC01));
             f["company.hasRevenue"] = hasRev;
             f["revenue.exists"] = hasRev;
-        }
-
-        var contract01 = GetAnswerStr(answers, "CONTRACT-01");
-        if (!string.IsNullOrEmpty(contract01))
-        {
-            f["contracts.b2bRelevant"] = contract01 != "none";
         }
 
         var invest01 = GetAnswerStr(answers, "INVEST-01");
