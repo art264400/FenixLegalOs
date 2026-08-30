@@ -1,4 +1,4 @@
-﻿using FenixLegalOs.Models;
+using FenixLegalOs.Models;
 using FenixLegalOs.Models.Enums;
 using FenixLegalOs.Repositories;
 using FenixLegalOs.Scoring.Core;
@@ -6,6 +6,7 @@ using FenixLegalOs.Scoring.Interfaces;
 using FenixLegalOs.Scoring.Modules.Corporate;
 using FenixLegalOs.Scoring.Modules.Founders;
 using FenixLegalOs.Scoring.Modules.IP;
+using FenixLegalOs.Scoring.Modules.Product;
 using FenixLegalOs.Scoring.Modules.Team;
 
 namespace FenixLegalOs.Services;
@@ -23,7 +24,8 @@ public class ScoringEngine
             new FoundersRuleEngine(),
             new CorporateRuleEngine(),
             new IpRuleEngine(),
-            new TeamRuleEngine()
+            new TeamRuleEngine(),
+            new ProductRuleEngine()
         };
     }
 

@@ -35,11 +35,12 @@ public class DataBankSnapshotTests
         Assert.Equal(28, ProductQuestions.All.Count);
 
         // 3. Risks Total & by Module
-        Assert.Equal(54, DataBank.Risks.Count);
+        Assert.Equal(67, DataBank.Risks.Count);
         Assert.Equal(18, FoundersRisks.All.Count);
         Assert.Equal(11, CorporateRisks.All.Count);
         Assert.Equal(12, IpRisks.All.Count);
         Assert.Equal(13, TeamRisks.All.Count);
+        Assert.Equal(13, ProductRisks.All.Count);
 
         // 4. Questions Aggregation Matches Module Lists Exactly
         var aggregatedQuestions = new List<DiagnosticQuestion>();
@@ -66,6 +67,7 @@ public class DataBankSnapshotTests
         aggregatedRisks.AddRange(CorporateRisks.All);
         aggregatedRisks.AddRange(IpRisks.All);
         aggregatedRisks.AddRange(TeamRisks.All);
+        aggregatedRisks.AddRange(ProductRisks.All);
 
         Assert.Equal(aggregatedRisks.Count, DataBank.Risks.Count);
         for (int i = 0; i < aggregatedRisks.Count; i++)
