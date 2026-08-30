@@ -860,7 +860,8 @@
         if (isMultiple) {
           let arr = Array.isArray(state.answers[q.id]) ? state.answers[q.id].slice() : [];
           const opt = q.options.find(function (o) { return o.id === optId; });
-          if (opt && opt.exclusive) {
+          const isExcl = opt && (opt.exclusive || opt.id === 'none' || opt.id === 'nothing' || opt.id === 'no_ip');
+          if (isExcl) {
             arr = arr.indexOf(optId) !== -1 ? [] : [optId];
           } else {
             const i = arr.indexOf(optId);
@@ -868,7 +869,7 @@
               arr.push(optId);
               arr = arr.filter(function (id) {
                 const oo = q.options.find(function (o) { return o.id === id; });
-                return !(oo && oo.exclusive);
+                return !(oo && (oo.exclusive || oo.id === 'none' || oo.id === 'nothing' || oo.id === 'no_ip'));
               });
             } else {
               arr.splice(i, 1);

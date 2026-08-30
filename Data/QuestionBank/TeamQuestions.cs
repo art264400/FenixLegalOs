@@ -19,7 +19,7 @@ public static class TeamQuestions
                 new("studios", "Внешняя студия или агентство", 1.0, ConfidenceClass: ConfidenceClass.Known),
                 new("advisors", "Советники или менторы (Advisors)", 1.0, ConfidenceClass: ConfidenceClass.Known),
                 new("interns", "Стажеры или практиканты", 1.0, ConfidenceClass: ConfidenceClass.Known),
-                new("none", "Никого, работают только основатели", 1.0, ConfidenceClass: ConfidenceClass.Known),
+                new("none", "Никого, работают только основатели", 1.0, ConfidenceClass: ConfidenceClass.Known, Exclusive: true),
                 new("other", "Другое", 1.0, ConfidenceClass: ConfidenceClass.Known)
             }
         },
