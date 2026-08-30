@@ -18,24 +18,34 @@ using Xunit;
 
 namespace FenixLegalOs.Tests;
 
-public class InvestmentModuleStage1Tests
+public class InvestmentModuleStage1Tests : IDisposable
 {
+    private readonly string _tempDb;
     private readonly ScoringEngine _engine;
     private readonly QuestionRepository _repo;
     private readonly InvestmentFactNormalizer _normalizer;
 
     public InvestmentModuleStage1Tests()
     {
-        var tempDb = Path.Combine(Path.GetTempPath(), $"test_fenix_investment_stage1_{Guid.NewGuid():N}.db");
+        _tempDb = Path.Combine(Path.GetTempPath(), $"test_fenix_investment_stage1_{Guid.NewGuid():N}.db");
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["FENIX_DB_PATH"] = tempDb
+            ["FENIX_DB_PATH"] = _tempDb
         }).Build();
         var dbInit = new DbInitializer(config);
         dbInit.Initialize();
         _repo = new QuestionRepository(dbInit);
         _engine = new ScoringEngine(_repo);
         _normalizer = new InvestmentFactNormalizer();
+    }
+
+    public void Dispose()
+    {
+        try
+        {
+            if (File.Exists(_tempDb)) File.Delete(_tempDb);
+        }
+        catch { }
     }
 
     // =========================================================================

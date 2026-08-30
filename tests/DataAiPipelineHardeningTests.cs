@@ -468,6 +468,6 @@ public class DataAiPipelineHardeningTests
         Assert.Equal(30, dataQuestions.Count);
         Assert.Equal(10, dataDimensions.Count);
         Assert.Equal(15, dataRisks.Count);
-        Assert.Equal(88, DataBank.Risks.Count);
+        Assert.Equal(100, DataBank.Risks.Count);
     }
 }

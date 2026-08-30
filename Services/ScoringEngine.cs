@@ -9,6 +9,7 @@ using FenixLegalOs.Scoring.Modules.IP;
 using FenixLegalOs.Scoring.Modules.Product;
 using FenixLegalOs.Scoring.Modules.DataAi;
 using FenixLegalOs.Scoring.Modules.Contracts;
+using FenixLegalOs.Scoring.Modules.Investment;
 using FenixLegalOs.Scoring.Modules.Team;
 
 namespace FenixLegalOs.Services;
@@ -29,7 +30,8 @@ public class ScoringEngine
             new TeamRuleEngine(),
             new ProductRuleEngine(),
             new DataAiRuleEngine(),
-            new ContractRuleEngine()
+            new ContractRuleEngine(),
+            new InvestmentRuleEngine()
         };
     }
 

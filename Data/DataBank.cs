@@ -45,7 +45,8 @@ public static class DataBank
         ..TeamRisks.All,
         ..ProductRisks.All,
         ..DataAiRisks.All,
-        ..ContractRisks.All
+        ..ContractRisks.All,
+        ..InvestmentRisks.All
     ];
 
     public static readonly List<DimensionDefinition> Dimensions =

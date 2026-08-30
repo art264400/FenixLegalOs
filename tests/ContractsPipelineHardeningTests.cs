@@ -434,6 +434,6 @@ public class ContractsPipelineHardeningTests
         Assert.Equal(9, contractQs.Count);
         Assert.Equal(6, contractDims.Count);
         Assert.Equal(6, contractRisks.Count);
-        Assert.Equal(88, DataBank.Risks.Count);
+        Assert.Equal(100, DataBank.Risks.Count);
     }
 }
