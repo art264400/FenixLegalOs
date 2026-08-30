@@ -106,22 +106,71 @@ public class DataAiRuleEngineTests
     }
 
     // =========================================================================
-    // B. DATA RULES
+    // B. DATA RULES & DATA_MAP AUDIT
     // =========================================================================
 
-    [Fact(DisplayName = "B8. DATA_MAP_INCOMPLETE triggers when map is incomplete and external services or >2 data types exist")]
-    public void DataMapIncomplete_Triggers()
+    [Fact(DisplayName = "B8. DATA_MAP_INCOMPLETE triggers when map is incomplete and count(data.types) > 2")]
+    public void DataMapIncomplete_Triggers_When_Types_Greater_Than_2()
     {
         var answers = new Dictionary<string, object>
         {
             ["DATA-01"] = "yes",
-            ["DATA-02"] = new List<string> { "contacts", "financial", "auth" },
-            ["DATA-05"] = "developers_only"
+            ["DATA-02"] = new List<string> { "contacts", "financial", "auth" }, // 3 types (>2)
+            ["DATA-05"] = "developers_only",
+            ["DATA-10"] = "no" // externalServicesUsed = false
         };
         var facts = FactNormalizer.NormalizeFacts(answers);
         var findings = _ruleEngine.Evaluate(facts, _allRisks);
 
         Assert.Contains(findings, f => f.Code == "DATA_MAP_INCOMPLETE");
+    }
+
+    [Fact(DisplayName = "B8b. DATA_MAP_INCOMPLETE does NOT trigger when count(data.types) == 2 and externalServicesUsed == false")]
+    public void DataMapIncomplete_DoesNotTrigger_When_Exactly_2_Types_And_No_ExtServices()
+    {
+        var answers = new Dictionary<string, object>
+        {
+            ["DATA-01"] = "yes",
+            ["DATA-02"] = new List<string> { "contacts", "auth" }, // 2 types (not > 2)
+            ["DATA-05"] = "developers_only",
+            ["DATA-10"] = "no" // externalServicesUsed = false
+        };
+        var facts = FactNormalizer.NormalizeFacts(answers);
+        var findings = _ruleEngine.Evaluate(facts, _allRisks);
+
+        Assert.DoesNotContain(findings, f => f.Code == "DATA_MAP_INCOMPLETE");
+    }
+
+    [Fact(DisplayName = "B8c. DATA_MAP_INCOMPLETE triggers when externalServicesUsed == true even with 1 data type")]
+    public void DataMapIncomplete_Triggers_When_ExternalServices_True()
+    {
+        var answers = new Dictionary<string, object>
+        {
+            ["DATA-01"] = "yes",
+            ["DATA-02"] = new List<string> { "contacts" }, // 1 type
+            ["DATA-05"] = "developers_only",
+            ["DATA-10"] = "yes" // externalServicesUsed = true
+        };
+        var facts = FactNormalizer.NormalizeFacts(answers);
+        var findings = _ruleEngine.Evaluate(facts, _allRisks);
+
+        Assert.Contains(findings, f => f.Code == "DATA_MAP_INCOMPLETE");
+    }
+
+    [Fact(DisplayName = "B8d. DATA_MAP_INCOMPLETE does NOT trigger when externalServicesUsed == 'unknown' and data.types <= 2")]
+    public void DataMapIncomplete_DoesNotTrigger_When_ExternalServices_Unknown_And_Types_Leq_2()
+    {
+        var answers = new Dictionary<string, object>
+        {
+            ["DATA-01"] = "yes",
+            ["DATA-02"] = new List<string> { "contacts" }, // 1 type
+            ["DATA-05"] = "developers_only",
+            ["DATA-10"] = "unknown" // externalServicesUsed = "unknown" (not boolean true)
+        };
+        var facts = FactNormalizer.NormalizeFacts(answers);
+        var findings = _ruleEngine.Evaluate(facts, _allRisks);
+
+        Assert.DoesNotContain(findings, f => f.Code == "DATA_MAP_INCOMPLETE");
     }
 
     [Fact(DisplayName = "B9. DATA_MAP_INCOMPLETE does NOT trigger when map is full")]
@@ -269,20 +318,28 @@ public class DataAiRuleEngineTests
         Assert.DoesNotContain(findings, f => f.Code == "DATA_CROSS_BORDER_REVIEW");
     }
 
-    [Fact(DisplayName = "B18. DATA_RETENTION_UNDEFINED and DATA_DELETION_GAP trigger appropriately")]
-    public void RetentionAndDeletion_Trigger()
+    [Fact(DisplayName = "B18. DATA_RETENTION_UNDEFINED triggers on all reachable canonical deficient values")]
+    public void Retention_Reachable_Values_Audit()
     {
-        var answers = new Dictionary<string, object>
-        {
-            ["DATA-01"] = "yes",
-            ["DATA-15"] = "none",
-            ["DATA-16"] = "not_all_systems"
-        };
-        var facts = FactNormalizer.NormalizeFacts(answers);
-        var findings = _ruleEngine.Evaluate(facts, _allRisks);
+        // 1. keep_useful triggers
+        var a1 = new Dictionary<string, object> { ["DATA-01"] = "yes", ["DATA-15"] = "keep_useful" };
+        Assert.Contains(_ruleEngine.Evaluate(FactNormalizer.NormalizeFacts(a1), _allRisks), f => f.Code == "DATA_RETENTION_UNDEFINED");
 
-        Assert.Contains(findings, f => f.Code == "DATA_RETENTION_UNDEFINED");
-        Assert.Contains(findings, f => f.Code == "DATA_DELETION_GAP");
+        // 2. none triggers
+        var a2 = new Dictionary<string, object> { ["DATA-01"] = "yes", ["DATA-15"] = "none" };
+        Assert.Contains(_ruleEngine.Evaluate(FactNormalizer.NormalizeFacts(a2), _allRisks), f => f.Code == "DATA_RETENTION_UNDEFINED");
+
+        // 3. unknown triggers
+        var a3 = new Dictionary<string, object> { ["DATA-01"] = "yes", ["DATA-15"] = "unknown" };
+        Assert.Contains(_ruleEngine.Evaluate(FactNormalizer.NormalizeFacts(a3), _allRisks), f => f.Code == "DATA_RETENTION_UNDEFINED");
+
+        // 4. defined does NOT trigger
+        var a4 = new Dictionary<string, object> { ["DATA-01"] = "yes", ["DATA-15"] = "defined" };
+        Assert.DoesNotContain(_ruleEngine.Evaluate(FactNormalizer.NormalizeFacts(a4), _allRisks), f => f.Code == "DATA_RETENTION_UNDEFINED");
+
+        // 5. general does NOT trigger
+        var a5 = new Dictionary<string, object> { ["DATA-01"] = "yes", ["DATA-15"] = "general" };
+        Assert.DoesNotContain(_ruleEngine.Evaluate(FactNormalizer.NormalizeFacts(a5), _allRisks), f => f.Code == "DATA_RETENTION_UNDEFINED");
     }
 
     [Fact(DisplayName = "B19. DATA_ACCESS_TOO_BROAD triggers when team access is broad")]
@@ -300,7 +357,7 @@ public class DataAiRuleEngineTests
     }
 
     // =========================================================================
-    // C. AI RULES
+    // C. AI RULES & REGULATED DOMAINS AUDIT
     // =========================================================================
 
     [Fact(DisplayName = "C22. AI_USER_DATA_TRANSFER triggers when user data is sent to external AI")]
@@ -426,25 +483,139 @@ public class DataAiRuleEngineTests
         Assert.Contains(findings, f => f.Code == "AI_AUTOMATED_DECISION");
     }
 
-    [Fact(DisplayName = "C29. AI_HUMAN_REVIEW_GAP triggers in regulated product context when human review is spot/none/unknown")]
-    public void AiHumanReviewGap_Triggers_In_Regulated_Context()
+    [Fact(DisplayName = "C29a. AI_HUMAN_REVIEW_GAP triggers for canonical regulated domains (health, investments)")]
+    public void AiHumanReviewGap_Triggers_For_Canonical_Regulated_Domains()
     {
-        var answers = new Dictionary<string, object>
+        // 1. health triggers
+        var a1 = new Dictionary<string, object>
         {
-            ["PROD-22"] = new List<string> { "health", "payments" },
+            ["PROD-22"] = new List<string> { "health" },
             ["AI-01"] = "external",
             ["AI-07"] = "assist",
             ["AI-08"] = "none"
         };
-        var facts = FactNormalizer.NormalizeFacts(answers);
-        var findings = _ruleEngine.Evaluate(facts, _allRisks);
+        Assert.Contains(_ruleEngine.Evaluate(FactNormalizer.NormalizeFacts(a1), _allRisks), f => f.Code == "AI_HUMAN_REVIEW_GAP");
 
-        Assert.Contains(findings, f => f.Code == "AI_HUMAN_REVIEW_GAP");
+        // 2. investments triggers
+        var a2 = new Dictionary<string, object>
+        {
+            ["PROD-22"] = new List<string> { "investments" },
+            ["AI-01"] = "external",
+            ["AI-07"] = "assist",
+            ["AI-08"] = "sometimes"
+        };
+        Assert.Contains(_ruleEngine.Evaluate(FactNormalizer.NormalizeFacts(a2), _allRisks), f => f.Code == "AI_HUMAN_REVIEW_GAP");
+    }
+
+    [Fact(DisplayName = "C29b. AI_HUMAN_REVIEW_GAP does NOT trigger for non-canonical domains (crypto, gambling, marketplace) with assist only")]
+    public void AiHumanReviewGap_DoesNotTrigger_For_Non_Canonical_Domains_With_Assist()
+    {
+        // 1. crypto alone with assist -> does NOT trigger
+        var a1 = new Dictionary<string, object>
+        {
+            ["PROD-22"] = new List<string> { "crypto" },
+            ["AI-01"] = "external",
+            ["AI-07"] = "assist",
+            ["AI-08"] = "none"
+        };
+        Assert.DoesNotContain(_ruleEngine.Evaluate(FactNormalizer.NormalizeFacts(a1), _allRisks), f => f.Code == "AI_HUMAN_REVIEW_GAP");
+
+        // 2. gambling alone with assist -> does NOT trigger
+        var a2 = new Dictionary<string, object>
+        {
+            ["PROD-22"] = new List<string> { "gambling" },
+            ["AI-01"] = "external",
+            ["AI-07"] = "assist",
+            ["AI-08"] = "none"
+        };
+        Assert.DoesNotContain(_ruleEngine.Evaluate(FactNormalizer.NormalizeFacts(a2), _allRisks), f => f.Code == "AI_HUMAN_REVIEW_GAP");
+
+        // 3. marketplace alone with assist -> does NOT trigger
+        var a3 = new Dictionary<string, object>
+        {
+            ["PROD-22"] = new List<string> { "marketplace" },
+            ["AI-01"] = "external",
+            ["AI-07"] = "assist",
+            ["AI-08"] = "none"
+        };
+        Assert.DoesNotContain(_ruleEngine.Evaluate(FactNormalizer.NormalizeFacts(a3), _allRisks), f => f.Code == "AI_HUMAN_REVIEW_GAP");
+    }
+
+    [Fact(DisplayName = "C29c. AI_HUMAN_REVIEW_GAP decision-mode triggers (human_check, automatic, assist, unknown)")]
+    public void AiHumanReviewGap_DecisionModes_Audit()
+    {
+        // 1. human_check triggers even without regulated product context
+        var a1 = new Dictionary<string, object>
+        {
+            ["AI-01"] = "external",
+            ["AI-07"] = "ai_human_check",
+            ["AI-08"] = "none"
+        };
+        Assert.Contains(_ruleEngine.Evaluate(FactNormalizer.NormalizeFacts(a1), _allRisks), f => f.Code == "AI_HUMAN_REVIEW_GAP");
+
+        // 2. automatic triggers even without regulated product context
+        var a2 = new Dictionary<string, object>
+        {
+            ["AI-01"] = "external",
+            ["AI-07"] = "automatic",
+            ["AI-08"] = "sometimes"
+        };
+        Assert.Contains(_ruleEngine.Evaluate(FactNormalizer.NormalizeFacts(a2), _allRisks), f => f.Code == "AI_HUMAN_REVIEW_GAP");
+
+        // 3. assist triggers WITH regulated domain
+        var a3 = new Dictionary<string, object>
+        {
+            ["PROD-22"] = new List<string> { "payments" },
+            ["AI-01"] = "external",
+            ["AI-07"] = "assist",
+            ["AI-08"] = "none"
+        };
+        Assert.Contains(_ruleEngine.Evaluate(FactNormalizer.NormalizeFacts(a3), _allRisks), f => f.Code == "AI_HUMAN_REVIEW_GAP");
+
+        // 4. unknown triggers WITH regulated domain
+        var a4 = new Dictionary<string, object>
+        {
+            ["PROD-22"] = new List<string> { "loans" },
+            ["AI-01"] = "external",
+            ["AI-07"] = "unknown",
+            ["AI-08"] = "none"
+        };
+        Assert.Contains(_ruleEngine.Evaluate(FactNormalizer.NormalizeFacts(a4), _allRisks), f => f.Code == "AI_HUMAN_REVIEW_GAP");
     }
 
     // =========================================================================
-    // D. UNKNOWN / N/A ISOLATION
+    // D. BOOLEAN / STRING TYPE SAFETY & UNKNOWN / N/A ISOLATION
     // =========================================================================
+
+    [Fact(DisplayName = "D30. String 'true' is NOT treated as boolean true")]
+    public void String_True_Is_Not_Treated_As_Bool_True()
+    {
+        var facts = new SharedFactStore
+        {
+            Facts = new Dictionary<string, object?>
+            {
+                ["data.personalDataProcessed"] = "true", // String "true"
+                ["data.privacyNotice"] = "none"
+            }
+        };
+        var findings = _ruleEngine.Evaluate(facts, _allRisks);
+        Assert.DoesNotContain(findings, f => f.Code == "DATA_PRIVACY_NOTICE_MISSING");
+    }
+
+    [Fact(DisplayName = "D31. Absent fact is NOT treated as explicit 'unknown'")]
+    public void Absent_Fact_Is_Not_Treated_As_Unknown()
+    {
+        var facts = new SharedFactStore
+        {
+            Facts = new Dictionary<string, object?>
+            {
+                // data.personalDataProcessed is missing / null
+                ["data.privacyNotice"] = "none"
+            }
+        };
+        var findings = _ruleEngine.Evaluate(facts, _allRisks);
+        Assert.DoesNotContain(findings, f => f.Code == "DATA_PRIVACY_NOTICE_MISSING");
+    }
 
     [Fact(DisplayName = "D33. No-data and no-AI scenario yields ZERO DATA_AI findings")]
     public void NoData_NoAi_Yields_Zero_Findings()

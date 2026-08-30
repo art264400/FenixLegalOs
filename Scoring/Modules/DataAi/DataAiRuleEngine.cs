@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using FenixLegalOs.Models;
 using FenixLegalOs.Models.Enums;
 using FenixLegalOs.Scoring.Interfaces;
@@ -8,33 +10,38 @@ public class DataAiRuleEngine : IModuleRuleEngine
 {
     public string ModuleId => "data";
 
+    private static readonly HashSet<string> CanonicalAiRegulatedDomains = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "health", "investments", "payments", "loans", "hiring", "certificates"
+    };
+
     public IReadOnlyList<RiskFinding> Evaluate(SharedFactStore facts, IReadOnlyList<RiskDefinition> allRisks)
     {
         var list = new List<RiskFinding>();
         var f = facts.Facts;
 
         // ─── Data Normalized Facts ───────────────────────────────────────────
-        bool personalDataProcessed = GetBoolFact(f, "data.personalDataProcessed");
+        bool personalDataProcessed = IsStrictBoolTrue(f, "data.personalDataProcessed");
         var dataTypes = f.GetValueOrDefault("data.types") as List<string> ?? new();
         var mapStatus = (string?)f.GetValueOrDefault("data.mapStatus");
         var privacyNotice = (string?)f.GetValueOrDefault("data.privacyNotice");
         var privacyNoticeMatch = (string?)f.GetValueOrDefault("data.privacyNoticeMatch");
-        bool secondaryUse = GetBoolFact(f, "data.secondaryUse");
+        bool secondaryUse = IsStrictBoolTrue(f, "data.secondaryUse");
         var secondaryUseDisclosure = (string?)f.GetValueOrDefault("data.secondaryUseDisclosure");
-        bool externalServicesUsed = GetBoolFact(f, "data.externalServicesUsed");
+        bool externalServicesUsed = IsStrictBoolTrue(f, "data.externalServicesUsed");
         var externalServiceMap = (string?)f.GetValueOrDefault("data.externalServiceMap");
         var vendorTermsReview = (string?)f.GetValueOrDefault("data.vendorTermsReview");
         var userGeography = (string?)f.GetValueOrDefault("data.userGeography");
         var storageCountriesKnown = (string?)f.GetValueOrDefault("data.storageCountriesKnown");
-        bool dataStoredAbroad = GetBoolFact(f, "data.dataStoredAbroad");
+        bool dataStoredAbroad = IsStrictBoolTrue(f, "data.dataStoredAbroad");
         var crossBorderReview = (string?)f.GetValueOrDefault("data.crossBorderReview");
         var retentionRules = (string?)f.GetValueOrDefault("data.retentionRules");
         var deletionCapability = (string?)f.GetValueOrDefault("data.deletionCapability");
         var teamAccess = (string?)f.GetValueOrDefault("data.teamAccess");
 
         // ─── AI Normalized Facts ─────────────────────────────────────────────
-        bool aiUsed = GetBoolFact(f, "ai.used");
-        bool aiExternal = GetBoolFact(f, "ai.external");
+        bool aiUsed = IsStrictBoolTrue(f, "ai.used");
+        bool aiExternal = IsStrictBoolTrue(f, "ai.external");
         var userDataSent = (string?)f.GetValueOrDefault("ai.userDataSent");
         var userDisclosure = (string?)f.GetValueOrDefault("ai.userDisclosure");
         var providerTermsReview = (string?)f.GetValueOrDefault("ai.providerTermsReview");
@@ -44,7 +51,7 @@ public class DataAiRuleEngine : IModuleRuleEngine
         var materialDecisionUse = (string?)f.GetValueOrDefault("ai.materialDecisionUse");
         var decisionTransparencyReview = (string?)f.GetValueOrDefault("ai.decisionTransparencyReview");
         var humanReview = (string?)f.GetValueOrDefault("ai.humanReview");
-        bool aiRegulatedProductContext = GetBoolFact(f, "ai.regulatedProductContext");
+        bool aiRegulatedProductContext = IsStrictBoolTrue(f, "ai.regulatedProductContext");
         var regulatedFunctions = f.GetValueOrDefault("product.regulatedFunctions") as List<string> ?? new();
 
         // ─── 1. DATA_MAP_INCOMPLETE (§27.2) ──────────────────────────────────
@@ -101,8 +108,8 @@ public class DataAiRuleEngine : IModuleRuleEngine
         }
 
         // ─── 7. DATA_RETENTION_UNDEFINED (§25, §24) ───────────────────────────
-        // data.personalDataProcessed == true AND data.retentionRules in [unlimited, keep_useful, none, unknown] -> MEDIUM
-        if (personalDataProcessed && retentionRules is "unlimited" or "keep_useful" or "none" or "unknown")
+        // data.personalDataProcessed == true AND data.retentionRules in [keep_useful, none, unknown] -> MEDIUM
+        if (personalDataProcessed && retentionRules is "keep_useful" or "none" or "unknown")
         {
             AddFinding(list, allRisks, "DATA_RETENTION_UNDEFINED", "DATA-15", retentionRules ?? "unknown", RiskSeverity.Medium);
         }
@@ -147,7 +154,7 @@ public class DataAiRuleEngine : IModuleRuleEngine
         }
 
         // ─── 13. AI_TRAINING_NOT_DISCLOSED (§27.2) ────────────────────────────
-        // ai.trainingUse in [true, possible_undefined, deidentified, unknown] AND ai.trainingDisclosure in [partial, none, unknown] -> HIGH
+        // (ai.trainingUse == true OR ai.trainingUse in [possible_undefined, deidentified, unknown]) AND ai.trainingDisclosure in [partial, none, unknown] -> HIGH
         bool isTrainingActive = trainingUse is true || (trainingUse is string trStr && trStr is "possible_undefined" or "deidentified" or "unknown");
         if (isTrainingActive && trainingDisclosure is "partial" or "none" or "unknown")
         {
@@ -161,12 +168,14 @@ public class DataAiRuleEngine : IModuleRuleEngine
             AddFinding(list, allRisks, "AI_AUTOMATED_DECISION", "AI-07A", decisionTransparencyReview ?? "unknown", RiskSeverity.High);
         }
 
-        // ─── 15. AI_HUMAN_REVIEW_GAP (§25, §24) ───────────────────────────────
-        // ai.materialDecisionUse in [assist, human_check, automatic, unknown] AND ai.humanReview in [none, sometimes, unknown] AND (ai.regulatedProductContext == true OR product.regulatedFunctions non-empty) -> HIGH
-        bool hasRegulatedContext = aiRegulatedProductContext || (regulatedFunctions.Count > 0 && !regulatedFunctions.Contains("none"));
-        if (materialDecisionUse is "assist" or "human_check" or "automatic" or "unknown" &&
-            humanReview is "none" or "sometimes" or "unknown" &&
-            hasRegulatedContext)
+        // ─── 15. AI_HUMAN_REVIEW_GAP (§25, §24, §23 ShowIf) ───────────────────
+        // (ai.materialDecisionUse in [human_check, automatic] OR (hasRegulatedContext AND ai.materialDecisionUse in [assist, human_check, automatic, unknown]))
+        // AND ai.humanReview in [none, sometimes, unknown] -> HIGH
+        bool hasRegulatedContext = aiRegulatedProductContext || regulatedFunctions.Any(rf => CanonicalAiRegulatedDomains.Contains(rf));
+        bool isDecisionScopeApplicable = materialDecisionUse is "human_check" or "automatic" ||
+                                         (hasRegulatedContext && materialDecisionUse is "assist" or "unknown");
+
+        if (isDecisionScopeApplicable && humanReview is "none" or "sometimes" or "unknown")
         {
             AddFinding(list, allRisks, "AI_HUMAN_REVIEW_GAP", "AI-08", humanReview ?? "unknown", RiskSeverity.High);
         }
@@ -174,12 +183,9 @@ public class DataAiRuleEngine : IModuleRuleEngine
         return list;
     }
 
-    private static bool GetBoolFact(Dictionary<string, object?> facts, string key)
+    private static bool IsStrictBoolTrue(Dictionary<string, object?> facts, string key)
     {
-        if (!facts.TryGetValue(key, out var val) || val == null) return false;
-        if (val is bool b) return b;
-        if (val is string s && bool.TryParse(s, out var parsed)) return parsed;
-        return false;
+        return facts.TryGetValue(key, out var val) && val is true;
     }
 
     private static void AddFinding(
