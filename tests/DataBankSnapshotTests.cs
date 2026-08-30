@@ -24,10 +24,10 @@ public class DataBankSnapshotTests
     public void DataBank_Counts_And_Module_Integrity()
     {
         // 1. Sections
-        Assert.Equal(7, DataBank.Sections.Count);
+        Assert.Equal(8, DataBank.Sections.Count);
 
         // 2. Questions Total & by Module
-        Assert.Equal(133, DataBank.Questions.Count);
+        Assert.Equal(150, DataBank.Questions.Count);
         Assert.Equal(17, FoundersQuestions.All.Count);
         Assert.Equal(15, CorporateQuestions.All.Count);
         Assert.Equal(17, IpQuestions.All.Count);
@@ -35,6 +35,7 @@ public class DataBankSnapshotTests
         Assert.Equal(28, ProductQuestions.All.Count);
         Assert.Equal(30, DataAiQuestions.All.Count);
         Assert.Equal(9, ContractQuestions.All.Count);
+        Assert.Equal(17, InvestmentQuestions.All.Count);
 
         // 3. Risks Total & by Module
         Assert.Equal(88, DataBank.Risks.Count);
@@ -55,6 +56,7 @@ public class DataBankSnapshotTests
         aggregatedQuestions.AddRange(ProductQuestions.All);
         aggregatedQuestions.AddRange(DataAiQuestions.All);
         aggregatedQuestions.AddRange(ContractQuestions.All);
+        aggregatedQuestions.AddRange(InvestmentQuestions.All);
 
         Assert.Equal(aggregatedQuestions.Count, DataBank.Questions.Count);
         for (int i = 0; i < aggregatedQuestions.Count; i++)
@@ -85,38 +87,6 @@ public class DataBankSnapshotTests
             Assert.Equal(aggregatedRisks[i].Severity, DataBank.Risks[i].Severity);
             Assert.Equal(aggregatedRisks[i].Priority, DataBank.Risks[i].Priority);
             Assert.Equal(aggregatedRisks[i].Resolution, DataBank.Risks[i].Resolution);
-        }
-    }
-
-    [Fact]
-    public void DataBank_SerializedSnapshot_ByteForByte_Identical_To_Baseline()
-    {
-        var snapshotDir = Path.Combine(Directory.GetCurrentDirectory(), "snapshots");
-        var baselineQuestionsPath = Path.Combine(snapshotDir, "questions_snapshot.json");
-        var baselineRisksPath = Path.Combine(snapshotDir, "risks_snapshot.json");
-        var baselineSectionsPath = Path.Combine(snapshotDir, "sections_snapshot.json");
-
-        if (File.Exists(baselineQuestionsPath) && File.Exists(baselineRisksPath) && File.Exists(baselineSectionsPath))
-        {
-            string baselineQuestions = File.ReadAllText(baselineQuestionsPath);
-            string baselineRisks = File.ReadAllText(baselineRisksPath);
-            string baselineSections = File.ReadAllText(baselineSectionsPath);
-
-            string currentQuestions = JsonSerializer.Serialize(DataBank.Questions, JsonOptions);
-            string currentRisks = JsonSerializer.Serialize(DataBank.Risks, JsonOptions);
-            string currentSections = JsonSerializer.Serialize(DataBank.Sections, JsonOptions);
-
-            File.WriteAllText(baselineSectionsPath, currentSections);
-            File.WriteAllText(baselineQuestionsPath, currentQuestions);
-            File.WriteAllText(baselineRisksPath, currentRisks);
-
-            baselineSections = File.ReadAllText(baselineSectionsPath);
-            baselineQuestions = File.ReadAllText(baselineQuestionsPath);
-            baselineRisks = File.ReadAllText(baselineRisksPath);
-
-            Assert.Equal(baselineSections, currentSections);
-            Assert.Equal(baselineQuestions, currentQuestions);
-            Assert.Equal(baselineRisks, currentRisks);
         }
     }
 }

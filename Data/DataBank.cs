@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using FenixLegalOs.Data.Dimensions;
 using FenixLegalOs.Data.QuestionBank;
 using FenixLegalOs.Data.RiskLibrary;
@@ -20,7 +21,8 @@ public static class DataBank
         new("team", 4, "Команда и сотрудники", "Team", 10),
         new("product", 5, "Продукт и пользователи", "Product", 10),
         new("data", 6, "Данные и ИИ", "Data & AI", 15),
-        new("contracts", 7, "Договоры с клиентами и партнерами", "Contracts", 8)
+        new("contracts", 7, "Договоры с клиентами и партнерами", "Contracts", 8),
+        new("investment", 8, "Готовность к инвестициям", "Investment", 12)
     };
 
     public static readonly List<DiagnosticQuestion> Questions =
@@ -31,7 +33,8 @@ public static class DataBank
         ..TeamQuestions.All,
         ..ProductQuestions.All,
         ..DataAiQuestions.All,
-        ..ContractQuestions.All
+        ..ContractQuestions.All,
+        ..InvestmentQuestions.All
     ];
 
     public static readonly List<RiskDefinition> Risks =
@@ -53,7 +56,8 @@ public static class DataBank
         ..TeamDimensions.All,
         ..ProductDimensions.All,
         ..DataAiDimensions.All,
-        ..ContractDimensions.All
+        ..ContractDimensions.All,
+        ..InvestmentDimensions.All
     ];
 
     public static string GetDimensionDisplayName(string dimensionId)

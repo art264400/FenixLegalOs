@@ -5,6 +5,7 @@ using FenixLegalOs.Scoring.Modules.Contracts;
 using FenixLegalOs.Scoring.Modules.Corporate;
 using FenixLegalOs.Scoring.Modules.DataAi;
 using FenixLegalOs.Scoring.Modules.Founders;
+using FenixLegalOs.Scoring.Modules.Investment;
 using FenixLegalOs.Scoring.Modules.IP;
 using FenixLegalOs.Scoring.Modules.Product;
 using FenixLegalOs.Scoring.Modules.Team;
@@ -24,7 +25,8 @@ public class FactNormalizer
         new TeamFactNormalizer(),
         new ProductFactNormalizer(),
         new DataAiFactNormalizer(),
-        new ContractFactNormalizer()
+        new ContractFactNormalizer(),
+        new InvestmentFactNormalizer()
     };
 
     public static SharedFactStore NormalizeFacts(Dictionary<string, object> answers)
@@ -58,8 +60,6 @@ public class FactNormalizer
 
         // =========================================================================
         // TEMPORARY MIGRATION DEBT (§24 Baseline signals)
-        // To be extracted into Investment module
-        // in subsequent module extraction passes.
         // =========================================================================
         var f = store.Facts;
 
@@ -76,26 +76,6 @@ public class FactNormalizer
             bool hasRev = (rev01 != "none" && !string.IsNullOrEmpty(rev01)) || (revC01 != "none" && !string.IsNullOrEmpty(revC01));
             f["company.hasRevenue"] = hasRev;
             f["revenue.exists"] = hasRev;
-        }
-
-        var invest01 = GetAnswerStr(answers, "INVEST-01");
-        if (!string.IsNullOrEmpty(invest01))
-        {
-            var timing = invest01 switch
-            {
-                "m3" or "m3_6" => "near_term",
-                "m6_12" => "mid_term",
-                "looking" or "discussing" or "terms" => "active",
-                _ => "none"
-            };
-            f["investment.timing"] = timing;
-        }
-
-        var invest02 = GetAnswerStr(answers, "INVEST-02");
-        var invC01 = GetAnswerStr(answers, "INV-C01");
-        if (!string.IsNullOrEmpty(invest02) || !string.IsNullOrEmpty(invC01))
-        {
-            f["investment.priorInvestment"] = (invest02 != "none" && !string.IsNullOrEmpty(invest02)) || invC01 == "yes";
         }
 
         return store;
