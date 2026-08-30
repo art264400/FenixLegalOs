@@ -533,11 +533,12 @@ public class DataAiModuleStage1Tests
         RoutingDependencyValidator.Validate(DataBank.Questions);
     }
 
-    // 30. No DATA/AI risk definitions created in Stage 1
-    [Fact(DisplayName = "30. No DATA_* or AI_* risk definitions in DataBank in Stage 1")]
-    public void No_DataAi_Risk_Definitions_In_Stage1()
+    // 30. Exact 15 DATA/AI risk definitions registered in DataBank
+    [Fact(DisplayName = "30. Exactly 15 DATA_* and AI_* risk definitions in DataBank")]
+    public void Exactly_15_DataAi_Risk_Definitions_In_DataBank()
     {
-        Assert.DoesNotContain(DataBank.Risks, r => r.Code.StartsWith("DATA_") || r.Code.StartsWith("AI_"));
+        var dataAiRisks = DataBank.Risks.Where(r => r.Code.StartsWith("DATA_") || r.Code.StartsWith("AI_")).ToList();
+        Assert.Equal(15, dataAiRisks.Count);
     }
 
     // 31. DATA_AI Applicability logic
