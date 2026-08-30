@@ -185,54 +185,43 @@ public class ScoringEngine
     }
 
     /// <summary>
-    /// Computes the authoritative list of visible questions and effective answers via fixed-point convergence.
-    /// Ensures that hidden/stale answers can NEVER influence downstream visibility or fact derivation.
-    /// Bounded by the finite question dependency depth (max iterations = enabledQuestions.Count + 1).
+    /// Computes the authoritative list of visible questions and effective answers via forward topological evaluation.
+    /// Ensures that hidden/stale answers can NEVER participate in establishing their own visibility,
+    /// establish upstream visibility, or leak into derived canonical facts.
     /// </summary>
     public static (List<DiagnosticQuestion> VisibleQuestions, Dictionary<string, object> EffectiveAnswers, SharedFactStore FactStore)
         ResolveEffectiveState(List<DiagnosticQuestion> allQuestions, Dictionary<string, object> rawAnswers)
     {
-        var enabledQuestions = allQuestions.Where(q => q.Enabled != false).ToList();
-        var currentEffectiveAnswers = new Dictionary<string, object>(rawAnswers);
-        List<DiagnosticQuestion> visibleQs;
-        SharedFactStore factStore;
+        var enabledQuestions = allQuestions
+            .Where(q => q.Enabled != false)
+            .OrderBy(q => q.Order)
+            .ToList();
 
-        // Finite upper bound: in any acyclic questionnaire DAG with N questions,
-        // a cascade of stale eliminations must strictly terminate in at most N iterations.
-        int maxIterations = Math.Max(enabledQuestions.Count, rawAnswers.Count) + 1;
-        int iterations = 0;
+        var effectiveAnswers = new Dictionary<string, object>(StringComparer.Ordinal);
+        var visibleQs = new List<DiagnosticQuestion>();
 
-        while (true)
+        foreach (var q in enabledQuestions)
         {
-            iterations++;
-            if (iterations > maxIterations)
+            // 1. Derive routing facts strictly from already-authorized upstream effective answers
+            var routingFactStore = FactNormalizer.NormalizeFacts(effectiveAnswers);
+
+            // 2. Evaluate question visibility strictly against upstream effective state
+            bool isVisible = ConditionsEvaluator.IsVisible(q.ShowIf, effectiveAnswers, routingFactStore);
+
+            if (isVisible)
             {
-                // Fail closed: prevent unbounded oscillation or non-terminating loops
-                throw new InvalidOperationException(
-                    $"Architecture A routing convergence failure: ShowIf dependency cycle or oscillation detected after {maxIterations} iterations.");
+                visibleQs.Add(q);
+                // 3. Raw answer becomes effective ONLY AFTER question is proven visible by upstream authority
+                if (rawAnswers.TryGetValue(q.Id, out var userVal) && userVal != null)
+                {
+                    effectiveAnswers[q.Id] = userVal;
+                }
             }
-
-            factStore = FactNormalizer.NormalizeFacts(currentEffectiveAnswers);
-            visibleQs = enabledQuestions
-                .Where(q => ConditionsEvaluator.IsVisible(q.ShowIf, currentEffectiveAnswers, factStore))
-                .OrderBy(q => q.Order)
-                .ToList();
-
-            var visibleIds = visibleQs.Select(q => q.Id).ToHashSet(StringComparer.Ordinal);
-            var nextEffectiveAnswers = rawAnswers
-                .Where(kv => visibleIds.Contains(kv.Key))
-                .ToDictionary(kv => kv.Key, kv => kv.Value);
-
-            if (nextEffectiveAnswers.Count == currentEffectiveAnswers.Count &&
-                nextEffectiveAnswers.Keys.All(k => currentEffectiveAnswers.ContainsKey(k)))
-            {
-                break;
-            }
-
-            currentEffectiveAnswers = nextEffectiveAnswers;
         }
 
-        return (visibleQs, currentEffectiveAnswers, factStore);
+        // 4. Recompute final canonical factStore from the completed set of authorized EffectiveAnswers
+        var finalFactStore = FactNormalizer.NormalizeFacts(effectiveAnswers);
+        return (visibleQs, effectiveAnswers, finalFactStore);
     }
 
     // ─── Deprecated: use GetNavigationState instead ──────────────────────────

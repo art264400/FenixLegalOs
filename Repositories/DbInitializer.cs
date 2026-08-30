@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Dapper;
 using FenixLegalOs.Data;
+using FenixLegalOs.Scoring.Core;
 using Microsoft.Data.Sqlite;
 
 namespace FenixLegalOs.Repositories;
@@ -19,6 +20,9 @@ public class DbInitializer
 
     public void Initialize()
     {
+        // Fail closed at startup if questionnaire dependency graph has cycles or invalid authority
+        RoutingDependencyValidator.Validate(DataBank.Questions);
+
         using var conn = new SqliteConnection(_connectionString);
         conn.Open();
         conn.Execute("PRAGMA journal_mode = WAL;");
