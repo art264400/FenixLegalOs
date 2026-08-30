@@ -4,6 +4,7 @@ using FenixLegalOs.Data;
 using FenixLegalOs.Data.RiskLibrary;
 using FenixLegalOs.Models;
 using FenixLegalOs.Models.Enums;
+using FenixLegalOs.Scoring.Core;
 using Xunit;
 
 namespace FenixLegalOs.Tests;
@@ -112,8 +113,22 @@ public class InvestmentRiskLibraryTests
         Assert.Contains("deal_terms", riskMap["INVEST_TERMS_NOT_UNDERSTOOD"].AffectedDimensions);
         Assert.Contains("deal_review", riskMap["INVEST_DEAL_UNREVIEWED"].AffectedDimensions);
 
-        // Cross-module risks map to round_definition
-        Assert.Contains("round_definition", riskMap["INVEST_SELF_AWARENESS_GAP"].AffectedDimensions);
-        Assert.Contains("round_definition", riskMap["INVEST_ROUND_BLOCKER"].AffectedDimensions);
+        // Cross-cutting risks have empty affected dimensions (not mapped to scored dimensions)
+        Assert.Empty(riskMap["INVEST_SELF_AWARENESS_GAP"].AffectedDimensions);
+        Assert.Empty(riskMap["INVEST_ROUND_BLOCKER"].AffectedDimensions);
+    }
+
+    [Fact(DisplayName = "7. [Regression] Cross-cutting RiskDefinition with AffectedDimensions = [] is valid and not attached to unrelated dimensions")]
+    public void CrossCutting_RiskDefinitions_Are_Not_Forcibly_Mapped()
+    {
+        var gapRisk = InvestmentRisks.All.First(r => r.Code == "INVEST_SELF_AWARENESS_GAP");
+        var blockerRisk = InvestmentRisks.All.First(r => r.Code == "INVEST_ROUND_BLOCKER");
+
+        Assert.Empty(gapRisk.AffectedDimensions);
+        Assert.Empty(blockerRisk.AffectedDimensions);
+
+        // StrongAreasCalculator handles empty AffectedDimensions without throwing or polluting dimensions
+        var dims = StrongAreasCalculator.GetAffectedDimensions(gapRisk.Code);
+        Assert.Empty(dims);
     }
 }

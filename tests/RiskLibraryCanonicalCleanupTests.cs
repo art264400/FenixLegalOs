@@ -324,7 +324,11 @@ public class RiskLibraryCanonicalCleanupTests
         foreach (var risk in DataBank.Risks)
         {
             var affectedDims = StrongAreasCalculator.GetAffectedDimensions(risk.Code);
-            Assert.NotEmpty(affectedDims);
+            foreach (var dim in affectedDims)
+            {
+                Assert.True(DataBank.Dimensions.Any(d => d.Id == dim),
+                    $"Risk '{risk.Code}' references unknown dimension '{dim}'.");
+            }
         }
     }
 

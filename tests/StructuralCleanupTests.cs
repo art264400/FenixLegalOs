@@ -149,7 +149,6 @@ public class StructuralCleanupTests
         Assert.NotEmpty(severeRisks);
         foreach (var risk in severeRisks)
         {
-            Assert.True(risk.AffectedDimensions.Count > 0, $"Risk '{risk.Code}' has no AffectedDimensions.");
             foreach (var dim in risk.AffectedDimensions)
             {
                 Assert.True(DataBank.Dimensions.Any(d => d.Id == dim),
