@@ -1,4 +1,5 @@
 using FenixLegalOs.Models;
+using FenixLegalOs.Models.Enums;
 using FenixLegalOs.Scoring.Interfaces;
 
 namespace FenixLegalOs.Scoring.Core;
@@ -22,71 +23,39 @@ public class FindingProcessor
     {
         var suppressedCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        // Canonical Founders Cross-Finding Suppressions (§25)
-        if (rawFindings.Any(f => f.Code == "FND_ACTIVE_DISPUTE"))
+        foreach (var finding in rawFindings)
         {
-            suppressedCodes.Add("FND_ROLE_AMBIGUITY");
-            suppressedCodes.Add("FND_DOCUMENTATION_GAP");
-        }
+            var def = Data.DataBank.Risks.FirstOrDefault(r => string.Equals(r.Code, finding.Code, StringComparison.OrdinalIgnoreCase));
+            if (def == null)
+            {
+                throw new InvalidOperationException($"Unknown RiskCode '{finding.Code}' encountered in candidate findings.");
+            }
 
-        if (rawFindings.Any(f => f.Code == "FND_EQUITY_DISPUTE"))
-        {
-            suppressedCodes.Add("FND_EQUITY_NOT_FORMALIZED");
-            suppressedCodes.Add("FND_EQUITY_AMBIGUITY");
-        }
-
-        if (rawFindings.Any(f => f.Code == "FND_DEAD_EQUITY"))
-        {
-            suppressedCodes.Add("FND_NO_VESTING");
-            suppressedCodes.Add("FND_COMMITMENT_MISMATCH");
-            suppressedCodes.Add("FND_EXIT_RULES_MISSING");
-        }
-
-        if (rawFindings.Any(f => f.Code == "FND_DEADLOCK"))
-        {
-            suppressedCodes.Add("FND_GOVERNANCE_AMBIGUITY");
-            suppressedCodes.Add("FND_NO_DEADLOCK_PROTECTION");
-        }
-
-        if (rawFindings.Any(f => f.Code == "FND_DEPARTED_UNRESOLVED"))
-        {
-            suppressedCodes.Add("FND_EXIT_RULES_MISSING");
-        }
-
-        if (rawFindings.Any(f => f.Code == "FND_EQUITY_AMBIGUITY"))
-        {
-            suppressedCodes.Add("FND_EQUITY_NOT_FORMALIZED");
-        }
-
-        // Canonical IP Cross-Finding Suppressions (§25)
-        if (rawFindings.Any(f => f.Code == "IP_PRODUCT_RIGHTS_UNCONFIRMED"))
-        {
-            suppressedCodes.Add("IP_FOUNDER_RIGHTS_NOT_TRANSFERRED");
-            suppressedCodes.Add("IP_CONTRACTOR_RIGHTS_GAP");
-            suppressedCodes.Add("IP_STUDIO_RIGHTS_GAP");
-        }
-
-        if (rawFindings.Any(f => f.Code == "IP_FORMER_DEVELOPER_GAP"))
-        {
-            suppressedCodes.Add("IP_CONTRACTOR_RIGHTS_GAP");
-            suppressedCodes.Add("TEAM_FORMER_ACCESS_RISK");
+            if (def.SuppressCodes.Count > 0)
+            {
+                foreach (var code in def.SuppressCodes)
+                {
+                    suppressedCodes.Add(code);
+                }
+            }
         }
 
         return rawFindings
             .Where(f => !suppressedCodes.Contains(f.Code))
             .OrderBy(r => GetSeverityOrder(r.Severity))
+            .ThenBy(r => r.Code, StringComparer.Ordinal)
             .ToList();
     }
 
-    public static int GetSeverityOrder(string sev)
+    public static int GetSeverityOrder(RiskSeverity sev)
     {
         return sev switch
         {
-            "BLOCKER" => 1,
-            "CRITICAL" => 2,
-            "HIGH" => 3,
-            "MEDIUM" => 4,
-            "INFO" => 5,
+            RiskSeverity.Blocker => 1,
+            RiskSeverity.Critical => 2,
+            RiskSeverity.High => 3,
+            RiskSeverity.Medium => 4,
+            RiskSeverity.Info => 5,
             _ => 6
         };
     }

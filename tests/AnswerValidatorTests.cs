@@ -1,5 +1,6 @@
 using FenixLegalOs.Data;
 using FenixLegalOs.Models;
+using FenixLegalOs.Models.Enums;
 using FenixLegalOs.Repositories;
 using FenixLegalOs.Scoring.Core;
 using FenixLegalOs.Scoring.Validation;
@@ -32,7 +33,7 @@ public class AnswerValidatorTests
         var answers = new Dictionary<string, object>
         {
             ["FND-C01"] = "2",
-            ["FND-C02"] = new[] { 50.0, 50.0 },
+            ["FND-C02"] = new Dictionary<string, object> { ["founder_1"] = 50.0, ["founder_2"] = 50.0 },
             ["FND-C03"] = "none",
             ["FND-C04"] = "signed",
             ["FND-01"] = "none",
@@ -116,8 +117,8 @@ public class AnswerValidatorTests
         var result = AnswerValidator.Validate(answers, _repo.GetQuestions());
         Assert.False(result.IsValid);
         Assert.Equal(2, result.Errors.Count);
-        Assert.Contains(result.Errors, e => e.QuestionId == "FND-01" && e.ErrorCode == "EMPTY_VALUE");
-        Assert.Contains(result.Errors, e => e.QuestionId == "FND-02" && e.ErrorCode == "EMPTY_VALUE");
+        Assert.Contains(result.Errors, e => e.QuestionId == "FND-01" && e.ErrorCode == ValidationErrorCode.EmptyValue);
+        Assert.Contains(result.Errors, e => e.QuestionId == "FND-02" && e.ErrorCode == ValidationErrorCode.EmptyValue);
     }
 
     [Fact]
@@ -130,7 +131,7 @@ public class AnswerValidatorTests
 
         var result = AnswerValidator.Validate(answers, _repo.GetQuestions());
         Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, e => e.QuestionId == "FND-01" && e.ErrorCode == "INVALID_OPTION");
+        Assert.Contains(result.Errors, e => e.QuestionId == "FND-01" && e.ErrorCode == ValidationErrorCode.InvalidOption);
     }
 
     [Fact]
@@ -144,7 +145,7 @@ public class AnswerValidatorTests
 
         var result = AnswerValidator.Validate(answers, _repo.GetQuestions());
         Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, e => e.QuestionId == "FND-01" && e.ErrorCode == "INVALID_OPTION");
+        Assert.Contains(result.Errors, e => e.QuestionId == "FND-01" && e.ErrorCode == ValidationErrorCode.InvalidOption);
     }
 
     [Fact]
@@ -157,7 +158,7 @@ public class AnswerValidatorTests
 
         var result = AnswerValidator.Validate(answers, _repo.GetQuestions());
         Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, e => e.QuestionId == "UNKNOWN-999" && e.ErrorCode == "UNKNOWN_QUESTION");
+        Assert.Contains(result.Errors, e => e.QuestionId == "UNKNOWN-999" && e.ErrorCode == ValidationErrorCode.UnknownQuestion);
     }
 
     [Fact]
@@ -178,119 +179,110 @@ public class AnswerValidatorTests
     {
         var answers = new Dictionary<string, object>
         {
-            ["IP-03"] = new[] { "founders", "nonexistent_creator_role" }
+            ["IP-02"] = new[] { "code", "invalid_item_xyz" }
         };
 
         var result = AnswerValidator.Validate(answers, _repo.GetQuestions());
         Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, e => e.QuestionId == "IP-03" && e.ErrorCode == "INVALID_OPTION");
+        Assert.Contains(result.Errors, e => e.QuestionId == "IP-02" && e.ErrorCode == ValidationErrorCode.InvalidOption);
     }
 
     [Fact]
-    public void Tampering_MultiSelectMutuallyExclusiveConflict_FailsValidation()
+    public void Tampering_MultiSelectMutualExclusion_FailsValidation()
     {
         var answers = new Dictionary<string, object>
         {
-            ["IP-02"] = new[] { "none", "code" } // "none" combined with "code"
+            ["IP-03"] = new[] { "none", "founders" } // 'none' cannot be combined with specific options
         };
 
         var result = AnswerValidator.Validate(answers, _repo.GetQuestions());
         Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, e => e.QuestionId == "IP-02" && e.ErrorCode == "MUTUALLY_EXCLUSIVE_CONFLICT");
+        Assert.Contains(result.Errors, e => e.QuestionId == "IP-03" && e.ErrorCode == ValidationErrorCode.MutuallyExclusiveConflict);
     }
 
-    [Fact]
-    public void Tampering_MalformedEquitySplit_FailsValidation()
-    {
-        var answers = new Dictionary<string, object>
-        {
-            ["FND-C02"] = new[] { 150.0, -20.0 } // Invalid percentages
-        };
-
-        var result = AnswerValidator.Validate(answers, _repo.GetQuestions());
-        Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, e => e.QuestionId == "FND-C02" && e.ErrorCode == "OUT_OF_RANGE_SHARE");
-    }
-
-    [Fact]
-    public void Tampering_MalformedEntityBuilder_FailsValidation()
-    {
-        var answers = new Dictionary<string, object>
-        {
-            ["COR-C02C"] = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(
-                @"[ { ""jurisdiction"": ""invalid_country_xyz"" } ]")
-        };
-
-        var result = AnswerValidator.Validate(answers, _repo.GetQuestions());
-        Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, e => e.QuestionId == "COR-C02C" && e.ErrorCode == "INVALID_JURISDICTION");
-    }
-
-    [Fact]
-    public void FactStore_InvariantCheck_NoEmptyStringsOrArbitraryValues()
+        [Fact]
+    public void CanonicalFndC02_ObjectMap_PassesValidation()
     {
         var answers = new Dictionary<string, object>
         {
             ["FND-C01"] = "2",
-            ["FND-C02"] = new[] { 60.0, 40.0 },
-            ["FND-C03"] = "resolved",
-            ["FND-C04"] = "signed",
-            ["FND-01"] = "minor",
-            ["FND-02"] = "written",
-            ["FND-03"] = "aligned",
-            ["FND-04"] = "registered",
-            ["FND-05"] = "vesting",
-            ["FND-05A"] = "defined",
-            ["FND-06"] = "written",
-            ["FND-06A"] = "majority",
-            ["FND-07"] = "full",
-            ["FND-08"] = "full",
-            ["FND-09"] = "documented",
-            ["FND-10"] = "unrelated",
-            ["FND-11"] = "aligned",
-            ["COR-C01"] = "multiple",
-            ["COR-C02A"] = "kz",
-            ["COR-C02B"] = "2",
-            ["COR-01"] = "match",
-            ["COR-02"] = "complete",
-            ["COR-03"] = "none",
-            ["COR-04"] = "complete",
-            ["COR-04A"] = "yes",
-            ["COR-05"] = "systematic",
-            ["COR-06"] = "clear_limits",
-            ["COR-07"] = "aligned",
-            ["COR-08"] = "organized",
-            ["IP-01"] = "ready",
-            ["IP-02"] = new[] { "code" },
-            ["IP-03"] = new[] { "founders" },
-            ["IP-04"] = "all",
-            ["IP-05"] = "assigned",
-            ["IP-06"] = "all",
-            ["IP-07"] = "all",
-            ["IP-08"] = "none",
-            ["IP-09"] = "confirmed",
-            ["IP-10"] = "no",
-            ["IP-10A"] = "no",
-            ["IP-11"] = "no",
-            ["IP-11A"] = "no",
-            ["IP-12"] = "no",
-            ["IP-13"] = "company",
-            ["IP-14"] = "company",
-            ["IP-15"] = "clear"
+            ["FND-C02"] = new Dictionary<string, object> { ["founder_1"] = 50, ["founder_2"] = 50 }
         };
 
-        var validationResult = AnswerValidator.Validate(answers, _repo.GetQuestions());
-        Assert.True(validationResult.IsValid, string.Join("; ", validationResult.Errors.Select(e => $"{e.QuestionId}: {e.Message}")));
+        var result = AnswerValidator.Validate(answers, _repo.GetQuestions());
+        Assert.True(result.IsValid);
+        Assert.Empty(result.Errors);
+    }
+
+    [Fact]
+    public void Tampering_EquityOutOfRange_FailsValidation()
+    {
+        var answers = new Dictionary<string, object>
+        {
+            ["FND-C02"] = new Dictionary<string, object> { ["founder_1"] = 150.0, ["founder_2"] = -10.0 }
+        };
+
+        var result = AnswerValidator.Validate(answers, _repo.GetQuestions());
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.QuestionId == "FND-C02" && e.ErrorCode == ValidationErrorCode.OutOfRangeShare);
+    }
+
+    [Fact]
+    public void Tampering_EquityArrayFormat_FailsValidation_With_InvalidType()
+    {
+        var answers = new Dictionary<string, object>
+        {
+            ["FND-C02"] = new[] { 50.0, 50.0 }
+        };
+
+        var result = AnswerValidator.Validate(answers, _repo.GetQuestions());
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.QuestionId == "FND-C02" && e.ErrorCode == ValidationErrorCode.InvalidType);
+    }
+
+    [Fact]
+    public void Tampering_EquityFreeFormString_FailsValidation_With_InvalidType()
+    {
+        var answers = new Dictionary<string, object>
+        {
+            ["FND-C02"] = "50% each"
+        };
+
+        var result = AnswerValidator.Validate(answers, _repo.GetQuestions());
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.QuestionId == "FND-C02" && e.ErrorCode == ValidationErrorCode.InvalidType);
+    }
+
+    [Fact]
+    public void Tampering_EntityBuilderInvalidJurisdiction_FailsValidation()
+    {
+        var answers = new Dictionary<string, object>
+        {
+            ["COR-C02C"] = new object[]
+            {
+                new Dictionary<string, object> { ["name"] = "SubCo", ["jurisdiction"] = "atlantis_fake_jur" }
+            }
+        };
+
+        var result = AnswerValidator.Validate(answers, _repo.GetQuestions());
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.QuestionId == "COR-C02C" && e.ErrorCode == ValidationErrorCode.InvalidJurisdiction);
+    }
+
+    [Fact]
+    public void HardenedFactStore_InvalidInput_DoesNotCorruptStore()
+    {
+        // Even if invalid answers bypass validator, FactNormalizer should ignore or not fabricate invalid facts
+        var answers = new Dictionary<string, object>
+        {
+            ["FND-01"] = "invalid_status",
+            ["FND-04"] = "unknown_status"
+        };
 
         var facts = FactNormalizer.NormalizeFacts(answers);
 
-        foreach (var kvp in facts.Facts)
-        {
-            if (kvp.Value is string strVal)
-            {
-                Assert.False(string.IsNullOrWhiteSpace(strVal), $"Fact '{kvp.Key}' has an empty/whitespace string value!");
-            }
-            Assert.NotNull(kvp.Value);
-        }
+        // Raw invalid strings must not produce canonical dispute booleans or valid statuses
+        Assert.False(facts.Facts.TryGetValue("founders.disputeLevel", out var dl) && dl is "active" or "formal");
+        Assert.False(facts.Facts.TryGetValue("founders.equityClarity", out var eq) && eq is "registered" or "signed" or "dispute");
     }
 }

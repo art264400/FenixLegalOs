@@ -1,4 +1,5 @@
 using FenixLegalOs.Models;
+using FenixLegalOs.Models.Enums;
 
 namespace FenixLegalOs.Scoring.Core;
 
@@ -16,7 +17,7 @@ public class InvestmentReadinessEvaluator
         if (!applicable) return new InvestmentReadinessOverlay { Applicable = false, ReadinessScore = 100 };
 
         var blockers = findings
-            .Where(f => f.Severity is "CRITICAL" or "BLOCKER")
+            .Where(f => f.Severity is RiskSeverity.Critical or RiskSeverity.Blocker)
             .Select(f => f.Title)
             .ToList();
 

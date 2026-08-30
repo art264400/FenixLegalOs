@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using FenixLegalOs.Models;
+using FenixLegalOs.Models.Enums;
 
 namespace FenixLegalOs.Services;
 
@@ -202,7 +203,7 @@ public class TypstPdfService
             foreach (var s in result.Sections)
             {
                 int score = s.Score ?? 0;
-                bool isNa = s.Status == "N_A" || s.Score == null;
+                bool isNa = s.Status == ApplicabilityStatus.NotApplicable || s.Score == null;
                 string scoreColor = isNa ? "#8E9BAE" : score >= 75 ? "#2ED573" : score >= 50 ? "#FF9F43" : "#FF5964";
                 string statusText = isNa ? "Не применимо" : score >= 75 ? "Устойчиво" : score >= 50 ? "В зоне внимания" : "Критический риск";
                 string scoreLabel = isNa ? "—" : $"{score}%";
@@ -242,12 +243,12 @@ public class TypstPdfService
                 int idx = 1;
                 foreach (var r in result.Risks)
                 {
-                    var borderColor = r.Severity is "CRITICAL" or "critical" or "BLOCKER" ? "#FF5964" : r.Severity is "HIGH" or "high" ? "#FF9F43" : "#F5A623";
-                    var tagBg = r.Severity is "CRITICAL" or "critical" or "BLOCKER" ? "#3D1A24" : r.Severity is "HIGH" or "high" ? "#3D2B1A" : "#38321A";
+                    var borderColor = r.Severity is RiskSeverity.Critical or RiskSeverity.Blocker ? "#FF5964" : r.Severity == RiskSeverity.High ? "#FF9F43" : "#F5A623";
+                    var tagBg = r.Severity is RiskSeverity.Critical or RiskSeverity.Blocker ? "#3D1A24" : r.Severity == RiskSeverity.High ? "#3D2B1A" : "#38321A";
                     var tagText = r.Resolution switch
                     {
-                        "lawyer_required" => "ТРЕБУЕТСЯ ЮРИСТ",
-                        "check_with_lawyer" => "ЖЕЛАТЕЛЬНО С ЮРИСТОМ",
+                        ResolutionType.LawyerRequired => "ТРЕБУЕТСЯ ЮРИСТ",
+                        ResolutionType.CheckWithLawyer => "ЖЕЛАТЕЛЬНО С ЮРИСТОМ",
                         _ => "САМОСТОЯТЕЛЬНО"
                     };
 

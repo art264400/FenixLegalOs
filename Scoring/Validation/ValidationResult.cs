@@ -1,15 +1,17 @@
+using FenixLegalOs.Models.Enums;
+
 namespace FenixLegalOs.Scoring.Validation;
 
 public class ValidationError
 {
     public string QuestionId { get; set; } = "";
-    public string ErrorCode { get; set; } = "";
+    public ValidationErrorCode ErrorCode { get; set; } = ValidationErrorCode.UnknownQuestion;
     public string Message { get; set; } = "";
     public object? ProvidedValue { get; set; }
 
     public ValidationError() { }
 
-    public ValidationError(string questionId, string errorCode, string message, object? providedValue = null)
+    public ValidationError(string questionId, ValidationErrorCode errorCode, string message, object? providedValue = null)
     {
         QuestionId = questionId;
         ErrorCode = errorCode;
@@ -27,7 +29,7 @@ public class ValidationResult
 
     public static ValidationResult Failure(List<ValidationError> errors) => new() { Errors = errors };
 
-    public static ValidationResult Failure(string questionId, string errorCode, string message, object? providedValue = null)
+    public static ValidationResult Failure(string questionId, ValidationErrorCode errorCode, string message, object? providedValue = null)
     {
         return new ValidationResult
         {
@@ -35,7 +37,7 @@ public class ValidationResult
         };
     }
 
-    public void AddError(string questionId, string errorCode, string message, object? providedValue = null)
+    public void AddError(string questionId, ValidationErrorCode errorCode, string message, object? providedValue = null)
     {
         Errors.Add(new ValidationError(questionId, errorCode, message, providedValue));
     }

@@ -1,4 +1,5 @@
 using FenixLegalOs.Models;
+using FenixLegalOs.Models.Enums;
 
 namespace FenixLegalOs.Scoring.Core;
 
@@ -16,7 +17,7 @@ public class DimensionScorer
         Dictionary<string, object> answers,
         ConfidenceTracker? confidenceTracker = null)
     {
-        var diagnosticQs = sectionQuestions.Where(q => q.ScoreMode == "diagnostic").ToList();
+        var diagnosticQs = sectionQuestions.Where(q => q.ScoreMode == ScoreMode.Diagnostic).ToList();
         var dimensionGroups = diagnosticQs.GroupBy(q => !string.IsNullOrEmpty(q.DimensionId) ? q.DimensionId : q.Id).ToList();
 
         var sectionDimensions = new List<DimensionScore>();

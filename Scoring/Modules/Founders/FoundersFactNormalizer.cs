@@ -88,51 +88,31 @@ public class FoundersFactNormalizer : IFactNormalizer
         if (answers.TryGetValue("FND-C02", out var fndC02Raw) && fndC02Raw != null)
         {
             var shares = new List<double>();
-            if (fndC02Raw is JsonElement je)
+            if (fndC02Raw is JsonElement je && je.ValueKind == JsonValueKind.Object)
             {
-                if (je.ValueKind == JsonValueKind.Array)
+                foreach (var prop in je.EnumerateObject())
                 {
-                    foreach (var item in je.EnumerateArray())
-                    {
-                        if (item.TryGetDouble(out var d)) shares.Add(d);
-                        else if (double.TryParse(item.GetString(), out var ps)) shares.Add(ps);
-                    }
+                    if (prop.Value.TryGetDouble(out var d)) shares.Add(d);
+                    else if (double.TryParse(prop.Value.GetString(), out var ps)) shares.Add(ps);
                 }
-                else if (je.ValueKind == JsonValueKind.Object)
-                {
-                    foreach (var prop in je.EnumerateObject())
-                    {
-                        if (prop.Value.TryGetDouble(out var d)) shares.Add(d);
-                        else if (double.TryParse(prop.Value.GetString(), out var ps)) shares.Add(ps);
-                    }
-                }
-            }
-            else if (fndC02Raw is IEnumerable<double> enumDouble)
-            {
-                shares.AddRange(enumDouble);
-            }
-            else if (fndC02Raw is IEnumerable<int> enumInt)
-            {
-                shares.AddRange(enumInt.Select(i => (double)i));
             }
             else if (fndC02Raw is IDictionary<string, double> dictDouble)
             {
                 shares.AddRange(dictDouble.Values);
+            }
+            else if (fndC02Raw is IDictionary<string, int> dictInt)
+            {
+                shares.AddRange(dictInt.Values.Select(v => (double)v));
+            }
+            else if (fndC02Raw is IDictionary<string, float> dictFloat)
+            {
+                shares.AddRange(dictFloat.Values.Select(v => (double)v));
             }
             else if (fndC02Raw is IDictionary<string, object> dictObj)
             {
                 foreach (var v in dictObj.Values)
                 {
                     if (double.TryParse(v?.ToString(), out var d)) shares.Add(d);
-                }
-            }
-            else
-            {
-                var str = fndC02Raw.ToString() ?? "";
-                var matches = Regex.Matches(str, @"\b\d+(?:\.\d+)?\b");
-                foreach (Match m in matches)
-                {
-                    if (double.TryParse(m.Value, out var val)) shares.Add(val);
                 }
             }
 
@@ -207,6 +187,7 @@ public class FoundersFactNormalizer : IFactNormalizer
         if (answers.TryGetValue("FND-04", out var fnd04Raw) && fnd04Raw != null)
         {
             var fnd04 = fnd04Raw.ToString() ?? "";
+            f["founders.equityDispute"] = fnd04 == "dispute";
             if (fnd04 is "registered" or "written_agreed" or "preliminary" or "verbal" or "ambiguous" or "dispute")
             {
                 f["founders.equityClarity"] = fnd04;

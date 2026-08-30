@@ -27,16 +27,24 @@
   const STORAGE_KEY = 'fenix_diagnostic_v1';
 
   let bank = null; // { sections, questions, versions }
-  let state = loadState(); // { sessionId, answers, idx }
+  let state = loadState(); // { sessionId, answers, currentQuestionId }
   let lastResult = null;
   let unlocked = false;
 
   function loadState() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        const s = JSON.parse(raw);
+        // Migrate old state shape (idx → currentQuestionId)
+        if (s.idx !== undefined && s.currentQuestionId === undefined) {
+          s.currentQuestionId = null;
+          delete s.idx;
+        }
+        return s;
+      }
     } catch (e) { /* ignore */ }
-    return { sessionId: null, answers: {}, idx: 0 };
+    return { sessionId: null, answers: {}, currentQuestionId: null };
   }
 
   function saveState() {
@@ -71,57 +79,87 @@
   }
 
   // ---------------------------------------------------------------------
-  // Conditional logic (mirror of server engine)
+  // Architecture A: Server-Driven Questionnaire Navigation (FINALIZED)
+  //
+  // Backend is the ONLY authority for:
+  //   - question visibility (ShowIf evaluation)
+  //   - canonical fact derivation
+  //   - current / next / previous question
+  //   - progress
+  //
+  // Frontend is UI only:
+  //   - renders QuestionDefinition from bank
+  //   - collects input
+  //   - submits answers
+  //   - renders server-provided NavigationState
+  //
+  // ADDING A NEW MODULE REQUIRES ZERO CHANGES TO THIS FILE.
   // ---------------------------------------------------------------------
 
-  function evalRule(rule, answers) {
-    if (rule.all || rule.any) {
-      if (rule.all && !rule.all.every(function (r) { return evalRule(r, answers); })) return false;
-      if (rule.any && !rule.any.some(function (r) { return evalRule(r, answers); })) return false;
-      return true;
-    }
-    let a = answers[rule.questionId];
+  /**
+   * Authoritative navigation state from backend (NavigationState DTO).
+   * null = server state unknown. Frontend MUST NOT make navigation decisions while null.
+   */
+  var serverNav = null;
 
-    // Client-side fact resolutions
-    if (rule.questionId === 'ip.coreProductExists') {
-      const pStage = answers['IP-01'];
-      a = pStage !== undefined && pStage !== null && pStage !== 'idea' ? 'true' : 'false';
-    } else if (rule.questionId === 'ip.creators') {
-      a = answers['IP-03'];
+  /**
+   * Fetches full NavigationState from the server.
+   * On failure: throws — caller must show error/retry UI.
+   * FAIL-CLOSED: if server is unavailable, we do NOT guess visibility.
+   */
+  async function syncNav(answers, currentQuestionId) {
+    if (!state.sessionId) {
+      const created = await api('POST', '/api/sessions');
+      state.sessionId = created.id;
+      saveState();
     }
+    var nav = await api('POST', '/api/sessions/' + state.sessionId + '/navigate', {
+      answers: answers,
+      currentQuestionId: currentQuestionId || state.currentQuestionId || null
+    });
+    serverNav = nav;
+    state.currentQuestionId = nav.currentQuestionId;
+    state.idx = nav.current > 0 ? nav.current - 1 : 0;
+    saveState();
+    return nav;
+  }
 
-    switch (rule.op) {
-      case 'answered': return a !== undefined && a !== null && a !== '' && !(Array.isArray(a) && !a.length);
-      case 'eq': return String(a).toLowerCase() === String(rule.value).toLowerCase();
-      case 'neq': return a !== undefined && String(a).toLowerCase() !== String(rule.value).toLowerCase();
-      case 'in':
-        if (typeof a !== 'string') return false;
-        if (Array.isArray(rule.value)) return rule.value.indexOf(a) !== -1;
-        if (typeof rule.value === 'string') return rule.value.split(',').map(function (s) { return s.trim(); }).indexOf(a) !== -1;
-        return false;
-      case 'notIn':
-        if (typeof a !== 'string') return true;
-        if (Array.isArray(rule.value)) return rule.value.indexOf(a) === -1;
-        if (typeof rule.value === 'string') return rule.value.split(',').map(function (s) { return s.trim(); }).indexOf(a) === -1;
-        return true;
-      case 'includes':
-      case 'contains':
-        if (Array.isArray(a)) return a.some(function (x) { return String(x).toLowerCase() === String(rule.value).toLowerCase(); });
-        if (typeof a === 'string') return a.split(',').map(function (s) { return s.trim().toLowerCase(); }).indexOf(String(rule.value).toLowerCase()) !== -1;
-        return false;
-      case 'notContains':
-        if (Array.isArray(a)) return !a.some(function (x) { return String(x).toLowerCase() === String(rule.value).toLowerCase(); });
-        if (typeof a === 'string') return a.split(',').map(function (s) { return s.trim().toLowerCase(); }).indexOf(String(rule.value).toLowerCase()) === -1;
-        return true;
-      default: return false;
+  function renderNavError() {
+    render(
+      '<section class="q-screen wrap-narrow">' +
+        '<h2 style="color:var(--critical); font-size:24px;">Ошибка соединения</h2>' +
+        '<p style="color:var(--ink-soft); margin:12px 0 24px;">Не удалось обновить навигацию с сервера. Проверьте подключение к сети.</p>' +
+        '<div class="q-nav">' +
+          '<button class="btn" id="retry-nav-btn">Повторить</button>' +
+        '</div>' +
+      '</section>'
+    );
+    const retryBtn = document.getElementById('retry-nav-btn');
+    if (retryBtn) {
+      retryBtn.addEventListener('click', function () {
+        syncNav(state.answers, state.currentQuestionId).then(screenQuestion).catch(renderNavError);
+      });
     }
   }
 
-  function visibleQuestions(answers) {
+  /**
+   * Returns the current question object from bank using server-authoritative currentQuestionId.
+   * Returns null if server nav state is unavailable.
+   */
+  function currentQuestion() {
+    if (!bank || !serverNav || !serverNav.currentQuestionId) return null;
+    return bank.questions.find(function (q) { return q.id === serverNav.currentQuestionId; }) || null;
+  }
+
+  /**
+   * Returns ordered visible questions list from server-authoritative visibleQuestionIds.
+   * Returns [] if server nav state is unavailable (fail-closed).
+   */
+  function visibleQuestions() {
+    if (!bank || !serverNav) return [];
+    var idSet = new Set(serverNav.visibleQuestionIds || []);
     return bank.questions.filter(function (q) {
-      if (q.enabled === false) return false;
-      if (!q.showIf || !q.showIf.length) return true;
-      return q.showIf.every(function (r) { return evalRule(r, answers); });
+      return q.enabled !== false && idSet.has(q.id);
     });
   }
 
@@ -324,7 +362,9 @@
         state.sessionId = 'local_' + Date.now();
       }
       state.answers = {};
+      state.currentQuestionId = null;
       state.idx = 0;
+      serverNav = null;
       lastResult = null;
       unlocked = false;
       isPaid = false;
@@ -340,7 +380,9 @@
         state.sessionId = 'local_' + Date.now();
       }
       state.answers = {};
+      state.currentQuestionId = null;
       state.idx = 0;
+      serverNav = null;
       lastResult = null;
       unlocked = false;
       isPaid = false;
@@ -391,7 +433,9 @@
         state.sessionId = 'local_' + Date.now();
       }
       state.answers = {};
+      state.currentQuestionId = null;
       state.idx = 0;
+      serverNav = null;
       lastResult = null;
       unlocked = false;
       isPaid = false;
@@ -410,14 +454,30 @@
   }
 
   function screenQuestion() {
-    const visible = visibleQuestions(state.answers);
-    if (state.idx >= visible.length) { finishDiagnostic(); return; }
-    if (state.idx < 0) state.idx = 0;
+    if (!serverNav) {
+      render(
+        '<section class="q-screen wrap-narrow">' +
+          '<div class="spinner" style="margin:50px auto"></div>' +
+        '</section>'
+      );
+      return;
+    }
 
-    const q = visible[state.idx];
-    const section = bank.sections.find(function (s) { return s.id === q.sectionId; });
-    const answered = state.idx;
-    setProgress(answered / visible.length);
+    if (!serverNav.currentQuestionId) {
+      finishDiagnostic();
+      return;
+    }
+
+    const q = bank.questions.find(function (item) { return item.id === serverNav.currentQuestionId; });
+    if (!q) {
+      finishDiagnostic();
+      return;
+    }
+
+    const section = bank.sections.find(function (s) { return s.id === q.sectionId; }) || { order: 1, title: '' };
+    const currentNum = serverNav.current || 1;
+    const totalNum = serverNav.totalVisible || 1;
+    setProgress((currentNum - 1) / totalNum);
 
     const current = state.answers[q.id];
     const isMultiple = q.type === 'multiple';
@@ -538,9 +598,9 @@
             '<div class="why-text" id="why-text" hidden>' + esc(q.explanation) + '</div></div>'
           : '') +
         '<div class="q-nav">' +
-          (state.idx > 0 ? '<button class="btn-ghost" id="back-btn">← Назад</button>' : '') +
+          (serverNav.previousQuestionId ? '<button class="btn-ghost" id="back-btn">← Назад</button>' : '') +
           (isMultiple || isEquityInputs || isEntityBuilder ? '<button class="btn" id="next-btn">Продолжить</button>' : '') +
-          '<span class="q-count">' + (state.idx + 1) + ' / ' + visible.length + '</span>' +
+          '<span class="q-count">' + currentNum + ' / ' + totalNum + '</span>' +
         '</div>' +
       '</section>'
     );
@@ -555,7 +615,16 @@
     }
 
     const backBtn = document.getElementById('back-btn');
-    if (backBtn) backBtn.addEventListener('click', function () { state.idx -= 1; saveState(); screenQuestion(); });
+    if (backBtn && serverNav.previousQuestionId) {
+      backBtn.addEventListener('click', async function () {
+        try {
+          await syncNav(state.answers, serverNav.previousQuestionId);
+          screenQuestion();
+        } catch (e) {
+          renderNavError();
+        }
+      });
+    }
 
     if (isEquityInputs) {
       function updateSum() {
@@ -772,16 +841,36 @@
       });
     }
 
-    function advance() {
+    async function advance() {
       const prevSection = q.sectionId;
-      state.idx += 1;
-      saveState();
-      const nextVisible = visibleQuestions(state.answers);
-      if (state.idx < nextVisible.length && nextVisible[state.idx].sectionId !== prevSection) {
-        track('diagnostic_section_completed', { sectionId: prevSection });
-        syncAnswers(prevSection);
+      try {
+        const res = await api('PUT', '/api/sessions/' + state.sessionId + '/answers', {
+          answers: state.answers,
+          lastSectionId: prevSection,
+          currentQuestionId: serverNav.nextQuestionId
+        });
+        if (res && res.navigation) {
+          serverNav = res.navigation;
+          state.currentQuestionId = res.navigation.currentQuestionId;
+          state.idx = res.navigation.current > 0 ? res.navigation.current - 1 : 0;
+          saveState();
+        } else {
+          await syncNav(state.answers, serverNav.nextQuestionId);
+        }
+
+        if (!serverNav || !serverNav.currentQuestionId) {
+          finishDiagnostic();
+          return;
+        }
+
+        const nextQ = bank.questions.find(function (item) { return item.id === serverNav.currentQuestionId; });
+        if (nextQ && nextQ.sectionId !== prevSection) {
+          track('diagnostic_section_completed', { sectionId: prevSection });
+        }
+        screenQuestion();
+      } catch (e) {
+        renderNavError();
       }
-      screenQuestion();
     }
 
     app.querySelectorAll('.q-option').forEach(function (btn) {
@@ -864,17 +953,19 @@
   // Results
   // ---------------------------------------------------------------------
 
-  function gaugeSvg(value, size) {
+  function gaugeSvg(value, size, isNa) {
     const stroke = Math.max(5, Math.round(size * 0.075));
     const r = (size - stroke) / 2;
     const c = 2 * Math.PI * r;
-    const cls = value === null ? 'g-na'
+    const isNone = value === null || value === undefined;
+    const cls = isNone ? 'g-na'
       : value >= 75 ? 'g-good' : value >= 50 ? 'g-ok' : value >= 30 ? 'g-mid' : 'g-low';
 
-    const effectiveVal = (value !== null && value >= 0) ? Math.max(4, value) : 0;
-    const dash = value === null ? 0 : (c * effectiveVal / 100);
+    const effectiveVal = (!isNone && value >= 0) ? Math.max(4, value) : 0;
+    const dash = isNone ? 0 : (c * effectiveVal / 100);
     const half = size / 2;
-    return '<svg class="gauge ' + cls + '" width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" role="img" aria-label="' + (value === null ? 'не применимо' : value + '% из 100%') + '">' +
+    const aria = isNa ? 'не применимо' : (isNone ? 'недостаточно данных' : value + '% из 100%');
+    return '<svg class="gauge ' + cls + '" width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" role="img" aria-label="' + aria + '">' +
       '<circle class="gauge-bg" cx="' + half + '" cy="' + half + '" r="' + r + '" stroke-width="' + stroke + '"></circle>' +
       '<circle class="gauge-arc" cx="' + half + '" cy="' + half + '" r="' + r + '" stroke-width="' + stroke + '"' +
         ' stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + c.toFixed(1) + '"' +
@@ -893,14 +984,15 @@
   }
 
   function sectionCard(s) {
-    const isNa = s.status === 'N_A' || s.score === null || s.score === undefined;
-    const scoreVal = isNa ? 0 : s.score;
-    const scoreText = isNa ? '—' : (scoreVal + '%');
-    const color = isNa ? 'var(--ink-faint)' : scoreVal >= 75 ? 'var(--positive)' : scoreVal >= 50 ? 'var(--warning)' : 'var(--critical)';
-    const statusText = isNa ? '• Не применимо' : scoreVal >= 75 ? '• Устойчиво' : scoreVal >= 50 ? '• В зоне внимания' : '• Критический риск';
+    const isNa = s.status === 'N_A';
+    const hasScore = s.score !== null && s.score !== undefined;
+    const scoreVal = hasScore ? s.score : 0;
+    const scoreText = hasScore ? (s.score + '%') : '—';
+    const color = isNa ? 'var(--ink-faint)' : !hasScore ? 'var(--ink-muted)' : scoreVal >= 75 ? 'var(--positive)' : scoreVal >= 50 ? 'var(--warning)' : 'var(--critical)';
+    const statusText = isNa ? '• Не применимо' : !hasScore ? '• Недостаточно данных' : scoreVal >= 75 ? '• Устойчиво' : scoreVal >= 50 ? '• В зоне внимания' : '• Критический риск';
     return (
       '<div class="sec-card">' +
-        '<div class="mini-gauge">' + gaugeSvg(scoreVal, 76, color) +
+        '<div class="mini-gauge">' + gaugeSvg(hasScore ? s.score : null, 76, isNa) +
           '<span class="gauge-value" style="color:' + color + ';font-size:19px">' + scoreText + '</span>' +
         '</div>' +
         '<div class="sec-info">' +
@@ -1476,7 +1568,19 @@
       return;
     }
     if (hash === '#/intro') { screenIntro(); return; }
-    if (hash === '#/diagnostic') { screenQuestion(); return; }
+    if (hash === '#/diagnostic') {
+      render(
+        '<section class="q-screen wrap-narrow">' +
+          '<div class="spinner" style="margin:50px auto"></div>' +
+        '</section>'
+      );
+      syncNav(state.answers, state.currentQuestionId).then(function () {
+        screenQuestion();
+      }).catch(function () {
+        renderNavError();
+      });
+      return;
+    }
     if (hash === '#/results') { screenResults(); return; }
     screenLanding();
   }

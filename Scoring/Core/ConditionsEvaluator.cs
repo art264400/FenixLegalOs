@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FenixLegalOs.Models;
+using FenixLegalOs.Models.Enums;
 
 namespace FenixLegalOs.Scoring.Core;
 
@@ -21,6 +22,8 @@ public class ConditionsEvaluator
 
         if (string.IsNullOrEmpty(rule.QuestionId)) return true;
 
+        var op = rule.Op ?? ConditionalOperator.Eq;
+
         // Check if QuestionId refers to a FactStore key
         if (factStore != null && (rule.QuestionId.Contains('.') || factStore.Facts.ContainsKey(rule.QuestionId)))
         {
@@ -28,74 +31,80 @@ public class ConditionsEvaluator
             {
                 if (factVal is bool b && bool.TryParse(rule.Value?.ToString(), out var targetBool))
                 {
-                    return rule.Op switch
+                    return op switch
                     {
-                        "eq" or null => b == targetBool,
-                        "neq" => b != targetBool,
-                        _ => throw new InvalidOperationException($"Unsupported boolean conditional operator: '{rule.Op}' for key '{rule.QuestionId}'")
+                        ConditionalOperator.Eq => b == targetBool,
+                        ConditionalOperator.Neq => b != targetBool,
+                        _ => throw new InvalidOperationException($"Unsupported boolean conditional operator: '{op}' for key '{rule.QuestionId}'")
                     };
                 }
                 if (factVal is IEnumerable<string> strList)
                 {
                     var targetStr = rule.Value?.ToString() ?? "";
-                    return rule.Op switch
+                    return op switch
                     {
-                        "contains" or "eq" or "in" => strList.Any(x => x.Equals(targetStr, StringComparison.OrdinalIgnoreCase)),
-                        "notContains" or "neq" => !strList.Any(x => x.Equals(targetStr, StringComparison.OrdinalIgnoreCase)),
-                        _ => throw new InvalidOperationException($"Unsupported collection conditional operator: '{rule.Op}' for key '{rule.QuestionId}'")
+                        ConditionalOperator.Contains or ConditionalOperator.Eq or ConditionalOperator.In =>
+                            strList.Any(x => x.Equals(targetStr, StringComparison.OrdinalIgnoreCase)),
+                        ConditionalOperator.NotContains or ConditionalOperator.Neq =>
+                            !strList.Any(x => x.Equals(targetStr, StringComparison.OrdinalIgnoreCase)),
+                        _ => throw new InvalidOperationException($"Unsupported collection conditional operator: '{op}' for key '{rule.QuestionId}'")
                     };
                 }
                 if (factVal != null)
                 {
-                    return EvaluateOp(rule.Op, factVal.ToString() ?? "", rule.Value, factVal, rule.QuestionId);
+                    return EvaluateOp(op, factVal.ToString() ?? "", rule.Value, factVal, rule.QuestionId);
                 }
             }
         }
 
         if (!answers.TryGetValue(rule.QuestionId, out var rawVal) || rawVal == null)
-            return rule.Op == "neq" || rule.Op == "notIn" || rule.Op == "notContains";
+            return op is ConditionalOperator.Neq or ConditionalOperator.NotIn or ConditionalOperator.NotContains;
 
         if (rawVal is JsonElement je && je.ValueKind == JsonValueKind.Array)
         {
             var arrVals = new List<string>();
             foreach (var el in je.EnumerateArray()) arrVals.Add(el.ToString());
             var targetStr = rule.Value?.ToString() ?? "";
-            return rule.Op switch
+            return op switch
             {
-                "contains" or "eq" or "in" => arrVals.Any(x => x.Equals(targetStr, StringComparison.OrdinalIgnoreCase)),
-                "notContains" or "neq" => !arrVals.Any(x => x.Equals(targetStr, StringComparison.OrdinalIgnoreCase)),
-                _ => throw new InvalidOperationException($"Unsupported array conditional operator: '{rule.Op}' for question '{rule.QuestionId}'")
+                ConditionalOperator.Contains or ConditionalOperator.Eq or ConditionalOperator.In =>
+                    arrVals.Any(x => x.Equals(targetStr, StringComparison.OrdinalIgnoreCase)),
+                ConditionalOperator.NotContains or ConditionalOperator.Neq =>
+                    !arrVals.Any(x => x.Equals(targetStr, StringComparison.OrdinalIgnoreCase)),
+                _ => throw new InvalidOperationException($"Unsupported array conditional operator: '{op}' for question '{rule.QuestionId}'")
             };
         }
 
         if (rawVal is IEnumerable<string> listVal)
         {
             var targetStr = rule.Value?.ToString() ?? "";
-            return rule.Op switch
+            return op switch
             {
-                "contains" or "eq" or "in" => listVal.Any(x => x.Equals(targetStr, StringComparison.OrdinalIgnoreCase)),
-                "notContains" or "neq" => !listVal.Any(x => x.Equals(targetStr, StringComparison.OrdinalIgnoreCase)),
-                _ => throw new InvalidOperationException($"Unsupported list conditional operator: '{rule.Op}' for question '{rule.QuestionId}'")
+                ConditionalOperator.Contains or ConditionalOperator.Eq or ConditionalOperator.In =>
+                    listVal.Any(x => x.Equals(targetStr, StringComparison.OrdinalIgnoreCase)),
+                ConditionalOperator.NotContains or ConditionalOperator.Neq =>
+                    !listVal.Any(x => x.Equals(targetStr, StringComparison.OrdinalIgnoreCase)),
+                _ => throw new InvalidOperationException($"Unsupported list conditional operator: '{op}' for question '{rule.QuestionId}'")
             };
         }
 
         var valStr = rawVal.ToString() ?? "";
-        return EvaluateOp(rule.Op, valStr, rule.Value, rawVal, rule.QuestionId);
+        return EvaluateOp(op, valStr, rule.Value, rawVal, rule.QuestionId);
     }
 
-    private static bool EvaluateOp(string? op, string valStr, object? ruleValue, object? rawVal, string questionId)
+    private static bool EvaluateOp(ConditionalOperator op, string valStr, object? ruleValue, object? rawVal, string questionId)
     {
         return op switch
         {
-            "eq" => valStr.Equals(ruleValue?.ToString(), StringComparison.OrdinalIgnoreCase),
-            "neq" => !valStr.Equals(ruleValue?.ToString(), StringComparison.OrdinalIgnoreCase),
-            "in" => RuleValueContains(ruleValue, valStr),
-            "notIn" => !RuleValueContains(ruleValue, valStr),
-            "contains" => valStr.Split(',', StringSplitOptions.TrimEntries).Any(x => x.Equals(ruleValue?.ToString(), StringComparison.OrdinalIgnoreCase)),
-            "notContains" => !valStr.Split(',', StringSplitOptions.TrimEntries).Any(x => x.Equals(ruleValue?.ToString(), StringComparison.OrdinalIgnoreCase)),
-            "answered" => !string.IsNullOrEmpty(valStr),
-            "gte" => double.TryParse(valStr, out var v1) && double.TryParse(ruleValue?.ToString(), out var v2) && v1 >= v2,
-            "lte" => double.TryParse(valStr, out var v3) && double.TryParse(ruleValue?.ToString(), out var v4) && v3 <= v4,
+            ConditionalOperator.Eq => valStr.Equals(ruleValue?.ToString(), StringComparison.OrdinalIgnoreCase),
+            ConditionalOperator.Neq => !valStr.Equals(ruleValue?.ToString(), StringComparison.OrdinalIgnoreCase),
+            ConditionalOperator.In => RuleValueContains(ruleValue, valStr),
+            ConditionalOperator.NotIn => !RuleValueContains(ruleValue, valStr),
+            ConditionalOperator.Contains => valStr.Split(',', StringSplitOptions.TrimEntries).Any(x => x.Equals(ruleValue?.ToString(), StringComparison.OrdinalIgnoreCase)),
+            ConditionalOperator.NotContains => !valStr.Split(',', StringSplitOptions.TrimEntries).Any(x => x.Equals(ruleValue?.ToString(), StringComparison.OrdinalIgnoreCase)),
+            ConditionalOperator.Answered => !string.IsNullOrEmpty(valStr),
+            ConditionalOperator.Gte => double.TryParse(valStr, out var v1) && double.TryParse(ruleValue?.ToString(), out var v2) && v1 >= v2,
+            ConditionalOperator.Lte => double.TryParse(valStr, out var v3) && double.TryParse(ruleValue?.ToString(), out var v4) && v3 <= v4,
             _ => throw new InvalidOperationException($"Unsupported conditional operator: '{op}' for question '{questionId}'")
         };
     }

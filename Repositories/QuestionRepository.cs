@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Dapper;
 using FenixLegalOs.Models;
+using FenixLegalOs.Models.Enums;
 using Microsoft.Data.Sqlite;
 
 namespace FenixLegalOs.Repositories;
@@ -60,8 +61,8 @@ public class QuestionRepository
                 Order = Convert.ToInt32(r.order_num),
                 Question = (string)r.question,
                 Explanation = r.explanation as string,
-                Type = (string)r.type,
-                ScoreMode = (string)r.score_mode,
+                Type = ParseWireEnum<QuestionType>((string)r.type),
+                ScoreMode = ParseWireEnum<ScoreMode>((string)r.score_mode),
                 Weight = Convert.ToDouble(r.weight),
                 DimensionWeight = Convert.ToDouble(r.dimension_weight),
                 WithinDimensionWeight = Convert.ToDouble(r.within_dimension_weight),
@@ -97,8 +98,8 @@ public class QuestionRepository
             {
                 Code = (string)r.code,
                 RootCauseGroup = (string)r.root_cause_group,
-                Severity = (string)r.severity,
-                Priority = (string)r.priority,
+                Severity = ParseWireEnum<RiskSeverity>((string)r.severity),
+                Priority = ParseWireEnum<RiskPriority>((string)r.priority),
                 SectionId = (string)r.section_id,
                 Modules = !string.IsNullOrEmpty((string)r.modules_json)
                     ? JsonSerializer.Deserialize<List<string>>((string)r.modules_json, JsonOpts) ?? new()
@@ -111,12 +112,13 @@ public class QuestionRepository
                     : new List<string>(),
                 Recommendation = (string)r.recommendation,
                 LawyerRequired = Convert.ToInt32(r.lawyer_required) == 1,
-                Resolution = (string)r.resolution,
+                Resolution = ParseWireEnum<ResolutionType>((string)r.resolution),
                 ServiceCode = r.service_code as string,
                 SuppressCodes = !string.IsNullOrEmpty((string)r.suppress_codes_json)
                     ? JsonSerializer.Deserialize<List<string>>((string)r.suppress_codes_json, JsonOpts) ?? new()
                     : new List<string>(),
-                Cta = r.cta as string
+                Cta = r.cta as string,
+                AffectedDimensions = Data.DataBank.Risks.FirstOrDefault(x => x.Code == (string)r.code)?.AffectedDimensions ?? new()
             };
             list.Add(risk);
         }
@@ -129,5 +131,10 @@ public class QuestionRepository
         conn.Open();
         var rows = conn.Query("SELECT key, version FROM knowledge_versions");
         return rows.ToDictionary(r => (string)r.key, r => (string)r.version);
+    }
+
+    private static TEnum ParseWireEnum<TEnum>(string wireVal) where TEnum : struct, Enum
+    {
+        return JsonSerializer.Deserialize<TEnum>($"\"{wireVal}\"");
     }
 }

@@ -12,4 +12,13 @@
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.10" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Remove="extracted_media\word\media\image2.png" />
+    <None Remove="extracted_media\word\media\image10.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="extracted_media\word\media\" />
+  </ItemGroup>
+
 </Project>

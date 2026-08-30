@@ -237,8 +237,8 @@ public class DbInitializer
                 Order = q.Order,
                 q.Question,
                 q.Explanation,
-                q.Type,
-                q.ScoreMode,
+                Type = JsonSerializer.Serialize(q.Type).Trim('"'),
+                ScoreMode = JsonSerializer.Serialize(q.ScoreMode).Trim('"'),
                 q.Weight,
                 q.DimensionWeight,
                 q.WithinDimensionWeight,
@@ -283,8 +283,8 @@ public class DbInitializer
             {
                 r.Code,
                 r.RootCauseGroup,
-                r.Severity,
-                r.Priority,
+                Severity = JsonSerializer.Serialize(r.Severity).Trim('"'),
+                Priority = JsonSerializer.Serialize(r.Priority).Trim('"'),
                 r.SectionId,
                 ModulesJson = JsonSerializer.Serialize(r.Modules),
                 r.Title,
@@ -293,12 +293,22 @@ public class DbInitializer
                 RecommendationsJson = JsonSerializer.Serialize(r.Recommendations),
                 r.Recommendation,
                 LawyerRequired = r.LawyerRequired ? 1 : 0,
-                r.Resolution,
+                Resolution = JsonSerializer.Serialize(r.Resolution).Trim('"'),
                 r.ServiceCode,
                 SuppressCodesJson = JsonSerializer.Serialize(r.SuppressCodes),
                 r.Cta
             });
         }
+
+        // 3b. Remove obsolete questions, risks, sections not present in canonical DataBank
+        var validQuestionIds = DataBank.Questions.Select(q => q.Id).ToList();
+        conn.Execute("DELETE FROM questions WHERE id NOT IN @validQuestionIds", new { validQuestionIds });
+
+        var validRiskCodes = DataBank.Risks.Select(r => r.Code).ToList();
+        conn.Execute("DELETE FROM risks WHERE code NOT IN @validRiskCodes", new { validRiskCodes });
+
+        var validSectionIds = DataBank.Sections.Select(s => s.Id).ToList();
+        conn.Execute("DELETE FROM sections WHERE id NOT IN @validSectionIds", new { validSectionIds });
 
         // 4. Record Versions
         conn.Execute(@"

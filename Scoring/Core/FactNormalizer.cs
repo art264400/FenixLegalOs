@@ -1,8 +1,10 @@
 using FenixLegalOs.Models;
+using FenixLegalOs.Models.Enums;
 using FenixLegalOs.Scoring.Interfaces;
 using FenixLegalOs.Scoring.Modules.Corporate;
 using FenixLegalOs.Scoring.Modules.Founders;
 using FenixLegalOs.Scoring.Modules.IP;
+using FenixLegalOs.Scoring.Modules.Team;
 
 namespace FenixLegalOs.Scoring.Core;
 
@@ -15,14 +17,34 @@ public class FactNormalizer
     {
         new FoundersFactNormalizer(),
         new CorporateFactNormalizer(),
-        new IpFactNormalizer()
+        new IpFactNormalizer(),
+        new TeamFactNormalizer()
     };
 
     public static SharedFactStore NormalizeFacts(Dictionary<string, object> answers)
     {
         var store = new SharedFactStore();
 
-        // 1. Run all registered module fact normalizers
+        // 1. Generic question score normalization from DataBank.Questions (§23 / §27.2)
+        foreach (var (qId, ansVal) in answers)
+        {
+            if (ansVal == null) continue;
+            var q = Data.DataBank.Questions.FirstOrDefault(x => x.Id == qId);
+            if (q != null && q.ScoreMode == ScoreMode.Diagnostic && q.Options != null)
+            {
+                var opt = q.Options.FirstOrDefault(o => o.Id == ansVal.ToString());
+                if (opt != null)
+                {
+                    store.Facts[$"score.{qId}"] = opt.Score;
+                }
+                else if (qId == "FND-05" && ansVal.ToString() == "none")
+                {
+                    store.Facts[$"score.{qId}"] = 0.0;
+                }
+            }
+        }
+
+        // 2. Run all registered module fact normalizers
         foreach (var normalizer in ModuleNormalizers)
         {
             normalizer.Normalize(answers, store);

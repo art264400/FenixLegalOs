@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using FenixLegalOs.Models;
 using FenixLegalOs.Repositories;
 using FenixLegalOs.Services;
@@ -66,9 +66,14 @@ public class SessionsController : ControllerBase
         }
 
         string? lastSectionId = body.TryGetProperty("lastSectionId", out var secProp) ? secProp.GetString() : null;
+        string? currentQuestionId = body.TryGetProperty("currentQuestionId", out var cqProp) ? cqProp.GetString() : null;
 
         bool ok = _sessions.SaveAnswers(id, answersJson, lastSectionId);
-        return ok ? Ok(new { ok = true }) : NotFound(new { error = "not_found" });
+        if (!ok) return NotFound(new { error = "not_found" });
+
+        // Architecture A: Return authoritative navigation state alongside save acknowledgement.
+        var navigation = _scoringEngine.GetNavigationState(answersDict, currentQuestionId);
+        return Ok(new { accepted = true, navigation });
     }
 
     [HttpGet("{id}/answers")]
@@ -103,6 +108,31 @@ public class SessionsController : ControllerBase
         return Ok(new { result });
     }
 
+    /// <summary>
+    /// Architecture A вЂ” Server-Driven Routing:
+    /// Accepts draft answers, returns the authoritative list of visible question IDs.
+    /// Frontend uses this to navigate without any local ShowIf/fact evaluation.
+    /// Adding a new module requires ZERO changes to the frontend.
+    /// </summary>
+    [HttpPost("{id}/navigate")]
+    public IActionResult Navigate(string id, [FromBody] JsonElement body)
+    {
+        Dictionary<string, object> answers = new();
+
+        if (body.TryGetProperty("answers", out var answersProp))
+        {
+            answers = JsonSerializer.Deserialize<Dictionary<string, object>>(answersProp.GetRawText()) ?? new();
+        }
+
+        var visibleIds = _scoringEngine.GetVisibleQuestionIds(answers);
+
+        return Ok(new
+        {
+            visibleQuestionIds = visibleIds,
+            totalVisible = visibleIds.Count
+        });
+    }
+
     [HttpGet("{id}/result")]
     public IActionResult GetResult(string id)
     {
@@ -120,9 +150,9 @@ public class SessionsController : ControllerBase
             {
                 if (i >= 2)
                 {
-                    result.Risks[i].Finding = "Детальный разбор доступен в полном платном отчете";
-                    result.Risks[i].WhyItMatters = "Информация скрыта в бесплатной демо-версии";
-                    result.Risks[i].Recommendation = "Разблокируйте отчёт и дорожную карту для просмотра рекомендаций юриста";
+                    result.Risks[i].Finding = "Р”РµС‚Р°Р»СЊРЅС‹Р№ СЂР°Р·Р±РѕСЂ РґРѕСЃС‚СѓРїРµРЅ РІ РїРѕР»РЅРѕРј РїР»Р°С‚РЅРѕРј РѕС‚С‡РµС‚Рµ";
+                    result.Risks[i].WhyItMatters = "РРЅС„РѕСЂРјР°С†РёСЏ СЃРєСЂС‹С‚Р° РІ Р±РµСЃРїР»Р°С‚РЅРѕР№ РґРµРјРѕ-РІРµСЂСЃРёРё";
+                    result.Risks[i].Recommendation = "Р Р°Р·Р±Р»РѕРєРёСЂСѓР№С‚Рµ РѕС‚С‡С‘С‚ Рё РґРѕСЂРѕР¶РЅСѓСЋ РєР°СЂС‚Сѓ РґР»СЏ РїСЂРѕСЃРјРѕС‚СЂР° СЂРµРєРѕРјРµРЅРґР°С†РёР№ СЋСЂРёСЃС‚Р°";
                 }
             }
         }
@@ -192,7 +222,7 @@ public class SessionsController : ControllerBase
 
         if (!session.Paid)
         {
-            return Ok(new { summary = "🔒 **AI-заключение доступно после оплаты**\n\nРазблокируйте полный отчёт Fenix Legal OS, чтобы получить персональный юридический меморандум венчурного юриста и пошаговый Action Plan." });
+            return Ok(new { summary = "рџ”’ **AI-Р·Р°РєР»СЋС‡РµРЅРёРµ РґРѕСЃС‚СѓРїРЅРѕ РїРѕСЃР»Рµ РѕРїР»Р°С‚С‹**\n\nР Р°Р·Р±Р»РѕРєРёСЂСѓР№С‚Рµ РїРѕР»РЅС‹Р№ РѕС‚С‡С‘С‚ Fenix Legal OS, С‡С‚РѕР±С‹ РїРѕР»СѓС‡РёС‚СЊ РїРµСЂСЃРѕРЅР°Р»СЊРЅС‹Р№ СЋСЂРёРґРёС‡РµСЃРєРёР№ РјРµРјРѕСЂР°РЅРґСѓРј РІРµРЅС‡СѓСЂРЅРѕРіРѕ СЋСЂРёСЃС‚Р° Рё РїРѕС€Р°РіРѕРІС‹Р№ Action Plan." });
         }
 
         var result = JsonSerializer.Deserialize<ScoreResult>(session.ResultJson);
@@ -204,3 +234,4 @@ public class SessionsController : ControllerBase
         return Ok(new { summary });
     }
 }
+

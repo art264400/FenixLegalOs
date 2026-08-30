@@ -213,7 +213,7 @@ public class IpFactNormalizer : IFactNormalizer
         if (answers.TryGetValue("IP-15", out var ip15Raw) && ip15Raw != null)
         {
             var ip15 = ip15Raw.ToString() ?? "";
-            if (ip15 is "clear" or "licensed" or "unchecked" or "risk")
+            if (ip15 is "clear" or "mostly" or "some_unknown" or "external_unchecked" or "unknown" or "licensed" or "unchecked" or "risk")
             {
                 f["ip.contentProvenance"] = ip15;
             }

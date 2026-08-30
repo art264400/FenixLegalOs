@@ -10,7 +10,7 @@ public class ModuleScorer
         return sectionId switch
         {
             "founders" => true,
-            "corporate" => (string?)f.GetValueOrDefault("company.entityStatus") is "incorporated" or "single" or "multiple" or "registering",
+            "corporate" => (string?)f.GetValueOrDefault("company.entityStatus") is "incorporated" or "registering",
             "ip" => true,
             "team" => GetBoolFact(f, "team.hasNonFounderTeam"),
             "data" => GetBoolFact(f, "data.personalDataProcessed") || GetBoolFact(f, "ai.used"),

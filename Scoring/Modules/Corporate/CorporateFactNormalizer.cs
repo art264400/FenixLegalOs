@@ -241,9 +241,33 @@ public class CorporateFactNormalizer : IFactNormalizer
         if (answers.TryGetValue("COR-08", out var cor08Raw) && cor08Raw != null)
         {
             var cor08 = cor08Raw.ToString() ?? "";
-            if (cor08 is "organized" or "partial" or "disorganized")
+            if (cor08 is "organized" or "scattered" or "reconstruct" or "missing" or "partial" or "disorganized")
             {
                 f["corporate.records"] = cor08;
+            }
+        }
+
+        if (answers.TryGetValue("COR-T01", out var corT01Raw) && corT01Raw != null)
+        {
+            var corT01 = corT01Raw.ToString() ?? "";
+            switch (corT01)
+            {
+                case "none":
+                    f["company.hiddenBeneficiary"] = false;
+                    break;
+                case "formal":
+                    f["company.hiddenBeneficiary"] = false;
+                    f["company.holdingStructure"] = true;
+                    break;
+                case "indirect":
+                    f["company.hiddenControl"] = "indirect";
+                    break;
+                case "informal":
+                    f["company.hiddenControl"] = "informal";
+                    break;
+                case "unknown":
+                    f["company.hiddenControl"] = "unknown";
+                    break;
             }
         }
     }

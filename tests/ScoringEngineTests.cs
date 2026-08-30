@@ -1,3 +1,5 @@
+using FenixLegalOs.Models.Enums;
+using FenixLegalOs.Scoring.Core;
 using FenixLegalOs.Data;
 using FenixLegalOs.Models;
 using FenixLegalOs.Repositories;
@@ -57,7 +59,7 @@ public class ScoringEngineTests
         Assert.True(result.CriticalCount >= 1, $"Ожидался минимум 1 критический риск, получено: {result.CriticalCount}");
         
         var hasDeadlockRisk = result.Risks.Any(r => 
-            r.Severity is "CRITICAL" or "HIGH" &&
+            r.Severity is RiskSeverity.Critical or RiskSeverity.High &&
             (r.Code.StartsWith("FND_", StringComparison.OrdinalIgnoreCase) || 
              r.Code.Contains("FOUNDERS", StringComparison.OrdinalIgnoreCase) || 
              r.Title.Contains("доли", StringComparison.OrdinalIgnoreCase) || 
@@ -87,7 +89,7 @@ public class ScoringEngineTests
         Assert.True(result.Overall >= 0);
         var foundersSec = result.Sections.FirstOrDefault(s => s.SectionId == "founders");
         Assert.NotNull(foundersSec);
-        Assert.Equal("APPLICABLE", foundersSec.Status);
+        Assert.Equal(ApplicabilityStatus.Applicable, foundersSec.Status);
         Assert.Equal(100, foundersSec.Score);
     }
 
@@ -118,7 +120,7 @@ public class ScoringEngineTests
         Assert.True(result.Overall > 0, $"Ожидался Overall > 0, получено: {result.Overall}");
         var corpSec = result.Sections.FirstOrDefault(s => s.SectionId == "corporate");
         Assert.NotNull(corpSec);
-        Assert.Equal("APPLICABLE", corpSec.Status);
+        Assert.Equal(ApplicabilityStatus.Applicable, corpSec.Status);
         Assert.NotNull(corpSec.Score);
     }
 
@@ -138,19 +140,19 @@ public class ScoringEngineTests
         Assert.DoesNotContain(result.Risks, r => r.Code == "COR_NO_ENTITY_FOR_ACTIVITY");
         var corpSec = result.Sections.FirstOrDefault(s => s.SectionId == "corporate");
         Assert.NotNull(corpSec);
-        Assert.Equal("N_A", corpSec.Status);
+        Assert.Equal(ApplicabilityStatus.NotApplicable, corpSec.Status);
     }
 
     [Fact(DisplayName = "2.3 Корпоративная структура: Pre-incorporation с коммерческой выручкой или нанятой командой активирует HIGH риск COR_NO_ENTITY_FOR_ACTIVITY")]
     public void Pre_Incorporation_With_Active_Revenue_Or_Team_Should_Trigger_COR_NO_ENTITY_FOR_ACTIVITY()
     {
-        // Сценарий: Юрлица нет, но проект ведёт коммерческую деятельность с командой и выручкой
+        // Сценарий: Юрлица нет, но проект ведёт коммерческую деятельность с командой
+        // TEAM-01 = ["employees"] → team.hasNonFounderTeam = true (canonical visible answer)
         var answers = new Dictionary<string, object>
         {
             ["FND-C01"] = "solo",
             ["COR-C01"] = "none",
-            ["TEAM-C01"] = "contractors",
-            ["REV-01"] = "active"
+            ["TEAM-01"] = new List<string> { "employees" }  // hasNonFounderTeam = true (replaces TEAM-C01)
         };
 
         var result = _engine.ComputeResult(answers);
@@ -158,7 +160,7 @@ public class ScoringEngineTests
         Assert.NotNull(result);
         var finding = result.Risks.FirstOrDefault(r => r.Code == "COR_NO_ENTITY_FOR_ACTIVITY");
         Assert.NotNull(finding);
-        Assert.Equal("HIGH", finding.Severity);
+        Assert.Equal(RiskSeverity.High, finding.Severity);
         Assert.Equal("ENTITY_ALIGNMENT", finding.RootCauseGroup);
     }
 
@@ -311,9 +313,9 @@ public class ScoringEngineTests
         Assert.NotNull(result);
         var ipSec = result.Sections.FirstOrDefault(s => s.SectionId == "ip");
         Assert.NotNull(ipSec);
-        Assert.Equal("APPLICABLE", ipSec.Status);
+        Assert.Equal(ApplicabilityStatus.Applicable, ipSec.Status);
         Assert.Equal(100, ipSec.Score);
-        Assert.DoesNotContain(result.Risks, r => r.SectionId == "ip" && r.Severity is "CRITICAL" or "HIGH");
+        Assert.DoesNotContain(result.Risks, r => r.SectionId == "ip" && r.Severity is RiskSeverity.Critical or RiskSeverity.High);
     }
 
     [Fact(DisplayName = "3.2 Интеллектуальная собственность: Отсутствие документов на ключевой продукт активирует CRITICAL риск и подавляет дочерние разрывы")]
@@ -340,7 +342,7 @@ public class ScoringEngineTests
         Assert.NotNull(result);
         var criticalRisk = result.Risks.FirstOrDefault(r => r.Code == "IP_PRODUCT_RIGHTS_UNCONFIRMED");
         Assert.NotNull(criticalRisk);
-        Assert.Equal("CRITICAL", criticalRisk.Severity);
+        Assert.Equal(RiskSeverity.Critical, criticalRisk.Severity);
         Assert.Equal("IP_OWNERSHIP", criticalRisk.RootCauseGroup);
 
         // Проверка канонического механизма подавления дублирующих рисков
@@ -370,7 +372,7 @@ public class ScoringEngineTests
         Assert.NotNull(result);
         var formerRisk = result.Risks.FirstOrDefault(r => r.Code == "IP_FORMER_DEVELOPER_GAP");
         Assert.NotNull(formerRisk);
-        Assert.Equal("CRITICAL", formerRisk.Severity);
+        Assert.Equal(RiskSeverity.Critical, formerRisk.Severity);
         Assert.Equal("KEY_DEVELOPER", formerRisk.RootCauseGroup);
     }
 
@@ -396,7 +398,7 @@ public class ScoringEngineTests
         Assert.NotNull(result);
         var employerRisk = result.Risks.FirstOrDefault(r => r.Code == "IP_EMPLOYER_RISK");
         Assert.NotNull(employerRisk);
-        Assert.Equal("CRITICAL", employerRisk.Severity);
+        Assert.Equal(RiskSeverity.Critical, employerRisk.Severity);
         Assert.Equal("IP_EMPLOYER", employerRisk.RootCauseGroup);
     }
 
@@ -416,7 +418,7 @@ public class ScoringEngineTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.DoesNotContain(result.Risks, r => r.SectionId == "ip" && r.Severity is "CRITICAL" or "HIGH");
+        Assert.DoesNotContain(result.Risks, r => r.SectionId == "ip" && r.Severity is RiskSeverity.Critical or RiskSeverity.High);
     }
 
     [Fact(DisplayName = "3.6 Интеллектуальная собственность: Незарегистрированный товарный знак не штрафует скоринг и создает информационный риск")]
@@ -450,7 +452,7 @@ public class ScoringEngineTests
         Assert.Equal(100, ipSec.Score); // Отсутствие товарного знака на ранней стадии не штрафует скоринг
         var brandInfo = result.Risks.FirstOrDefault(r => r.Code == "IP_BRAND_REGISTRATION_INFO");
         Assert.NotNull(brandInfo);
-        Assert.Equal("INFO", brandInfo.Severity);
+        Assert.Equal(RiskSeverity.Info, brandInfo.Severity);
     }
 
     [Fact(DisplayName = "3.7 Интеллектуальная собственность: Маршрутизация IP-10 → IP-10A управляет видимостью и весами вопроса о ресурсах работодателя")]
@@ -521,7 +523,7 @@ public class ScoringEngineTests
         var res3 = _engine.ComputeResult(critAnswers);
         var rCrit = res3.Risks.FirstOrDefault(r => r.Code == "IP_EMPLOYER_RISK");
         Assert.NotNull(rCrit);
-        Assert.Equal("CRITICAL", rCrit.Severity);
+        Assert.Equal(RiskSeverity.Critical, rCrit.Severity);
     }
 
     [Fact(DisplayName = "3.10 Интеллектуальная собственность: Граничные условия Rule Engine для сторонних компонентов (системный аудит vs отсутствие аудита)")]
@@ -547,7 +549,7 @@ public class ScoringEngineTests
         var res2 = _engine.ComputeResult(riskAnswers);
         var rTp = res2.Risks.FirstOrDefault(r => r.Code == "IP_THIRD_PARTY_COMPONENTS");
         Assert.NotNull(rTp);
-        Assert.Equal("MEDIUM", rTp.Severity);
+        Assert.Equal(RiskSeverity.Medium, rTp.Severity);
     }
 
     [Fact(DisplayName = "4.1 Точный скоринг: Идеальный профиль дает ровно 100 баллов, Level 'strong' и статус 'Сильная основа'")]
@@ -594,7 +596,7 @@ public class ScoringEngineTests
 
         Assert.NotNull(result);
         Assert.Equal(100, result.Overall);
-        Assert.Equal("strong", result.Level);
+        Assert.Equal(LegalScoreLevel.Strong, result.Level);
         Assert.Equal("Сильная основа", result.LevelTitle);
         Assert.Equal(0, result.CriticalCount);
         Assert.Equal(0, result.HighCount);
@@ -630,7 +632,7 @@ public class ScoringEngineTests
         var ipSec = result.Sections.FirstOrDefault(s => s.SectionId == "ip");
 
         Assert.Equal(100, fndSec?.Score);
-        Assert.Equal("N_A", corpSec?.Status);
+        Assert.Equal(ApplicabilityStatus.NotApplicable, corpSec?.Status);
         Assert.Null(corpSec?.Score);
         Assert.Equal(100, ipSec?.Score);
         Assert.Equal(100, result.Overall);
@@ -673,7 +675,7 @@ public class ScoringEngineTests
         var corpSec = result.Sections.FirstOrDefault(s => s.SectionId == "corporate");
 
         Assert.NotNull(corpSec);
-        Assert.Equal("APPLICABLE", corpSec.Status);
+        Assert.Equal(ApplicabilityStatus.Applicable, corpSec.Status);
 
         // Ручной расчёт формулы: Round(93.85) = 94
         const int expectedScore = 94;
@@ -691,19 +693,19 @@ public class ScoringEngineTests
         // [60..79]  -> "attention"        ("Есть вопросы, требующие внимания")
         // [80..100] -> "strong"           ("Сильная основа")
 
-        Assert.Equal("structural_risks", ScoringEngine.GetLevel(0));
-        Assert.Equal("structural_risks", ScoringEngine.GetLevel(39));
-        Assert.Equal("material_gaps", ScoringEngine.GetLevel(40));
-        Assert.Equal("material_gaps", ScoringEngine.GetLevel(59));
-        Assert.Equal("attention", ScoringEngine.GetLevel(60));
-        Assert.Equal("attention", ScoringEngine.GetLevel(79));
-        Assert.Equal("strong", ScoringEngine.GetLevel(80));
-        Assert.Equal("strong", ScoringEngine.GetLevel(100));
+        Assert.Equal(LegalScoreLevel.StructuralRisks, ScoringEngine.GetLevel(0));
+        Assert.Equal(LegalScoreLevel.StructuralRisks, ScoringEngine.GetLevel(39));
+        Assert.Equal(LegalScoreLevel.MaterialGaps, ScoringEngine.GetLevel(40));
+        Assert.Equal(LegalScoreLevel.MaterialGaps, ScoringEngine.GetLevel(59));
+        Assert.Equal(LegalScoreLevel.Attention, ScoringEngine.GetLevel(60));
+        Assert.Equal(LegalScoreLevel.Attention, ScoringEngine.GetLevel(79));
+        Assert.Equal(LegalScoreLevel.Strong, ScoringEngine.GetLevel(80));
+        Assert.Equal(LegalScoreLevel.Strong, ScoringEngine.GetLevel(100));
 
-        Assert.Equal("Структурные вопросы", ScoringEngine.GetLevelTitle("structural_risks"));
-        Assert.Equal("Существенные пробелы", ScoringEngine.GetLevelTitle("material_gaps"));
-        Assert.Equal("Есть вопросы, требующие внимания", ScoringEngine.GetLevelTitle("attention"));
-        Assert.Equal("Сильная основа", ScoringEngine.GetLevelTitle("strong"));
+        Assert.Equal("Структурные вопросы", ScoringEngine.GetLevelTitle(LegalScoreLevel.StructuralRisks));
+        Assert.Equal("Существенные пробелы", ScoringEngine.GetLevelTitle(LegalScoreLevel.MaterialGaps));
+        Assert.Equal("Есть вопросы, требующие внимания", ScoringEngine.GetLevelTitle(LegalScoreLevel.Attention));
+        Assert.Equal("Сильная основа", ScoringEngine.GetLevelTitle(LegalScoreLevel.Strong));
     }
 
     [Fact(DisplayName = "4.5 Точный скоринг: Расчёт процента уверенности (Confidence Score) при неизвестных ответах")]
@@ -775,7 +777,7 @@ public class ScoringEngineTests
         var ipSec = result.Sections.FirstOrDefault(s => s.SectionId == "ip");
 
         Assert.NotNull(ipSec);
-        Assert.Equal("APPLICABLE", ipSec.Status);
+        Assert.Equal(ApplicabilityStatus.Applicable, ipSec.Status);
 
         // Ручной расчёт формулы: Round((56.50 / 62.0) * 100) = 91
         const int expectedScore = 91;
@@ -825,7 +827,7 @@ public class ScoringEngineTests
         var rule = new ConditionalRule
         {
             QuestionId = "FND-C01",
-            Op = "unsupported_evil_operator",
+            Op = (ConditionalOperator)999,
             Value = "solo"
         };
 
@@ -859,7 +861,7 @@ public class ScoringEngineTests
         // Должен быть только INFO риск регистрации бренда, без ложных HIGH/CRITICAL
         Assert.Equal(0, result.CriticalCount);
         Assert.Equal(0, result.HighCount);
-        Assert.Contains(result.Risks, r => r.Code == "IP_BRAND_REGISTRATION_INFO" && r.Severity == "INFO");
+        Assert.Contains(result.Risks, r => r.Code == "IP_BRAND_REGISTRATION_INFO" && r.Severity == RiskSeverity.Info);
     }
 
     [Fact(DisplayName = "5.4 Каноническая супрессия (§25): IP_PRODUCT_RIGHTS_UNCONFIRMED подавляет дочерние риски передачи прав")]
@@ -929,7 +931,7 @@ public class ScoringEngineTests
 
         var employerRisk = result.Risks.FirstOrDefault(r => r.Code == "IP_EMPLOYER_RISK");
         Assert.NotNull(employerRisk);
-        Assert.Equal("CRITICAL", employerRisk.Severity);
+        Assert.Equal(RiskSeverity.Critical, employerRisk.Severity);
     }
 
     [Fact(DisplayName = "5.7 Правило работодателя: IP-10=unrelated + IP-10A=no не создаёт IP_EMPLOYER_RISK")]
@@ -1077,7 +1079,7 @@ public class ScoringEngineTests
             .Distinct()
             .ToHashSet();
 
-        var severeRisks = allRisks.Where(r => r.Severity is "CRITICAL" or "HIGH" or "BLOCKER").ToList();
+        var severeRisks = allRisks.Where(r => r.Severity is RiskSeverity.Critical or RiskSeverity.High or RiskSeverity.Blocker).ToList();
         Assert.NotEmpty(severeRisks);
 
         foreach (var risk in severeRisks)
@@ -1200,7 +1202,7 @@ public class ScoringEngineTests
         var result = _engine.ComputeResult(answers);
         var corpSection = result.Sections.First(s => s.SectionId == "corporate");
 
-        Assert.Equal("APPLICABLE", corpSection.Status);
+        Assert.Equal(ApplicabilityStatus.Applicable, corpSection.Status);
         Assert.Null(corpSection.Score);
         Assert.Empty(corpSection.Dimensions);
     }
@@ -1346,7 +1348,7 @@ public class ScoringEngineTests
             ["FND_ACTIVE_DISPUTE"] = new() { ["FND-C01"] = "2", ["FND-01"] = "active_conflict" },
             ["FND_EQUITY_DISPUTE"] = new() { ["FND-C01"] = "2", ["FND-04"] = "dispute" },
             ["FND_DEAD_EQUITY"] = new() { ["FND-C01"] = "2", ["FND-03"] = "stopped", ["FND-05"] = "none" },
-            ["FND_DEADLOCK"] = new() { ["FND-C01"] = "2", ["FND-C02"] = new List<double> { 50, 50 }, ["FND-06A"] = "broad_unanimity", ["FND-07"] = "none" },
+            ["FND_DEADLOCK"] = new() { ["FND-C01"] = "2", ["FND-C02"] = new Dictionary<string, object> { ["founder_1"] = 50, ["founder_2"] = 50 }, ["FND-06A"] = "broad_unanimity", ["FND-07"] = "none" },
             ["FND_DEPARTED_UNRESOLVED"] = new() { ["FND-C01"] = "2", ["FND-C03"] = "unresolved" },
             ["FND_CONFLICT_OF_INTEREST"] = new() { ["FND-C01"] = "2", ["FND-10"] = "employer_same_field" },
             ["FND_ROLE_AMBIGUITY"] = new() { ["FND-C01"] = "2", ["FND-02"] = "overlap" },
@@ -1356,7 +1358,7 @@ public class ScoringEngineTests
             ["FND_NO_VESTING"] = new() { ["FND-C01"] = "2", ["FND-05"] = "not_discussed" },
             ["FND_INCOMPLETE_LEAVER_RULES"] = new() { ["FND-C01"] = "2", ["FND-05A"] = "none" },
             ["FND_GOVERNANCE_AMBIGUITY"] = new() { ["FND-C01"] = "2", ["FND-06"] = "none" },
-            ["FND_NO_DEADLOCK_PROTECTION"] = new() { ["FND-C01"] = "2", ["FND-C02"] = new List<double> { 90, 10 }, ["FND-07"] = "only_agree" },
+            ["FND_NO_DEADLOCK_PROTECTION"] = new() { ["FND-C01"] = "2", ["FND-C02"] = new Dictionary<string, object> { ["founder_1"] = 90, ["founder_2"] = 10 }, ["FND-07"] = "only_agree" },
             ["FND_EXIT_RULES_MISSING"] = new() { ["FND-C01"] = "2", ["FND-08"] = "none" },
             ["FND_CONTRIBUTION_AMBIGUITY"] = new() { ["FND-C01"] = "2", ["FND-09"] = "material_unclear" },
             ["FND_STRATEGIC_MISALIGNMENT"] = new() { ["FND-C01"] = "2", ["FND-11"] = "material_difference" },
@@ -1381,7 +1383,7 @@ public class ScoringEngineTests
             ["FND-04"] = "dispute"
         };
         var resDispute = _engine.ComputeResult(disputeAnswers);
-        Assert.Contains(resDispute.Risks, r => r.Code == "FND_EQUITY_DISPUTE" && r.Severity == "CRITICAL");
+        Assert.Contains(resDispute.Risks, r => r.Code == "FND_EQUITY_DISPUTE" && r.Severity == RiskSeverity.Critical);
         Assert.DoesNotContain(resDispute.Risks, r => r.Code == "FND_EQUITY_NOT_FORMALIZED");
         Assert.DoesNotContain(resDispute.Risks, r => r.Code == "FND_EQUITY_AMBIGUITY");
 
@@ -1392,7 +1394,7 @@ public class ScoringEngineTests
             ["FND-04"] = "ambiguous"
         };
         var resAmbig = _engine.ComputeResult(ambigAnswers);
-        Assert.Contains(resAmbig.Risks, r => r.Code == "FND_EQUITY_AMBIGUITY" && r.Severity == "HIGH");
+        Assert.Contains(resAmbig.Risks, r => r.Code == "FND_EQUITY_AMBIGUITY" && r.Severity == RiskSeverity.High);
         Assert.DoesNotContain(resAmbig.Risks, r => r.Code == "FND_EQUITY_DISPUTE");
         Assert.DoesNotContain(resAmbig.Risks, r => r.Code == "FND_EQUITY_NOT_FORMALIZED");
 
@@ -1403,7 +1405,7 @@ public class ScoringEngineTests
             ["FND-04"] = "verbal"
         };
         var resVerbal = _engine.ComputeResult(verbalAnswers);
-        Assert.Contains(resVerbal.Risks, r => r.Code == "FND_EQUITY_NOT_FORMALIZED" && r.Severity == "MEDIUM");
+        Assert.Contains(resVerbal.Risks, r => r.Code == "FND_EQUITY_NOT_FORMALIZED" && r.Severity == RiskSeverity.Medium);
         Assert.DoesNotContain(resVerbal.Risks, r => r.Code == "FND_EQUITY_DISPUTE");
         Assert.DoesNotContain(resVerbal.Risks, r => r.Code == "FND_EQUITY_AMBIGUITY");
     }
@@ -1420,13 +1422,13 @@ public class ScoringEngineTests
         var deadlockAnswers = new Dictionary<string, object>
         {
             ["FND-C01"] = "2",
-            ["FND-C02"] = new List<double> { 50, 50 },
+            ["FND-C02"] = new Dictionary<string, object> { ["founder_1"] = 50, ["founder_2"] = 50 },
             ["FND-06A"] = "broad_unanimity",
             ["FND-07"] = "none"
         };
 
         var resDeadlock = _engine.ComputeResult(deadlockAnswers);
-        Assert.Contains(resDeadlock.Risks, r => r.Code == "FND_DEADLOCK" && r.Severity == "CRITICAL");
+        Assert.Contains(resDeadlock.Risks, r => r.Code == "FND_DEADLOCK" && r.Severity == RiskSeverity.Critical);
         Assert.DoesNotContain(resDeadlock.Risks, r => r.Code == "FND_NO_DEADLOCK_PROTECTION");
         Assert.DoesNotContain(resDeadlock.Risks, r => r.Code == "FND_GOVERNANCE_AMBIGUITY");
 
@@ -1434,25 +1436,25 @@ public class ScoringEngineTests
         var majorityControlAnswers = new Dictionary<string, object>
         {
             ["FND-C01"] = "2",
-            ["FND-C02"] = new List<double> { 90, 10 },
+            ["FND-C02"] = new Dictionary<string, object> { ["founder_1"] = 90, ["founder_2"] = 10 },
             ["FND-06A"] = "broad_unanimity",
             ["FND-07"] = "none"
         };
         var resMajControl = _engine.ComputeResult(majorityControlAnswers);
         Assert.DoesNotContain(resMajControl.Risks, r => r.Code == "FND_DEADLOCK");
-        Assert.Contains(resMajControl.Risks, r => r.Code == "FND_NO_DEADLOCK_PROTECTION" && r.Severity == "HIGH");
+        Assert.Contains(resMajControl.Risks, r => r.Code == "FND_NO_DEADLOCK_PROTECTION" && r.Severity == RiskSeverity.High);
 
         // 3. Негативный сценарий 2: Порядок голосования простым большинством (FND-06A = "majority") НЕ активирует FND_DEADLOCK
         var majorityVotingAnswers = new Dictionary<string, object>
         {
             ["FND-C01"] = "2",
-            ["FND-C02"] = new List<double> { 50, 50 },
+            ["FND-C02"] = new Dictionary<string, object> { ["founder_1"] = 50, ["founder_2"] = 50 },
             ["FND-06A"] = "majority",
             ["FND-07"] = "none"
         };
         var resMajVoting = _engine.ComputeResult(majorityVotingAnswers);
         Assert.DoesNotContain(resMajVoting.Risks, r => r.Code == "FND_DEADLOCK");
-        Assert.Contains(resMajVoting.Risks, r => r.Code == "FND_NO_DEADLOCK_PROTECTION" && r.Severity == "HIGH");
+        Assert.Contains(resMajVoting.Risks, r => r.Code == "FND_NO_DEADLOCK_PROTECTION" && r.Severity == RiskSeverity.High);
     }
     [Fact(DisplayName = "6.14 [CANONICAL §24 & §27.2] 2 фаундера без FND-C02: nearEqualControl не true и FND_DEADLOCK не возникает")]
     public void Two_Founders_Without_FND_C02_Do_Not_Trigger_Deadlock()
@@ -1514,20 +1516,20 @@ public class ScoringEngineTests
     public void Active_Conflict_And_Formal_Dispute_Trigger_FND_Active_Dispute()
     {
         var res1 = _engine.ComputeResult(new Dictionary<string, object> { ["FND-C01"] = "2", ["FND-01"] = "active_conflict" });
-        Assert.Contains(res1.Risks, r => r.Code == "FND_ACTIVE_DISPUTE" && r.Severity == "CRITICAL");
+        Assert.Contains(res1.Risks, r => r.Code == "FND_ACTIVE_DISPUTE" && r.Severity == RiskSeverity.Critical);
 
         var res2 = _engine.ComputeResult(new Dictionary<string, object> { ["FND-C01"] = "2", ["FND-01"] = "formal_dispute" });
-        Assert.Contains(res2.Risks, r => r.Code == "FND_ACTIVE_DISPUTE" && r.Severity == "CRITICAL");
+        Assert.Contains(res2.Risks, r => r.Code == "FND_ACTIVE_DISPUTE" && r.Severity == RiskSeverity.Critical);
     }
 
     [Fact(DisplayName = "6.18 [CANONICAL §27.2] FND-C03=dispute и FND-08=already_unresolved активируют FND_DEPARTED_UNRESOLVED")]
     public void Departed_Dispute_And_Unresolved_Departure_Trigger_Departed_Unresolved()
     {
         var res1 = _engine.ComputeResult(new Dictionary<string, object> { ["FND-C01"] = "2", ["FND-C03"] = "dispute" });
-        Assert.Contains(res1.Risks, r => r.Code == "FND_DEPARTED_UNRESOLVED" && r.Severity == "CRITICAL");
+        Assert.Contains(res1.Risks, r => r.Code == "FND_DEPARTED_UNRESOLVED" && r.Severity == RiskSeverity.Critical);
 
         var res2 = _engine.ComputeResult(new Dictionary<string, object> { ["FND-C01"] = "2", ["FND-08"] = "already_unresolved" });
-        Assert.Contains(res2.Risks, r => r.Code == "FND_DEPARTED_UNRESOLVED" && r.Severity == "CRITICAL");
+        Assert.Contains(res2.Risks, r => r.Code == "FND_DEPARTED_UNRESOLVED" && r.Severity == RiskSeverity.Critical);
     }
 
     [Fact(DisplayName = "6.19 [CANONICAL §20] Strategic Misalignment блокирует Strong Area 'strategic_alignment', а не 'governance'")]

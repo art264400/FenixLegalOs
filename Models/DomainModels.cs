@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using FenixLegalOs.Models.Enums;
 
 namespace FenixLegalOs.Models;
 
@@ -17,13 +18,13 @@ public record AnswerOption(
     string? Severity = null,
     string? RiskCode = null,
     bool Exclusive = false,
-    string? ConfidenceClass = "known" // known, partial, unknown
+    ConfidenceClass ConfidenceClass = ConfidenceClass.Known
 );
 
 public class ConditionalRule
 {
     public string? QuestionId { get; set; }
-    public string? Op { get; set; } // eq, neq, in, notIn, includes, answered, gte, lte
+    public ConditionalOperator? Op { get; set; }
     public object? Value { get; set; }
     public List<ConditionalRule>? All { get; set; }
     public List<ConditionalRule>? Any { get; set; }
@@ -37,8 +38,8 @@ public class DiagnosticQuestion
     public int Order { get; set; }
     public string Question { get; set; } = "";
     public string? Explanation { get; set; }
-    public string Type { get; set; } = "single"; // single, multiple, boolean, text, number, equity_split
-    public string ScoreMode { get; set; } = "diagnostic"; // context, diagnostic, trigger, custom
+    public QuestionType Type { get; set; } = QuestionType.Single;
+    public ScoreMode ScoreMode { get; set; } = ScoreMode.Diagnostic;
     public List<AnswerOption>? Options { get; set; }
     public double Weight { get; set; } = 1.0;
     public double DimensionWeight { get; set; } = 1.0;
@@ -59,8 +60,8 @@ public class RiskDefinition
 {
     public string Code { get; set; } = "";
     public string RootCauseGroup { get; set; } = "GENERAL";
-    public string Severity { get; set; } = "MEDIUM"; // INFO, MEDIUM, HIGH, CRITICAL, BLOCKER
-    public string Priority { get; set; } = "LATER"; // NOW, 30_DAYS, BEFORE_ROUND, LATER
+    public RiskSeverity Severity { get; set; } = RiskSeverity.Medium;
+    public RiskPriority Priority { get; set; } = RiskPriority.Later;
     public string SectionId { get; set; } = "";
     public List<string> Modules { get; set; } = new();
     public string Title { get; set; } = "";
@@ -69,18 +70,19 @@ public class RiskDefinition
     public List<string> Recommendations { get; set; } = new();
     public string Recommendation { get; set; } = "";
     public bool LawyerRequired { get; set; }
-    public string Resolution { get; set; } = "self"; // self, check_with_lawyer, lawyer_required
+    public ResolutionType Resolution { get; set; } = ResolutionType.SelfService;
     public string? ServiceCode { get; set; }
     public List<string> SuppressCodes { get; set; } = new();
     public string? Cta { get; set; }
+    public List<string> AffectedDimensions { get; set; } = new();
 }
 
 public class RiskFinding
 {
     public string Code { get; set; } = "";
     public string RootCauseGroup { get; set; } = "GENERAL";
-    public string Severity { get; set; } = "MEDIUM"; // INFO, MEDIUM, HIGH, CRITICAL, BLOCKER
-    public string Priority { get; set; } = "LATER"; // NOW, 30_DAYS, BEFORE_ROUND, LATER
+    public RiskSeverity Severity { get; set; } = RiskSeverity.Medium;
+    public RiskPriority Priority { get; set; } = RiskPriority.Later;
     public string SectionId { get; set; } = "";
     public List<string> Modules { get; set; } = new();
     public string Title { get; set; } = "";
@@ -90,10 +92,13 @@ public class RiskFinding
     public string Recommendation { get; set; } = "";
     public List<RiskFindingBasis> Basis { get; set; } = new();
     public bool LawyerRequired { get; set; }
-    public string Resolution { get; set; } = "self";
+    public ResolutionType Resolution { get; set; } = ResolutionType.SelfService;
     public string? ServiceCode { get; set; }
     public string? Cta { get; set; }
+    public List<string> AffectedDimensions { get; set; } = new();
 }
+
+public record DimensionDefinition(string Id, string SectionId, string DisplayName);
 
 public class DimensionScore
 {
@@ -109,7 +114,7 @@ public class SectionScore
     public string Title { get; set; } = "";
     public int? Score { get; set; }
     public double Weight { get; set; }
-    public string Status { get; set; } = "APPLICABLE"; // APPLICABLE, N_A
+    public ApplicabilityStatus Status { get; set; } = ApplicabilityStatus.Applicable;
     public int Confidence { get; set; } = 100;
     public List<DimensionScore> Dimensions { get; set; } = new();
     public List<string> Findings { get; set; } = new();
@@ -142,6 +147,16 @@ public class ScoreVersions
 public class SharedFactStore
 {
     public Dictionary<string, object?> Facts { get; set; } = new();
+
+    public double? GetQuestionScore(string questionId)
+    {
+        if (Facts.TryGetValue($"score.{questionId}", out var val) && val != null)
+        {
+            if (val is double d) return d;
+            if (double.TryParse(val.ToString(), out var parsed)) return parsed;
+        }
+        return null;
+    }
 }
 
 public class ScoreResult
@@ -149,7 +164,7 @@ public class ScoreResult
     public int Overall { get; set; }
     public int Confidence { get; set; } = 85;
     public string ConfidenceText { get; set; } = "Высокая определенность ответов.";
-    public string Level { get; set; } = "strong";
+    public LegalScoreLevel Level { get; set; } = LegalScoreLevel.Strong;
     public string LevelTitle { get; set; } = "";
     public string LevelText { get; set; } = "";
     public List<SectionScore> Sections { get; set; } = new();
@@ -199,5 +214,4 @@ public class Lead
     public string? PaidAt { get; set; }
     public int? PaymentAmount { get; set; }
     public string? PaymentMethod { get; set; }
-    public string CreatedAt { get; set; } = DateTime.UtcNow.ToString("o");
 }
