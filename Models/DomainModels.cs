@@ -124,7 +124,7 @@ public class SectionScore
 public class InvestmentReadinessOverlay
 {
     public bool Applicable { get; set; } = true;
-    public int ReadinessScore { get; set; }
+    public int? ReadinessScore { get; set; }
     public List<string> Blockers { get; set; } = new();
 }
 

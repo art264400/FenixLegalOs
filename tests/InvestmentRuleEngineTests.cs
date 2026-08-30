@@ -402,7 +402,7 @@ public class InvestmentRuleEngineTests : IDisposable
         var result = _engine.ComputeResult(raw);
         var invFindings = result.Risks.Where(f => f.Modules.Contains("investment")).ToList();
 
-        Assert.Equal(10, invFindings.Count);
+        Assert.Equal(11, invFindings.Count); // 10 local findings + 1 INVEST_ROUND_BLOCKER
         foreach (var finding in invFindings)
         {
             Assert.NotEmpty(finding.Basis);

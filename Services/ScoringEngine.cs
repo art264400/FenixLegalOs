@@ -111,12 +111,24 @@ public class ScoringEngine
         var rawFindings = FindingProcessor.CollectRawFindings(factStore, allRisks, _moduleRuleEngines);
         var mergedFindings = FindingProcessor.MergeAndSuppressFindings(rawFindings, factStore);
 
+        // 5b. Cross-Module Rules (Investment cross-module rules: SELF_AWARENESS_GAP, ROUND_BLOCKER)
+        var crossFindings = InvestmentCrossModuleRuleEngine.Evaluate(mergedFindings, factStore, allRisks);
+        if (crossFindings.Count > 0)
+        {
+            mergedFindings.AddRange(crossFindings);
+            mergedFindings = FindingProcessor.MergeAndSuppressFindings(mergedFindings, factStore);
+        }
+
+        // 5c. Timing & Blocker Matrix Urgency Overlay (§17.3 / §18)
+        var finalFindings = InvestmentBlockerMatrix.ApplyOverlay(mergedFindings, factStore);
+
         // 6. Strong Areas Calculation
-        var strongAreas = StrongAreasCalculator.CalculateStrongAreas(allDimensionScores, mergedFindings);
+        var strongAreas = StrongAreasCalculator.CalculateStrongAreas(allDimensionScores, finalFindings);
 
         // 7. Investment Readiness & Consulting Overlays
-        var investmentOverlay = InvestmentReadinessEvaluator.Calculate(effectiveAnswers, factStore, mergedFindings);
-        var consulting = ConsultingEvaluator.Calculate(mergedFindings, factStore, overallScore);
+        var invSectionScore = sections.FirstOrDefault(s => s.SectionId == "investment")?.Score;
+        var investmentOverlay = InvestmentReadinessEvaluator.Calculate(invSectionScore, finalFindings, factStore);
+        var consulting = ConsultingEvaluator.Calculate(finalFindings, factStore, overallScore);
 
         var level = OverallScorer.GetLevel(overallScore);
 
@@ -129,10 +141,10 @@ public class ScoringEngine
             LevelTitle = OverallScorer.GetLevelTitle(level),
             LevelText = OverallScorer.GetLevelText(level),
             Sections = sections,
-            Risks = mergedFindings,
-            CriticalCount = mergedFindings.Count(r => r.Severity is RiskSeverity.Critical or RiskSeverity.Blocker),
-            HighCount = mergedFindings.Count(r => r.Severity == RiskSeverity.High),
-            MediumCount = mergedFindings.Count(r => r.Severity == RiskSeverity.Medium),
+            Risks = finalFindings,
+            CriticalCount = finalFindings.Count(r => r.Severity is RiskSeverity.Critical or RiskSeverity.Blocker),
+            HighCount = finalFindings.Count(r => r.Severity == RiskSeverity.High),
+            MediumCount = finalFindings.Count(r => r.Severity == RiskSeverity.Medium),
             Strengths = strongAreas,
             AnsweredCount = visibleQs.Count(q => effectiveAnswers.ContainsKey(q.Id)),
             InvestmentReadiness = investmentOverlay,
