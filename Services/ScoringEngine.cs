@@ -36,23 +36,9 @@ public class ScoringEngine
         var allRisks = _repository.GetRisks();
 
         // ─── Effective Answers Trust Boundary (Architecture A) ───────────────
-        // Phase 1: Determine visible questions using ALL submitted answers (for routing).
-        var routingFactStore = FactNormalizer.NormalizeFacts(answers);
-        var visibleQs = allQuestions
-            .Where(q => q.Enabled != false
-                && ConditionsEvaluator.IsVisible(q.ShowIf, answers, routingFactStore))
-            .ToList();
-
-        // Phase 2: Filter to EffectiveAnswers — only answers to visible questions.
-        //          Hidden/stale/tampered answers are excluded BEFORE fact derivation.
-        var visibleIds = visibleQs.Select(q => q.Id).ToHashSet(StringComparer.Ordinal);
-        var effectiveAnswers = answers
-            .Where(kv => visibleIds.Contains(kv.Key))
-            .ToDictionary(kv => kv.Key, kv => kv.Value);
-
-        // Phase 3: Recompute canonical facts from EffectiveAnswers only.
-        //          This is the clean factStore used by ALL downstream scoring and rules.
-        var factStore = FactNormalizer.NormalizeFacts(effectiveAnswers);
+        // Fixed-point convergence: hidden/stale answers are filtered out iteratively,
+        // preventing orphaned or self-resurrecting visibility of downstream questions.
+        var (visibleQs, effectiveAnswers, factStore) = ResolveEffectiveState(allQuestions, answers);
         // ─────────────────────────────────────────────────────────────────────
 
         var sections = new List<SectionScore>();
@@ -161,15 +147,8 @@ public class ScoringEngine
         string? currentQuestionId = null)
     {
         var allQuestions = _repository.GetQuestions();
-
-        // Use routing facts (all answers) to determine visibility — same as Phase 1 in ComputeResult.
-        var routingFactStore = FactNormalizer.NormalizeFacts(answers);
-        var visibleIds = allQuestions
-            .Where(q => q.Enabled != false
-                && ConditionsEvaluator.IsVisible(q.ShowIf, answers, routingFactStore))
-            .OrderBy(q => q.Order)
-            .Select(q => q.Id)
-            .ToList();
+        var (visibleQs, _, _) = ResolveEffectiveState(allQuestions, answers);
+        var visibleIds = visibleQs.Select(q => q.Id).ToList();
 
         int total = visibleIds.Count;
 
@@ -203,6 +182,43 @@ public class ScoringEngine
             Current = currentIndex + 1, // 1-based
             TotalVisible = total
         };
+    }
+
+    /// <summary>
+    /// Computes the authoritative list of visible questions and effective answers via fixed-point convergence.
+    /// Ensures that hidden/stale answers can NEVER influence downstream visibility or fact derivation.
+    /// </summary>
+    public static (List<DiagnosticQuestion> VisibleQuestions, Dictionary<string, object> EffectiveAnswers, SharedFactStore FactStore)
+        ResolveEffectiveState(List<DiagnosticQuestion> allQuestions, Dictionary<string, object> rawAnswers)
+    {
+        var enabledQuestions = allQuestions.Where(q => q.Enabled != false).ToList();
+        var currentEffectiveAnswers = new Dictionary<string, object>(rawAnswers);
+        List<DiagnosticQuestion> visibleQs;
+        SharedFactStore factStore;
+
+        while (true)
+        {
+            factStore = FactNormalizer.NormalizeFacts(currentEffectiveAnswers);
+            visibleQs = enabledQuestions
+                .Where(q => ConditionsEvaluator.IsVisible(q.ShowIf, currentEffectiveAnswers, factStore))
+                .OrderBy(q => q.Order)
+                .ToList();
+
+            var visibleIds = visibleQs.Select(q => q.Id).ToHashSet(StringComparer.Ordinal);
+            var nextEffectiveAnswers = rawAnswers
+                .Where(kv => visibleIds.Contains(kv.Key))
+                .ToDictionary(kv => kv.Key, kv => kv.Value);
+
+            if (nextEffectiveAnswers.Count == currentEffectiveAnswers.Count &&
+                nextEffectiveAnswers.Keys.All(k => currentEffectiveAnswers.ContainsKey(k)))
+            {
+                break;
+            }
+
+            currentEffectiveAnswers = nextEffectiveAnswers;
+        }
+
+        return (visibleQs, currentEffectiveAnswers, factStore);
     }
 
     // ─── Deprecated: use GetNavigationState instead ──────────────────────────
