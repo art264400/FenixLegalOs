@@ -187,6 +187,7 @@ public class ScoringEngine
     /// <summary>
     /// Computes the authoritative list of visible questions and effective answers via fixed-point convergence.
     /// Ensures that hidden/stale answers can NEVER influence downstream visibility or fact derivation.
+    /// Bounded by the finite question dependency depth (max iterations = enabledQuestions.Count + 1).
     /// </summary>
     public static (List<DiagnosticQuestion> VisibleQuestions, Dictionary<string, object> EffectiveAnswers, SharedFactStore FactStore)
         ResolveEffectiveState(List<DiagnosticQuestion> allQuestions, Dictionary<string, object> rawAnswers)
@@ -196,8 +197,21 @@ public class ScoringEngine
         List<DiagnosticQuestion> visibleQs;
         SharedFactStore factStore;
 
+        // Finite upper bound: in any acyclic questionnaire DAG with N questions,
+        // a cascade of stale eliminations must strictly terminate in at most N iterations.
+        int maxIterations = Math.Max(enabledQuestions.Count, rawAnswers.Count) + 1;
+        int iterations = 0;
+
         while (true)
         {
+            iterations++;
+            if (iterations > maxIterations)
+            {
+                // Fail closed: prevent unbounded oscillation or non-terminating loops
+                throw new InvalidOperationException(
+                    $"Architecture A routing convergence failure: ShowIf dependency cycle or oscillation detected after {maxIterations} iterations.");
+            }
+
             factStore = FactNormalizer.NormalizeFacts(currentEffectiveAnswers);
             visibleQs = enabledQuestions
                 .Where(q => ConditionsEvaluator.IsVisible(q.ShowIf, currentEffectiveAnswers, factStore))
