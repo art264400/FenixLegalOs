@@ -234,7 +234,7 @@ public class ContractsModuleStage1Tests
     {
         var rawAnswers = new Dictionary<string, object>
         {
-            ["PROD-02"] = new List<string> { "b2c" },
+            ["PROD-02"] = new List<string> { "consumers" },
             ["CONTRACT-01"] = new List<string> { "partners", "suppliers" }
         };
         var (visible, _, _) = ScoringEngine.ResolveEffectiveState(DataBank.Questions, rawAnswers);
@@ -331,10 +331,61 @@ public class ContractsModuleStage1Tests
     }
 
     // =========================================================================
-    // F. N/A & DENOMINATOR EXCLUSIONS
+    // F. CONFIDENCE & N/A DENOMINATOR
     // =========================================================================
 
-    [Fact(DisplayName = "F.1 CONTRACT-07 = no_large score is null/N/A and excluded from denominator")]
+    [Fact(DisplayName = "F.1 Bad/low legal score does NOT reduce confidence for known factual answers")]
+    public void Bad_Score_Does_Not_Reduce_Confidence()
+    {
+        // Low legal scores (0.35, 0.10) with fully known facts
+        var rawAnswers = new Dictionary<string, object>
+        {
+            ["CONTRACT-01"] = new List<string> { "clients" },
+            ["CONTRACT-02"] = "material_informal", // Score = 0.35, Known
+            ["CONTRACT-03"] = "outside",           // Score = 0.45, Known
+            ["CONTRACT-04"] = "case",              // Score = 0.20, Known
+            ["CONTRACT-05"] = "weak",              // Score = 0.15, Known
+            ["CONTRACT-06"] = "copied",            // Score = 0.15, Known
+            ["CONTRACT-07"] = "often",             // Score = 0.25, Known
+            ["CONTRACT-08"] = "near_total",        // Score = 0.10, Known
+            ["CONTRACT-08A"] = "serious"           // Score = 0.15, Known
+        };
+
+        var result = _engine.ComputeResult(rawAnswers);
+        var contractSec = result.Sections.First(s => s.SectionId == "contracts");
+
+        // Score is very low (~20%), but confidence is 100% because user knows their state with certainty
+        Assert.True(contractSec.Score < 30);
+        Assert.Equal(100, result.Confidence);
+    }
+
+    [Fact(DisplayName = "F.2 Explicit unknown lowers confidence according to global canonical unknown policy")]
+    public void Explicit_Unknown_Lowers_Confidence()
+    {
+        var answersKnown = new Dictionary<string, object>
+        {
+            ["CONTRACT-01"] = new List<string> { "clients" },
+            ["CONTRACT-02"] = "always",
+            ["CONTRACT-03"] = "clear",
+            ["CONTRACT-04"] = "clear",
+            ["CONTRACT-05"] = "clear",
+            ["CONTRACT-06"] = "custom",
+            ["CONTRACT-07"] = "reviewed",
+            ["CONTRACT-08"] = "no"
+        };
+        var resKnown = _engine.ComputeResult(answersKnown);
+        Assert.Equal(100, resKnown.Confidence);
+
+        var answersUnknown = new Dictionary<string, object>(answersKnown)
+        {
+            ["CONTRACT-02"] = "unknown",
+            ["CONTRACT-05"] = "unknown"
+        };
+        var resUnknown = _engine.ComputeResult(answersUnknown);
+        Assert.True(resUnknown.Confidence < 100);
+    }
+
+    [Fact(DisplayName = "F.3 CONTRACT-07 = no_large score is null/N/A and excluded from denominator")]
     public void Contract07_NoLarge_Is_Excluded_From_Denominator()
     {
         var rawAnswers = new Dictionary<string, object>
@@ -429,21 +480,32 @@ public class ContractsModuleStage1Tests
         Assert.False(facts.Facts.ContainsKey("contracts.counterpartyExitRisk"));
     }
 
-    [Fact(DisplayName = "H.3 Stale CONTRACT-07 answer removed when CONTRACT-01 changes from clients to partners")]
-    public void Stale_Contract07_Answer_Removed()
+    [Fact(DisplayName = "H.3 Real stale Product companies removal hides CONTRACT-07 and drops stale answer")]
+    public void Stale_Product_Companies_Removal_Hides_Contract07()
     {
-        var rawAnswers = new Dictionary<string, object>
+        // 1. Initial State: Product has companies, CONTRACT-01 has partners (not clients) => CONTRACT-07 visible
+        var rawAnswers1 = new Dictionary<string, object>
         {
-            ["PROD-02"] = new List<string> { "consumers" }, // No companies
-            ["CONTRACT-01"] = new List<string> { "partners" }, // Clients removed
-            ["CONTRACT-07"] = "reviewed" // Stale answer to hidden question
+            ["PROD-02"] = new List<string> { "companies" },
+            ["CONTRACT-01"] = new List<string> { "partners" },
+            ["CONTRACT-07"] = "reviewed"
         };
+        var (visible1, effective1, facts1) = ScoringEngine.ResolveEffectiveState(DataBank.Questions, rawAnswers1);
+        Assert.Contains(visible1, q => q.Id == "CONTRACT-07");
+        Assert.Contains("CONTRACT-07", effective1.Keys);
+        Assert.Equal("reviewed", facts1.Facts["contracts.largeDealReview"]);
 
-        var (visible, effective, facts) = ScoringEngine.ResolveEffectiveState(DataBank.Questions, rawAnswers);
-
-        Assert.DoesNotContain(visible, q => q.Id == "CONTRACT-07");
-        Assert.DoesNotContain("CONTRACT-07", effective.Keys);
-        Assert.False(facts.Facts.ContainsKey("contracts.largeDealReview"));
+        // 2. Modified State: User changes PROD-02 to ["consumers"] (companies removed)
+        var rawAnswers2 = new Dictionary<string, object>
+        {
+            ["PROD-02"] = new List<string> { "consumers" }, // Companies removed
+            ["CONTRACT-01"] = new List<string> { "partners" },
+            ["CONTRACT-07"] = "reviewed"                    // Stale answer now left in raw map
+        };
+        var (visible2, effective2, facts2) = ScoringEngine.ResolveEffectiveState(DataBank.Questions, rawAnswers2);
+        Assert.DoesNotContain(visible2, q => q.Id == "CONTRACT-07");
+        Assert.DoesNotContain("CONTRACT-07", effective2.Keys);
+        Assert.False(facts2.Facts.ContainsKey("contracts.largeDealReview"));
     }
 
     // =========================================================================

@@ -37,7 +37,7 @@ public static class ContractQuestions
             Options = new() {
                 new("always", "Всегда в письменной форме (подписанный договор / ЭДО / акцепт оферты)", 1.0, ConfidenceClass: ConfidenceClass.Known),
                 new("some_in_messages", "В основном письменные, но часть договоренностей только в переписке", 0.70, ConfidenceClass: ConfidenceClass.Known),
-                new("material_informal", "Существенная часть обязательств строится на устных договоренностях", 0.35, ConfidenceClass: ConfidenceClass.Partial),
+                new("material_informal", "Существенная часть обязательств строится на устных договоренностях", 0.35, ConfidenceClass: ConfidenceClass.Known),
                 new("mostly_informal", "Большинство отношений без формальных договоров", 0.10, ConfidenceClass: ConfidenceClass.Known),
                 new("unknown", "Не уверен(а)", 0.15, ConfidenceClass: ConfidenceClass.Unknown)
             }
@@ -54,7 +54,7 @@ public static class ContractQuestions
             Options = new() {
                 new("clear", "Четко определены: есть ТЗ, SLA, метрики или конкретные этапы и критерии приемки", 1.0, ConfidenceClass: ConfidenceClass.Known),
                 new("mostly", "В целом понятно, но некоторые формулировки допускают двоякое толкование", 0.75, ConfidenceClass: ConfidenceClass.Known),
-                new("outside", "Часто выполняются работы за рамками договора без допсоглашений (scope creep)", 0.45, ConfidenceClass: ConfidenceClass.Partial),
+                new("outside", "Часто выполняются работы за рамками договора без допсоглашений (scope creep)", 0.45, ConfidenceClass: ConfidenceClass.Known),
                 new("generic", "Предмет описан общими фразами без конкретики и критериев результата", 0.25, ConfidenceClass: ConfidenceClass.Known),
                 new("unknown", "Не уверен(а)", 0.15, ConfidenceClass: ConfidenceClass.Unknown)
             }
@@ -71,7 +71,7 @@ public static class ContractQuestions
             Options = new() {
                 new("clear", "Четко: установлены сроки оплаты, неустойка и порядок одностороннего отказа", 1.0, ConfidenceClass: ConfidenceClass.Known),
                 new("mostly", "Порядок оплаты понятен, но условия расторжения или штрафы прописаны слабо", 0.75, ConfidenceClass: ConfidenceClass.Known),
-                new("some_unclear", "Условия оплаты зависят от внешних факторов (клиент платит, когда захочет)", 0.50, ConfidenceClass: ConfidenceClass.Partial),
+                new("some_unclear", "Условия оплаты зависят от внешних факторов (клиент платит, когда захочет)", 0.50, ConfidenceClass: ConfidenceClass.Known),
                 new("case", "Условия каждый раз разные, расторжение и споры никак не урегулированы", 0.20, ConfidenceClass: ConfidenceClass.Known),
                 new("unknown", "Не уверен(а)", 0.15, ConfidenceClass: ConfidenceClass.Unknown)
             }
@@ -145,7 +145,7 @@ public static class ContractQuestions
             Options = new() {
                 new("no", "Нет, клиентская база диверсифицирована (ни один клиент не дает >20% выручки)", 1.0, ConfidenceClass: ConfidenceClass.Known),
                 new("noticeable", "Есть 1–2 крупных клиента (20–40% выручки), но потеря не убьет бизнес", 0.75, ConfidenceClass: ConfidenceClass.Known),
-                new("material", "Существенная зависимость: один клиент дает 40–70% выручки", 0.35, ConfidenceClass: ConfidenceClass.Partial),
+                new("material", "Существенная зависимость: один клиент дает 40–70% выручки", 0.35, ConfidenceClass: ConfidenceClass.Known),
                 new("near_total", "Критическая зависимость: один клиент дает >70% выручки", 0.10, ConfidenceClass: ConfidenceClass.Known),
                 new("unknown", "Не уверен(а)", 0.15, ConfidenceClass: ConfidenceClass.Unknown)
             }
