@@ -80,15 +80,15 @@ public class ContractsModuleStage1Tests
         Assert.Equal(100.0, totalWeight);
     }
 
-    [Fact(DisplayName = "A.3 Contracts section has canonical 8% weight and Stage 1 risks count = 0")]
-    public void SectionWeight_Is_8_And_Stage1_Risks_Count_Is_0()
+    [Fact(DisplayName = "A.3 Contracts section has canonical 8% weight and canonical risks count = 6")]
+    public void SectionWeight_Is_8_And_Canonical_Risks_Count_Is_6()
     {
         var section = DataBank.Sections.FirstOrDefault(s => s.Id == "contracts");
         Assert.NotNull(section);
         Assert.Equal(8, section.Weight);
 
         var contractRisks = DataBank.Risks.Where(r => r.SectionId == "contracts").ToList();
-        Assert.Empty(contractRisks);
+        Assert.Equal(6, contractRisks.Count);
     }
 
     // =========================================================================
