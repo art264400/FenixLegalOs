@@ -184,6 +184,24 @@ public class ScoringEngine
         };
     }
 
+    private static readonly Dictionary<string, int> SectionOrderMap = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["founders"] = 1,
+        ["corporate"] = 2,
+        ["ip"] = 3,
+        ["team"] = 4,
+        ["product"] = 5,
+        ["data"] = 6,
+        ["contracts"] = 7,
+        ["investment"] = 8
+    };
+
+    public static int GetGlobalQuestionRank(DiagnosticQuestion q)
+    {
+        int secRank = SectionOrderMap.TryGetValue(q.SectionId ?? "", out var s) ? s : 99;
+        return secRank * 1000 + q.Order;
+    }
+
     /// <summary>
     /// Computes the authoritative list of visible questions and effective answers via forward topological evaluation.
     /// Ensures that hidden/stale answers can NEVER participate in establishing their own visibility,
@@ -194,7 +212,7 @@ public class ScoringEngine
     {
         var enabledQuestions = allQuestions
             .Where(q => q.Enabled != false)
-            .OrderBy(q => q.Order)
+            .OrderBy(GetGlobalQuestionRank)
             .ToList();
 
         var effectiveAnswers = new Dictionary<string, object>(StringComparer.Ordinal);

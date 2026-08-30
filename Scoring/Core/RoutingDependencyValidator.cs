@@ -15,7 +15,7 @@ public static class RoutingDependencyValidator
     public static void Validate(IReadOnlyList<DiagnosticQuestion> questions)
     {
         var questionMap = questions.ToDictionary(q => q.Id, q => q, StringComparer.Ordinal);
-        var orderMap = questions.ToDictionary(q => q.Id, q => q.Order, StringComparer.Ordinal);
+        var orderMap = questions.ToDictionary(q => q.Id, q => Services.ScoringEngine.GetGlobalQuestionRank(q), StringComparer.Ordinal);
 
         // 1. Discover fact producers by evaluating each question independently
         var factToProducerMap = new Dictionary<string, string>(StringComparer.Ordinal);

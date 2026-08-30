@@ -69,4 +69,31 @@ public class SessionsControllerTests
         Assert.Equal(1, navState.Current);
         Assert.True(navState.TotalVisible > 0);
     }
+
+    [Fact(DisplayName = "2. Sequential questionnaire ordering flows section by section")]
+    public void Questionnaire_Flows_Section_By_Section()
+    {
+        var createResult = _controller.CreateSession() as OkObjectResult;
+        var sessionId = createResult?.Value?.GetType().GetProperty("id")?.GetValue(createResult.Value)?.ToString()!;
+
+        // Answer FND-C01 = two
+        var body = JsonDocument.Parse("{\"answers\":{\"FND-C01\":\"two\"},\"currentQuestionId\":\"FND-C01\"}").RootElement;
+        var navResult = _controller.Navigate(sessionId, body) as OkObjectResult;
+        var navState = navResult?.Value as NavigationState;
+
+        Assert.NotNull(navState);
+        Assert.Equal("FND-C02", navState.NextQuestionId);
+
+        // Verify visibleQuestionIds order: all FND questions before COR questions, before IP, before TEAM, before PROD
+        var fndIndices = navState.VisibleQuestionIds.Select((id, idx) => (id, idx)).Where(x => x.id.StartsWith("FND-")).Select(x => x.idx).ToList();
+        var corIndices = navState.VisibleQuestionIds.Select((id, idx) => (id, idx)).Where(x => x.id.StartsWith("COR-")).Select(x => x.idx).ToList();
+        var ipIndices = navState.VisibleQuestionIds.Select((id, idx) => (id, idx)).Where(x => x.id.StartsWith("IP-")).Select(x => x.idx).ToList();
+        var teamIndices = navState.VisibleQuestionIds.Select((id, idx) => (id, idx)).Where(x => x.id.StartsWith("TEAM-")).Select(x => x.idx).ToList();
+        var prodIndices = navState.VisibleQuestionIds.Select((id, idx) => (id, idx)).Where(x => x.id.StartsWith("PROD-")).Select(x => x.idx).ToList();
+
+        Assert.True(fndIndices.Max() < corIndices.Min(), "All Founders questions must precede Corporate questions");
+        Assert.True(corIndices.Max() < ipIndices.Min(), "All Corporate questions must precede IP questions");
+        Assert.True(ipIndices.Max() < teamIndices.Min(), "All IP questions must precede Team questions");
+        Assert.True(teamIndices.Max() < prodIndices.Min(), "All Team questions must precede Product questions");
+    }
 }
