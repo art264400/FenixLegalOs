@@ -18,7 +18,8 @@ public static class DataBank
         new("corporate", 2, "Корпоративная структура", "Corporate", 12),
         new("ip", 3, "Интеллектуальная собственность", "IP", 18),
         new("team", 4, "Команда и сотрудники", "Team", 10),
-        new("product", 5, "Продукт и пользователи", "Product", 10)
+        new("product", 5, "Продукт и пользователи", "Product", 10),
+        new("data", 6, "Данные и ИИ", "Data & AI", 15)
     };
 
     public static readonly List<DiagnosticQuestion> Questions =
@@ -27,7 +28,8 @@ public static class DataBank
         ..CorporateQuestions.All,
         ..IpQuestions.All,
         ..TeamQuestions.All,
-        ..ProductQuestions.All
+        ..ProductQuestions.All,
+        ..DataAiQuestions.All
     ];
 
     public static readonly List<RiskDefinition> Risks =
@@ -45,7 +47,8 @@ public static class DataBank
         ..CorporateDimensions.All,
         ..IpDimensions.All,
         ..TeamDimensions.All,
-        ..ProductDimensions.All
+        ..ProductDimensions.All,
+        ..DataAiDimensions.All
     ];
 
     public static string GetDimensionDisplayName(string dimensionId)

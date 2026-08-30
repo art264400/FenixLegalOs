@@ -2,6 +2,7 @@ using FenixLegalOs.Models;
 using FenixLegalOs.Models.Enums;
 using FenixLegalOs.Scoring.Interfaces;
 using FenixLegalOs.Scoring.Modules.Corporate;
+using FenixLegalOs.Scoring.Modules.DataAi;
 using FenixLegalOs.Scoring.Modules.Founders;
 using FenixLegalOs.Scoring.Modules.IP;
 using FenixLegalOs.Scoring.Modules.Product;
@@ -20,7 +21,8 @@ public class FactNormalizer
         new CorporateFactNormalizer(),
         new IpFactNormalizer(),
         new TeamFactNormalizer(),
-        new ProductFactNormalizer()
+        new ProductFactNormalizer(),
+        new DataAiFactNormalizer()
     };
 
     public static SharedFactStore NormalizeFacts(Dictionary<string, object> answers)
@@ -54,7 +56,7 @@ public class FactNormalizer
 
         // =========================================================================
         // TEMPORARY MIGRATION DEBT (§24 Baseline signals)
-        // To be extracted into Team, Revenue, DataAi, Contracts, Investment modules
+        // To be extracted into Contracts, Investment modules
         // in subsequent module extraction passes.
         // =========================================================================
         var f = store.Facts;
@@ -72,25 +74,6 @@ public class FactNormalizer
             bool hasRev = (rev01 != "none" && !string.IsNullOrEmpty(rev01)) || (revC01 != "none" && !string.IsNullOrEmpty(revC01));
             f["company.hasRevenue"] = hasRev;
             f["revenue.exists"] = hasRev;
-        }
-
-        var data01 = GetAnswerStr(answers, "DATA-01");
-        var data02 = GetAnswerStr(answers, "DATA-02");
-        if (!string.IsNullOrEmpty(data01) || !string.IsNullOrEmpty(data02))
-        {
-            f["data.personalDataProcessed"] = data01 == "yes" || (!string.IsNullOrEmpty(data02) && data02 != "none");
-        }
-
-        var ai01 = GetAnswerStr(answers, "AI-01");
-        if (!string.IsNullOrEmpty(ai01))
-        {
-            f["ai.used"] = ai01 is "external" or "own" or "both";
-        }
-
-        var ai02 = GetAnswerStr(answers, "AI-02");
-        if (!string.IsNullOrEmpty(ai02))
-        {
-            f["ai.sensitiveDataSent"] = ai02 == "sensitive";
         }
 
         var contract01 = GetAnswerStr(answers, "CONTRACT-01");

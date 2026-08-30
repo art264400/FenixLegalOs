@@ -189,18 +189,23 @@ public class UserJourneyE2ETests
             ["PROD-02"] = new List<string> { "undecided" },
             ["PROD-03"] = new List<string> { "other" },
             ["PROD-04"] = "none",
-            ["PROD-22"] = new List<string> { "none" }
+            ["PROD-22"] = new List<string> { "none" },
+            ["DATA-01"] = "no",
+            ["DATA-02"] = new List<string> { "none" },
+            ["AI-01"] = "no"
         };
 
         var journey = await RunUserJourneyAsync(soloAnswers);
 
-        // Verify that journey was short (~15 questions instead of ~70)
-        Assert.True(journey.StepCount <= 18, $"Expected <= 18 steps, got {journey.StepCount}");
+        // Verify that journey was short (~18 questions instead of 124)
+        Assert.True(journey.StepCount <= 22, $"Expected <= 22 steps, got {journey.StepCount}");
         Assert.Contains("FND-C01", journey.VisitedQuestionIds);
         Assert.Contains("COR-C01", journey.VisitedQuestionIds);
         Assert.Contains("IP-01", journey.VisitedQuestionIds);
         Assert.Contains("TEAM-01", journey.VisitedQuestionIds);
         Assert.Contains("PROD-01", journey.VisitedQuestionIds);
+        Assert.Contains("DATA-01", journey.VisitedQuestionIds);
+        Assert.Contains("AI-01", journey.VisitedQuestionIds);
 
         // Multi-founder questions must never have been visited
         Assert.DoesNotContain("FND-C02", journey.VisitedQuestionIds);
@@ -346,7 +351,7 @@ public class UserJourneyE2ETests
             string? currentQId = navState?.CurrentQuestionId;
             int steps = 0;
 
-            while (!string.IsNullOrEmpty(currentQId) && steps < 100)
+            while (!string.IsNullOrEmpty(currentQId) && steps < 200)
             {
                 steps++;
                 var q = _questionRepo.GetQuestions().FirstOrDefault(item => item.Id == currentQId);

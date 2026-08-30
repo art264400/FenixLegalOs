@@ -40,13 +40,12 @@ public class ConditionsEvaluator
                 }
                 if (factVal is IEnumerable<string> strList)
                 {
-                    var targetStr = rule.Value?.ToString() ?? "";
                     return op switch
                     {
                         ConditionalOperator.Contains or ConditionalOperator.Eq or ConditionalOperator.In =>
-                            strList.Any(x => x.Equals(targetStr, StringComparison.OrdinalIgnoreCase)),
-                        ConditionalOperator.NotContains or ConditionalOperator.Neq =>
-                            !strList.Any(x => x.Equals(targetStr, StringComparison.OrdinalIgnoreCase)),
+                            strList.Any(x => RuleValueContains(rule.Value, x)),
+                        ConditionalOperator.NotContains or ConditionalOperator.Neq or ConditionalOperator.NotIn =>
+                            !strList.Any(x => RuleValueContains(rule.Value, x)),
                         _ => throw new InvalidOperationException($"Unsupported collection conditional operator: '{op}' for key '{rule.QuestionId}'")
                     };
                 }
@@ -64,26 +63,24 @@ public class ConditionsEvaluator
         {
             var arrVals = new List<string>();
             foreach (var el in je.EnumerateArray()) arrVals.Add(el.ToString());
-            var targetStr = rule.Value?.ToString() ?? "";
             return op switch
             {
                 ConditionalOperator.Contains or ConditionalOperator.Eq or ConditionalOperator.In =>
-                    arrVals.Any(x => x.Equals(targetStr, StringComparison.OrdinalIgnoreCase)),
-                ConditionalOperator.NotContains or ConditionalOperator.Neq =>
-                    !arrVals.Any(x => x.Equals(targetStr, StringComparison.OrdinalIgnoreCase)),
+                    arrVals.Any(x => RuleValueContains(rule.Value, x)),
+                ConditionalOperator.NotContains or ConditionalOperator.Neq or ConditionalOperator.NotIn =>
+                    !arrVals.Any(x => RuleValueContains(rule.Value, x)),
                 _ => throw new InvalidOperationException($"Unsupported array conditional operator: '{op}' for question '{rule.QuestionId}'")
             };
         }
 
         if (rawVal is IEnumerable<string> listVal)
         {
-            var targetStr = rule.Value?.ToString() ?? "";
             return op switch
             {
                 ConditionalOperator.Contains or ConditionalOperator.Eq or ConditionalOperator.In =>
-                    listVal.Any(x => x.Equals(targetStr, StringComparison.OrdinalIgnoreCase)),
-                ConditionalOperator.NotContains or ConditionalOperator.Neq =>
-                    !listVal.Any(x => x.Equals(targetStr, StringComparison.OrdinalIgnoreCase)),
+                    listVal.Any(x => RuleValueContains(rule.Value, x)),
+                ConditionalOperator.NotContains or ConditionalOperator.Neq or ConditionalOperator.NotIn =>
+                    !listVal.Any(x => RuleValueContains(rule.Value, x)),
                 _ => throw new InvalidOperationException($"Unsupported list conditional operator: '{op}' for question '{rule.QuestionId}'")
             };
         }

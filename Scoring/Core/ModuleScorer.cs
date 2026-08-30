@@ -14,7 +14,7 @@ public class ModuleScorer
             "ip" => true,
             "team" => GetBoolFact(f, "team.hasNonFounderTeam"),
             "product" => true,
-            "data" => GetBoolFact(f, "data.personalDataProcessed") || GetBoolFact(f, "ai.used"),
+            "data" => GetBoolFact(f, "data.personalDataProcessed") || GetBoolFact(f, "ai.used") || f.GetValueOrDefault("data.userInfoDeclared")?.ToString() == "unknown" || f.GetValueOrDefault("ai.used")?.ToString() == "unknown",
             "contracts" => GetBoolFact(f, "contracts.b2bRelevant"),
             "investment" => (string?)f.GetValueOrDefault("investment.timing") != "none" || GetBoolFact(f, "investment.priorInvestment"),
             _ => sectionQs.Count > 0
