@@ -353,9 +353,12 @@
         }).join('') : '';
 
         colAi.innerHTML =
-          '<div class="tb-col-header">' +
-            '<h3>🤖 3. LLM-отчет</h3>' +
-            '<button class="btn btn-secondary btn-sm" id="tb-regen-ai-btn">🔄 Перегенерировать</button>' +
+          '<div class="tb-col-header" style="flex-wrap:wrap;gap:8px">' +
+            '<h3>🤖 3. Полный отчёт</h3>' +
+            '<div style="display:flex;gap:6px;align-items:center">' +
+              '<button class="btn btn-sm" id="tb-download-pdf-btn" style="padding:4px 10px;font-size:11.5px;background:#38BDF8;color:#060A13;font-weight:700">📥 Скачать PDF</button>' +
+              '<button class="btn btn-secondary btn-sm" id="tb-regen-ai-btn" style="padding:4px 10px;font-size:11.5px">🔄 Перегенерировать</button>' +
+            '</div>' +
           '</div>' +
           '<div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--ink-soft);background:var(--bg-elev);padding:6px 12px;border-radius:6px;margin-bottom:10px">' +
             '<span>Модель: <b style="color:var(--accent)">' + esc(currentAiMemo.model) + '</b></span>' +
@@ -380,6 +383,8 @@
           '</div>';
 
         document.getElementById('tb-regen-ai-btn').addEventListener('click', triggerAiGeneration);
+        const pdfBtn = document.getElementById('tb-download-pdf-btn');
+        if (pdfBtn) pdfBtn.addEventListener('click', downloadTestBenchPdf);
 
         const tabSyn = document.getElementById('btn-tab-synthesis');
         const tabIn = document.getElementById('btn-tab-input-json');
@@ -409,15 +414,55 @@
       } else {
         colAi.innerHTML =
           '<div class="tb-col-header">' +
-            '<h3>🤖 3. LLM-отчет</h3>' +
+            '<h3>🤖 3. Полный отчёт</h3>' +
             '<span class="badge" style="background:rgba(255,255,255,0.08);color:var(--ink-soft)">Ожидание</span>' +
           '</div>' +
-          '<div style="text-align:center;padding:40px 20px;display:flex;flex-direction:column;align-items:center;gap:14px">' +
-            '<p style="color:var(--ink-soft);font-size:13.5px;max-width:280px">Отчет LLM еще не сгенерирован для этого набора ответов.</p>' +
-            '<button class="btn" id="tb-gen-ai-btn" style="padding:12px 24px;font-size:14px">⚡ Сгенерировать отчет LLM</button>' +
+          '<div style="text-align:center;padding:30px 20px;display:flex;flex-direction:column;align-items:center;gap:12px">' +
+            '<p style="color:var(--ink-soft);font-size:13px;max-width:280px">Сгенерируйте отчёт с нейросетевым синтезом или скачайте типографический PDF сразу.</p>' +
+            '<button class="btn" id="tb-gen-ai-btn" style="padding:10px 20px;font-size:13.5px">⚡ Сгенерировать отчёт (LLM)</button>' +
+            '<button class="btn btn-secondary" id="tb-download-direct-pdf-btn" style="padding:9px 18px;font-size:12.5px">📥 Скачать PDF-отчёт напрямую</button>' +
           '</div>';
 
         document.getElementById('tb-gen-ai-btn').addEventListener('click', triggerAiGeneration);
+        const directPdfBtn = document.getElementById('tb-download-direct-pdf-btn');
+        if (directPdfBtn) directPdfBtn.addEventListener('click', downloadTestBenchPdf);
+      }
+    }
+
+    async function downloadTestBenchPdf() {
+      const btn = document.getElementById('tb-download-pdf-btn') || document.getElementById('tb-download-direct-pdf-btn');
+      const originalText = btn ? btn.innerHTML : '📥 Скачать PDF';
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Формирование PDF…';
+      }
+      try {
+        const res = await fetch('/api/admin/testbench/generate-pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            answers: currentAnswers,
+            projectName: 'Стартап',
+            narratives: currentAiMemo ? currentAiMemo.narratives : null
+          })
+        });
+        if (!res.ok) throw new Error('Ошибка генерации PDF: ' + res.status);
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'Fenix_SLS_Report_Sim.pdf';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      } catch (err) {
+        alert('Не удалось сформировать PDF: ' + err.message);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = originalText;
+        }
       }
     }
 
@@ -425,13 +470,13 @@
       const colAi = document.getElementById('tb-col-ai');
       colAi.innerHTML =
         '<div class="tb-col-header">' +
-          '<h3>🤖 3. LLM-отчет</h3>' +
+          '<h3>🤖 3. Полный отчёт</h3>' +
           '<span class="badge" style="background:rgba(56,189,248,0.2);color:var(--accent)">Генерация…</span>' +
         '</div>' +
         '<div style="text-align:center;padding:60px 20px;display:flex;flex-direction:column;align-items:center;gap:14px">' +
           '<div class="spinner" style="width:32px;height:32px;border-width:3px"></div>' +
-          '<p style="color:var(--accent);font-size:14px;font-weight:600">OpenAI синтезирует юридический меморандум…</p>' +
-          '<span style="font-size:12px;color:var(--ink-soft)">Анализ 8 зон, рисков и 30-дневного Action Plan</span>' +
+          '<p style="color:var(--accent);font-size:14px;font-weight:600">Синтез юридического меморандума…</p>' +
+          '<span style="font-size:12px;color:var(--ink-soft)">Анализ 8 зон, рисков и дорожной карты действий</span>' +
         '</div>';
 
       try {
@@ -443,8 +488,8 @@
         renderAiColumn(colAi);
       } catch (err) {
         colAi.innerHTML =
-          '<div class="tb-col-header"><h3>🤖 3. LLM-отчет</h3></div>' +
-          '<p style="color:var(--critical);padding:20px">Ошибка генерации LLM: ' + esc(err.message) + '</p>' +
+          '<div class="tb-col-header"><h3>🤖 3. Полный отчёт</h3></div>' +
+          '<p style="color:var(--critical);padding:20px">Ошибка генерации: ' + esc(err.message) + '</p>' +
           '<button class="btn btn-secondary" id="tb-retry-ai-btn" style="margin:0 20px">Повторить попытку</button>';
         document.getElementById('tb-retry-ai-btn').addEventListener('click', triggerAiGeneration);
       }
@@ -600,6 +645,9 @@
             (l.sourceRiskCode ? 'Источник CTA: <code>' + esc(l.sourceRiskCode) + '</code><br>' : '') +
             'Lead heat: <span class="heat heat-' + esc(l.heatLabel) + '">' + l.heatScore + ' · ' + HEAT_LABEL[l.heatLabel] + '</span><br>' +
             'Fundraising: ' + esc(TIMELINE_LABEL[data.fundraisingTimeline] || 'нет данных') +
+          '</div>' +
+          '<div style="margin-top:16px;display:flex;gap:10px;align-items:center">' +
+            '<a href="/api/admin/leads/' + encodeURIComponent(l.id) + '/pdf" target="_blank" class="btn" style="padding:8px 16px;font-size:13px;text-decoration:none;display:inline-flex;align-items:center;gap:6px">📥 Скачать PDF-отчёт</a>' +
           '</div>' +
           '<div class="field" style="margin-top:20px;max-width:260px"><label>Статус</label>' +
             '<select id="lead-status">' + statusOptions + '</select></div>' +

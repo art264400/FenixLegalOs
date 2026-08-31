@@ -33,7 +33,8 @@ public class TypstPdfService
         ScoreResult result,
         SharedFactStore facts,
         string sessionId,
-        string? companyName = null)
+        string? companyName = null,
+        ReportNarrativesDto? rawNarratives = null)
     {
         var reportCtx = ReportEngine.AssembleReportContext(result, facts, sessionId, companyName);
 
@@ -48,7 +49,7 @@ public class TypstPdfService
 
         try
         {
-            var rawNarratives = await _aiReportService.GenerateReportNarrativesAsync(reportCtx);
+            rawNarratives ??= await _aiReportService.GenerateReportNarrativesAsync(reportCtx);
             var sanitizedNarratives = ReportQualityGate.ValidateAndSanitize(rawNarratives, reportCtx);
 
             if (!string.IsNullOrWhiteSpace(sanitizedNarratives.ProjectProfileNarrative))
@@ -186,7 +187,7 @@ public class TypstPdfService
         )
       ],
       [
-        #text(font: (""Segoe UI"", ""Arial""), size: 7.5pt, fill: rgb(""#94A3B8""))[Отчет: " + ctx.ReportNumber + @"  ·  " + ctx.GeneratedDate + (string.IsNullOrWhiteSpace(ctx.ProjectName) || ctx.ProjectName is "Проект" or "Стартап" ? @"  ·  " + EscapeTypst(ctx.ProjectStage) : @"  ·  " + EscapeTypst(ctx.ProjectName) + @" (" + EscapeTypst(ctx.ProjectStage) + @")") + @"]
+        #text(font: (""Segoe UI"", ""Arial""), size: 7.5pt, fill: rgb(""#94A3B8""))[Отчет: " + EscapeTypst(ctx.ReportNumber) + @"  ·  " + EscapeTypst(ctx.GeneratedDate) + (string.IsNullOrWhiteSpace(ctx.ProjectName) || ctx.ProjectName is "Проект" or "Стартап" ? @"  ·  " + EscapeTypst(ctx.ProjectStage) : @"  ·  " + EscapeTypst(ctx.ProjectName) + @" (" + EscapeTypst(ctx.ProjectStage) + @")") + @"]
       ]
     )
     #v(3pt)
@@ -1415,6 +1416,8 @@ public class TypstPdfService
             .Replace("]", "\\]")
             .Replace("#", "\\#")
             .Replace("$", "\\$")
-            .Replace("@", "\\@");
+            .Replace("@", "\\@")
+            .Replace("_", "\\_")
+            .Replace("*", "\\*");
     }
 }

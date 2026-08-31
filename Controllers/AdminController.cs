@@ -18,6 +18,7 @@ public class AdminController : ControllerBase
     private readonly ScoringEngine _scoringEngine;
     private readonly AiReportService _aiReportService;
     private readonly SettingsRepository _settings;
+    private readonly TypstPdfService _pdfService;
     private const string AdminTokenCookieName = "fenix_admin";
     private static readonly HashSet<string> AdminTokens = new();
     private static readonly string AdminPassword = Environment.GetEnvironmentVariable("FENIX_ADMIN_PASSWORD") ?? "fenix2026";
@@ -28,7 +29,8 @@ public class AdminController : ControllerBase
         RiskRepository riskRepo,
         ScoringEngine scoringEngine,
         AiReportService aiReportService,
-        SettingsRepository settings)
+        SettingsRepository settings,
+        TypstPdfService pdfService)
     {
         _leads = leads;
         _questionRepo = questionRepo;
@@ -36,6 +38,7 @@ public class AdminController : ControllerBase
         _scoringEngine = scoringEngine;
         _aiReportService = aiReportService;
         _settings = settings;
+        _pdfService = pdfService;
     }
 
     private bool IsAdmin()
@@ -57,7 +60,7 @@ public class AdminController : ControllerBase
         AdminTokens.Add(token);
         _leads.AuditLog("admin", "login", null);
 
-        Response.Headers.Append("Set-Cookie", $"{AdminTokenCookieName}={token}; HttpOnly; Path=/; SameSite=Strict; Max-Age=86400");
+        Response?.Headers.Append("Set-Cookie", $"{AdminTokenCookieName}={token}; HttpOnly; Path=/; SameSite=Strict; Max-Age=86400");
         return Ok(new { ok = true });
     }
 
@@ -675,8 +678,64 @@ public class AdminController : ControllerBase
             narratives,
             inputPayload,
             durationMs = sw.ElapsedMilliseconds,
-            model = "gpt-4o-mini"
+            model = "gpt-5.6-sol"
         });
+    }
+
+    [HttpPost("testbench/generate-pdf")]
+    public async Task<IActionResult> GenerateTestBenchPdf([FromBody] JsonElement body)
+    {
+        if (!IsAdmin()) return Unauthorized();
+        var answers = new Dictionary<string, object>();
+
+        if (body.TryGetProperty("answers", out var aProp) && aProp.ValueKind == JsonValueKind.Object)
+        {
+            answers = JsonSerializer.Deserialize<Dictionary<string, object>>(aProp.GetRawText()) ?? new();
+        }
+
+        string projectName = body.TryGetProperty("projectName", out var pProp) ? pProp.GetString() ?? "Стартап" : "Стартап";
+        string sessionId = "admin_tb_" + Guid.NewGuid().ToString("N")[..8];
+
+        var result = _scoringEngine.ComputeResult(answers);
+        var facts = FenixLegalOs.Scoring.Core.FactNormalizer.NormalizeFacts(answers);
+
+        // Optional custom/cached narratives if provided
+        FenixLegalOs.Models.Report.ReportNarrativesDto? rawNarratives = null;
+        if (body.TryGetProperty("narratives", out var nProp) && nProp.ValueKind == JsonValueKind.Object)
+        {
+            rawNarratives = JsonSerializer.Deserialize<FenixLegalOs.Models.Report.ReportNarrativesDto>(nProp.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+
+        var pdfBytes = await _pdfService.GeneratePdfAsync(result, facts, sessionId, projectName, rawNarratives: rawNarratives);
+        if (pdfBytes == null) return Problem("PDF generation failed");
+
+        return File(pdfBytes, "application/pdf", $"Fenix_SLS_Report_{projectName}_{sessionId}.pdf");
+    }
+
+    [HttpGet("leads/{id}/pdf")]
+    public async Task<IActionResult> GetLeadPdf(string id)
+    {
+        if (!IsAdmin()) return Unauthorized();
+        var lead = _leads.GetLead(id);
+        if (lead == null) return NotFound(new { error = "lead_not_found" });
+
+        var answersDict = lead.SessionAnswers != null
+            ? JsonSerializer.Deserialize<Dictionary<string, object>>((string)lead.SessionAnswers) ?? new()
+            : new();
+
+        var result = answersDict.Count > 0
+            ? _scoringEngine.ComputeResult(answersDict)
+            : (lead.SessionResult != null ? JsonSerializer.Deserialize<ScoreResult>((string)lead.SessionResult) : null);
+
+        if (result == null) return NotFound(new { error = "invalid_result" });
+
+        var facts = FenixLegalOs.Scoring.Core.FactNormalizer.NormalizeFacts(answersDict);
+        string companyName = !string.IsNullOrWhiteSpace((string)lead.Company) ? (string)lead.Company : "Стартап";
+
+        var pdfBytes = await _pdfService.GeneratePdfAsync(result, facts, lead.SessionId ?? id, companyName);
+        if (pdfBytes == null) return Problem("PDF generation failed");
+
+        return File(pdfBytes, "application/pdf", $"Fenix_SLS_Report_{lead.SessionId ?? id}.pdf");
     }
 
     // ─── Risk Management Endpoints ─────────────────────────────────────────
