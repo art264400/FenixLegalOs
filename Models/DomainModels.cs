@@ -71,6 +71,10 @@ public class RiskDefinition
     public string Recommendation { get; set; } = "";
     public bool LawyerRequired { get; set; }
     public ResolutionType Resolution { get; set; } = ResolutionType.SelfService;
+    public ResolutionMode ResolutionMode { get; set; } = ResolutionMode.LegalWork;
+    public string? RecommendedActionId { get; set; }
+    public List<string> Facts { get; set; } = new();
+    public List<string> BusinessImpact { get; set; } = new();
     public string? ServiceCode { get; set; }
     public List<string> SuppressCodes { get; set; } = new();
     public string? Cta { get; set; }
@@ -93,6 +97,10 @@ public class RiskFinding
     public List<RiskFindingBasis> Basis { get; set; } = new();
     public bool LawyerRequired { get; set; }
     public ResolutionType Resolution { get; set; } = ResolutionType.SelfService;
+    public ResolutionMode ResolutionMode { get; set; } = ResolutionMode.LegalWork;
+    public string? RecommendedActionId { get; set; }
+    public List<string> Facts { get; set; } = new();
+    public List<string> BusinessImpact { get; set; } = new();
     public string? ServiceCode { get; set; }
     public string? Cta { get; set; }
     public List<string> AffectedDimensions { get; set; } = new();

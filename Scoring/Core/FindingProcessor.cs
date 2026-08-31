@@ -19,13 +19,15 @@ public class FindingProcessor
         return rawList;
     }
 
-    public static List<RiskFinding> MergeAndSuppressFindings(List<RiskFinding> rawFindings, SharedFactStore facts)
+    public static List<RiskFinding> MergeAndSuppressFindings(List<RiskFinding> rawFindings, SharedFactStore facts, IReadOnlyList<RiskDefinition>? allRisks = null)
     {
         var suppressedCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var risksLookup = allRisks ?? Data.DataBank.Risks;
 
         foreach (var finding in rawFindings)
         {
-            var def = Data.DataBank.Risks.FirstOrDefault(r => string.Equals(r.Code, finding.Code, StringComparison.OrdinalIgnoreCase));
+            var def = risksLookup.FirstOrDefault(r => string.Equals(r.Code, finding.Code, StringComparison.OrdinalIgnoreCase))
+                      ?? Data.DataBank.Risks.FirstOrDefault(r => string.Equals(r.Code, finding.Code, StringComparison.OrdinalIgnoreCase));
             if (def == null)
             {
                 throw new InvalidOperationException($"Unknown RiskCode '{finding.Code}' encountered in candidate findings.");

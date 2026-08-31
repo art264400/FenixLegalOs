@@ -71,7 +71,7 @@
     ['pricing', '💰 Тариф & Цены'],
     ['testbench', '🧪 QA Simulator & Test Bench'],
     ['questions', 'Question Bank'],
-    ['risks', 'Risk Library'],
+    ['risks', '⚡ Реестр рисков'],
   ];
 
   function renderShell(active, detailId) {
@@ -96,52 +96,63 @@
     try {
       const data = await api('GET', '/api/admin/settings/pricing');
       el.innerHTML =
-        '<section class="admin-card" style="max-width:560px;margin:20px 0;background:var(--bg-elev);border:1px solid var(--line);border-radius:var(--radius);padding:28px">' +
-          '<h2 style="font-size:22px;color:var(--ink);margin-bottom:8px">💰 Управление стоимостью отчёта</h2>' +
-          '<p style="color:var(--ink-soft);font-size:14px;margin-bottom:24px;line-height:1.5">Здесь вы можете изменить цену разблокировки полного юридического отчёта в тенге. Изменение мгновенно применится на сайте, в форме оплаты и на кнопке Kaspi Pay.</p>' +
-          '<form id="pricing-form" style="display:grid;gap:18px">' +
+        '<section class="admin-card" style="max-width:580px;margin:20px 0;background:var(--bg-elev);border:1px solid var(--line);border-radius:var(--radius);padding:28px">' +
+          '<h2 style="font-size:22px;color:var(--ink);margin-bottom:8px">💰 Тарифы & Контакты в отчёте</h2>' +
+          '<p style="color:var(--ink-soft);font-size:14px;margin-bottom:24px;line-height:1.5">Здесь вы можете изменить цены тарифов и официальные контакты Fenix Law, которые указываются в генерируемом PDF-отчёте.</p>' +
+          '<form id="pricing-form" style="display:grid;gap:16px">' +
+            '<h3 style="font-size:15px;color:var(--ink);margin-top:4px;border-bottom:1px solid var(--line);padding-bottom:6px">Тарифы (₸ KZT)</h3>' +
             '<div class="field">' +
-              '<label for="p-price" style="font-weight:600">Актуальная цена отчёта (₸ KZT)</label>' +
-              '<input id="p-price" type="number" step="100" required value="' + data.priceKzt + '" style="font-size:18px;font-weight:700;color:var(--accent)">' +
+              '<label for="p-price" style="font-weight:600">Тариф 1: «FENIX SLS — Отчёт»</label>' +
+              '<input id="p-price" type="number" min="0" step="1" required value="' + data.priceKzt + '" style="font-size:16px;font-weight:700;color:var(--accent)">' +
             '</div>' +
             '<div class="field">' +
-              '<label for="p-old-price" style="font-weight:600">Зачёркнутая базовая цена (₸ KZT) — для скидки</label>' +
-              '<input id="p-old-price" type="number" step="100" required value="' + data.oldPriceKzt + '" style="font-size:16px">' +
+              '<label for="p-consult-price" style="font-weight:600">Тариф 2: «⭐ FENIX SLS + разбор с юристом»</label>' +
+              '<input id="p-consult-price" type="number" min="0" step="1" required value="' + (data.consultationPriceKzt || 79900) + '" style="font-size:16px;font-weight:700;color:var(--gold)">' +
             '</div>' +
-            '<div id="pricing-calc" style="background:var(--bg-card);border:1px solid var(--line);border-radius:8px;padding:14px;font-size:13.5px;color:var(--ink-2)">' +
-              'Текущая скидка: <strong style="color:var(--positive)">' + data.discountPercent + '%</strong> (Пользователь платит ' + data.priceKzt.toLocaleString('ru') + ' ₸ вместо ' + data.oldPriceKzt.toLocaleString('ru') + ' ₸)' +
+
+            '<h3 style="font-size:15px;color:var(--ink);margin-top:14px;border-bottom:1px solid var(--line);padding-bottom:6px">Контакты для связи (в PDF-отчёте)</h3>' +
+            '<div class="field">' +
+              '<label for="p-tg" style="font-weight:600">Телеграм</label>' +
+              '<input id="p-tg" type="text" required value="' + esc(data.telegram || '@fenixlaw') + '" placeholder="@fenixlaw" style="font-size:14px">' +
             '</div>' +
+            '<div class="field">' +
+              '<label for="p-web" style="font-weight:600">Сайт</label>' +
+              '<input id="p-web" type="text" required value="' + esc(data.website || 'www.fenixlaw.org') + '" placeholder="www.fenixlaw.org" style="font-size:14px">' +
+            '</div>' +
+            '<div class="field">' +
+              '<label for="p-phone" style="font-weight:600">Телефон</label>' +
+              '<input id="p-phone" type="text" required value="' + esc(data.phone || '+7-700-559-1377') + '" placeholder="+7-700-559-1377" style="font-size:14px">' +
+            '</div>' +
+
             '<div class="form-error" id="pricing-err" hidden></div>' +
-            '<div class="form-success" id="pricing-ok" hidden style="color:var(--positive);font-weight:600">✓ Стоимость успешно обновлена и сохранена в системе!</div>' +
-            '<button class="btn" type="submit" style="margin-top:6px">💾 Сохранить изменения стоимости</button>' +
+            '<div class="form-success" id="pricing-ok" hidden style="color:var(--positive);font-weight:600">✓ Настройки тарифов и контактов успешно сохранены!</div>' +
+            '<button class="btn" type="submit" style="margin-top:8px">💾 Сохранить настройки</button>' +
           '</form>' +
         '</section>';
 
       const form = document.getElementById('pricing-form');
       const priceIn = document.getElementById('p-price');
-      const oldPriceIn = document.getElementById('p-old-price');
-      const calcEl = document.getElementById('pricing-calc');
+      const consultPriceIn = document.getElementById('p-consult-price');
+      const tgIn = document.getElementById('p-tg');
+      const webIn = document.getElementById('p-web');
+      const phoneIn = document.getElementById('p-phone');
       const errEl = document.getElementById('pricing-err');
       const okEl = document.getElementById('pricing-ok');
-
-      function updateCalc() {
-        const p = parseInt(priceIn.value, 10) || 0;
-        const o = parseInt(oldPriceIn.value, 10) || 0;
-        const disc = o > p ? Math.round((1 - p / o) * 100) : 0;
-        calcEl.innerHTML = 'Текущая скидка: <strong style="color:var(--positive)">' + disc + '%</strong> (Пользователь платит ' + p.toLocaleString('ru') + ' ₸ вместо ' + o.toLocaleString('ru') + ' ₸)';
-      }
-
-      priceIn.addEventListener('input', updateCalc);
-      oldPriceIn.addEventListener('input', updateCalc);
 
       form.addEventListener('submit', async function (e) {
         e.preventDefault();
         errEl.hidden = true;
         okEl.hidden = true;
         try {
+          const newPrice = parseInt(priceIn.value, 10);
+          const newConsultPrice = parseInt(consultPriceIn.value, 10);
           const res = await api('POST', '/api/admin/settings/pricing', {
-            priceKzt: parseInt(priceIn.value, 10),
-            oldPriceKzt: parseInt(oldPriceIn.value, 10)
+            priceKzt: newPrice,
+            oldPriceKzt: newPrice,
+            consultationPriceKzt: newConsultPrice,
+            telegram: tgIn.value.trim(),
+            website: webIn.value.trim(),
+            phone: phoneIn.value.trim()
           });
           okEl.hidden = false;
           setTimeout(function () { okEl.hidden = true; }, 3500);
@@ -335,20 +346,66 @@
 
     function renderAiColumn(colAi) {
       if (currentAiMemo) {
+        const narr = currentAiMemo.narratives || {};
+        const rootCausesMap = narr.rootCauseSummaries || narr.topRiskSummaries || {};
+        const topRisksList = Object.keys(rootCausesMap).length ? Object.keys(rootCausesMap).map(function(k) {
+          return '<li style="margin-bottom:6px"><code style="font-size:11px;font-weight:700">' + esc(k) + '</code>: ' + esc(rootCausesMap[k]) + '</li>';
+        }).join('') : '';
+
         colAi.innerHTML =
           '<div class="tb-col-header">' +
             '<h3>🤖 3. LLM-отчет</h3>' +
             '<button class="btn btn-secondary btn-sm" id="tb-regen-ai-btn">🔄 Перегенерировать</button>' +
           '</div>' +
-          '<div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--ink-soft);background:var(--bg-elev);padding:6px 12px;border-radius:6px">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--ink-soft);background:var(--bg-elev);padding:6px 12px;border-radius:6px;margin-bottom:10px">' +
             '<span>Модель: <b style="color:var(--accent)">' + esc(currentAiMemo.model) + '</b></span>' +
             '<span>Время: <b style="color:var(--positive)">' + (currentAiMemo.durationMs / 1000).toFixed(2) + ' сек</b></span>' +
           '</div>' +
-          '<div class="ai-memo-body" style="background:var(--bg-elev);border:1px solid var(--line);border-radius:8px;padding:16px;overflow-y:auto;max-height:680px;font-size:13px;line-height:1.55">' +
-            formatMarkdown(currentAiMemo.memo) +
+          '<div class="tb-ai-tabs" style="display:flex;gap:6px;margin-bottom:10px">' +
+            '<button class="btn btn-sm tb-tab-btn active" id="btn-tab-synthesis" style="font-size:11.5px;padding:4px 10px">📝 Текстовый синтез</button>' +
+            '<button class="btn btn-secondary btn-sm tb-tab-btn" id="btn-tab-input-json" style="font-size:11.5px;padding:4px 10px">🔍 Input JSON (В нейросеть)</button>' +
+            '<button class="btn btn-secondary btn-sm tb-tab-btn" id="btn-tab-output-json" style="font-size:11.5px;padding:4px 10px">📤 Output JSON (Из нейросети)</button>' +
+          '</div>' +
+          '<div id="tb-ai-view-synthesis" class="ai-memo-body" style="background:var(--bg-elev);border:1px solid var(--line);border-radius:8px;padding:16px;overflow-y:auto;max-height:640px;font-size:13px;line-height:1.55">' +
+            (narr.executiveConclusion ? '<div style="margin-bottom:16px"><h4 style="color:var(--gold);font-size:14px;margin-bottom:6px">📌 Синтез ситуации (Executive Conclusion):</h4><p style="color:#FFF">' + esc(narr.executiveConclusion) + '</p></div>' : '') +
+            (narr.projectProfileNarrative ? '<div style="margin-bottom:16px"><h4 style="color:var(--accent);font-size:14px;margin-bottom:6px">🏢 Профиль компании:</h4><p style="color:var(--ink-soft)">' + esc(narr.projectProfileNarrative) + '</p></div>' : '') +
+            (topRisksList ? '<div style="margin-bottom:16px"><h4 style="color:var(--critical);font-size:14px;margin-bottom:6px">⚡ Корневые причины рисков (Root Causes):</h4><ul style="padding-left:18px;color:#FFF">' + topRisksList + '</ul></div>' : '') +
+            (narr.fenixLawRecommendation ? '<div><h4 style="color:var(--positive);font-size:14px;margin-bottom:6px">⚖️ Заключение Fenix Law:</h4><p style="color:var(--ink-soft)">' + esc(narr.fenixLawRecommendation) + '</p></div>' : '') +
+          '</div>' +
+          '<div id="tb-ai-view-input-json" style="display:none;background:var(--bg-elev);border:1px solid var(--line);border-radius:8px;padding:12px;overflow-y:auto;max-height:640px">' +
+            '<pre style="color:#a5d6ff;font-size:11.5px;margin:0;font-family:monospace;white-space:pre-wrap">' + esc(JSON.stringify(currentAiMemo.inputPayload, null, 2)) + '</pre>' +
+          '</div>' +
+          '<div id="tb-ai-view-output-json" style="display:none;background:var(--bg-elev);border:1px solid var(--line);border-radius:8px;padding:12px;overflow-y:auto;max-height:640px">' +
+            '<pre style="color:#7ee787;font-size:11.5px;margin:0;font-family:monospace;white-space:pre-wrap">' + esc(JSON.stringify(currentAiMemo.narratives, null, 2)) + '</pre>' +
           '</div>';
 
         document.getElementById('tb-regen-ai-btn').addEventListener('click', triggerAiGeneration);
+
+        const tabSyn = document.getElementById('btn-tab-synthesis');
+        const tabIn = document.getElementById('btn-tab-input-json');
+        const tabOut = document.getElementById('btn-tab-output-json');
+        const vSyn = document.getElementById('tb-ai-view-synthesis');
+        const vIn = document.getElementById('tb-ai-view-input-json');
+        const vOut = document.getElementById('tb-ai-view-output-json');
+
+        tabSyn.addEventListener('click', function() {
+          tabSyn.className = 'btn btn-sm tb-tab-btn active';
+          tabIn.className = 'btn btn-secondary btn-sm tb-tab-btn';
+          tabOut.className = 'btn btn-secondary btn-sm tb-tab-btn';
+          vSyn.style.display = 'block'; vIn.style.display = 'none'; vOut.style.display = 'none';
+        });
+        tabIn.addEventListener('click', function() {
+          tabIn.className = 'btn btn-sm tb-tab-btn active';
+          tabSyn.className = 'btn btn-secondary btn-sm tb-tab-btn';
+          tabOut.className = 'btn btn-secondary btn-sm tb-tab-btn';
+          vIn.style.display = 'block'; vSyn.style.display = 'none'; vOut.style.display = 'none';
+        });
+        tabOut.addEventListener('click', function() {
+          tabOut.className = 'btn btn-sm tb-tab-btn active';
+          tabSyn.className = 'btn btn-secondary btn-sm tb-tab-btn';
+          tabIn.className = 'btn btn-secondary btn-sm tb-tab-btn';
+          vOut.style.display = 'block'; vSyn.style.display = 'none'; vIn.style.display = 'none';
+        });
       } else {
         colAi.innerHTML =
           '<div class="tb-col-header">' +
@@ -595,17 +652,336 @@
     el.innerHTML = '<p style="color:var(--ink-faint);font-size:13px">Question bank v' + esc(data.version) + ' · ' + data.questions.length + ' вопросов · редактирование — в следующей итерации, сейчас question bank версионируется в коде (src/data/questions.ts)</p>' + bySection;
   }
 
+  const SECTION_TITLES = {
+    founders: '👤 Сооснователи',
+    corporate: '🏛️ Корпоративная структура',
+    ip: '💡 Интеллектуальная собственность',
+    team: '👥 Команда и сотрудники',
+    product: '📦 Продукт и пользователи',
+    data: '🤖 Данные и ИИ',
+    contracts: '📄 Договоры с контрагентами',
+    investment: '📈 Инвестиционная готовность'
+  };
+
+  const PRIORITY_LABELS = {
+    Now: '⚡ Срочно (Now)',
+    ThirtyDays: '⏳ В течение 30 дней',
+    BeforeRound: '🎯 До раунда инвестиций',
+    Later: '📅 Планово (Later)'
+  };
+
   async function loadRisks(el) {
-    const data = await api('GET', '/api/admin/risk-library');
-    const rows = data.risks.map(function (r) {
-      return '<tr><td><code style="font-size:12px">' + esc(r.code) + '</code></td>' +
-        '<td><span class="sev sev-' + r.severity + '">' + r.severity + '</span></td>' +
-        '<td><strong>' + esc(r.title) + '</strong><br><span style="color:var(--ink-soft);font-size:13px">' + esc(r.finding) + '</span></td>' +
-        '<td style="font-size:12.5px;color:var(--ink-faint)">' + esc(r.resolution) + '</td></tr>';
-    }).join('');
-    el.innerHTML =
-      '<p style="color:var(--ink-faint);font-size:13px">Risk library v' + esc(data.version) + ' · ' + data.risks.length + ' правил · CRITICAL_* — rule-based флаги</p>' +
-      '<table class="data" style="margin-top:16px"><thead><tr><th>Код</th><th>Severity</th><th>Риск</th><th>Resolution</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    el.innerHTML = '<p style="color:var(--ink-faint)">Загрузка каталога рисков…</p>';
+
+    let currentSection = 'all';
+    let currentSeverity = 'all';
+    let currentPriority = 'all';
+    let currentSearch = '';
+
+    async function fetchAndRender() {
+      const qParams = new URLSearchParams();
+      if (currentSection !== 'all') qParams.set('sectionId', currentSection);
+      if (currentSeverity !== 'all') qParams.set('severity', currentSeverity);
+      if (currentPriority !== 'all') qParams.set('priority', currentPriority);
+      if (currentSearch) qParams.set('search', currentSearch);
+
+      const data = await api('GET', '/api/admin/risks?' + qParams.toString());
+      const stats = data.stats;
+      const risks = data.risks;
+
+      el.innerHTML =
+        '<div class="risk-admin-header">' +
+          '<div>' +
+            '<h2 style="font-size:22px;color:var(--ink);margin-bottom:6px">⚡ Реестр и управление рисками (Risk Registry)</h2>' +
+            '<p style="color:var(--ink-soft);font-size:14px">Каталог всех 115+ юридических рисков с возможностью редактирования формулировок, критичности, рекомендаций и сроков на лету.</p>' +
+          '</div>' +
+          '<button class="btn btn-secondary" id="btn-reset-risks" style="font-size:13px;padding:8px 16px">🔄 Сбросить к заводским</button>' +
+        '</div>' +
+
+        '<div class="risk-stats-bar">' +
+          '<div class="risk-stat-chip">Всего рисков: <strong>' + stats.total + '</strong></div>' +
+          '<div class="risk-stat-chip"><span class="sev sev-Blocker">Blocker</span> <strong>' + stats.blockers + '</strong></div>' +
+          '<div class="risk-stat-chip"><span class="sev sev-Critical">Critical</span> <strong>' + stats.critical + '</strong></div>' +
+          '<div class="risk-stat-chip"><span class="sev sev-High">High</span> <strong>' + stats.high + '</strong></div>' +
+          '<div class="risk-stat-chip"><span class="sev sev-Medium">Medium</span> <strong>' + stats.medium + '</strong></div>' +
+          '<div class="risk-stat-chip"><span class="sev sev-Low">Info</span> <strong>' + (stats.info || 0) + '</strong></div>' +
+          '<div class="risk-stat-chip">⚡ Срочно (Now): <strong>' + stats.now + '</strong></div>' +
+          '<div class="risk-stat-chip">⚖️ Требуется Fenix Law: <strong>' + stats.lawyerRequired + '</strong></div>' +
+        '</div>' +
+
+        '<div class="risk-filters-bar">' +
+          '<div>' +
+            '<select id="filter-section">' +
+              '<option value="all"' + (currentSection === 'all' ? ' selected' : '') + '>Все модули (8)</option>' +
+              Object.keys(SECTION_TITLES).map(function(k) {
+                return '<option value="' + k + '"' + (currentSection === k ? ' selected' : '') + '>' + SECTION_TITLES[k] + '</option>';
+              }).join('') +
+            '</select>' +
+          '</div>' +
+          '<div>' +
+            '<select id="filter-severity">' +
+              '<option value="all"' + (currentSeverity === 'all' ? ' selected' : '') + '>Любая опасность</option>' +
+              '<option value="Blocker"' + (currentSeverity === 'Blocker' ? ' selected' : '') + '>🔴 Blocker</option>' +
+              '<option value="Critical"' + (currentSeverity === 'Critical' ? ' selected' : '') + '>🟠 Critical</option>' +
+              '<option value="High"' + (currentSeverity === 'High' ? ' selected' : '') + '>🟠 High</option>' +
+              '<option value="Medium"' + (currentSeverity === 'Medium' ? ' selected' : '') + '>🟡 Medium</option>' +
+              '<option value="Info"' + (currentSeverity === 'Info' ? ' selected' : '') + '>⚪ Info</option>' +
+            '</select>' +
+          '</div>' +
+          '<div>' +
+            '<select id="filter-priority">' +
+              '<option value="all"' + (currentPriority === 'all' ? ' selected' : '') + '>Любой срок</option>' +
+              '<option value="Now"' + (currentPriority === 'Now' ? ' selected' : '') + '>⚡ Срочно (Now)</option>' +
+              '<option value="ThirtyDays"' + (currentPriority === 'ThirtyDays' ? ' selected' : '') + '>⏳ 30 дней</option>' +
+              '<option value="BeforeRound"' + (currentPriority === 'BeforeRound' ? ' selected' : '') + '>🎯 До раунда</option>' +
+              '<option value="Later"' + (currentPriority === 'Later' ? ' selected' : '') + '>📅 Планово (Later)</option>' +
+            '</select>' +
+          '</div>' +
+          '<div>' +
+            '<input id="filter-search" type="text" placeholder="🔍 Поиск по коду, заголовку, тексту…" value="' + esc(currentSearch) + '">' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="risk-table-wrap">' +
+          '<table class="data" style="margin:0">' +
+            '<thead><tr>' +
+              '<th style="width:160px">Код риска</th>' +
+              '<th style="width:120px">Опасность</th>' +
+              '<th style="width:140px">Срок Action Plan</th>' +
+              '<th style="width:180px">Модуль</th>' +
+              '<th>Заголовок и формулировка уязвимости</th>' +
+              '<th style="width:100px;text-align:right">Действие</th>' +
+            '</tr></thead>' +
+            '<tbody>' +
+              (risks.length === 0 ? '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint);padding:32px">Рисков по заданным фильтрам не найдено</td></tr>' : '') +
+              risks.map(function (r) {
+                const suppressBadge = r.suppressCodes && r.suppressCodes.length
+                  ? '<div style="margin-top:4px;font-size:11.5px;color:var(--ink-faint)">Подавляет: <code style="font-size:11px">' + r.suppressCodes.join('</code>, <code style="font-size:11px">') + '</code></div>'
+                  : '';
+                const lawyerBadge = r.lawyerRequired
+                  ? '<span style="display:inline-block;margin-left:6px;font-size:12px;color:var(--gold)" title="Требуется юрист">⚖️ Fenix Law</span>'
+                  : '';
+                return '<tr class="risk-row" data-code="' + esc(r.code) + '">' +
+                  '<td><code style="font-size:12px;font-weight:700">' + esc(r.code) + '</code>' + lawyerBadge + '</td>' +
+                  '<td><span class="sev sev-' + r.severity + '">' + r.severity + '</span></td>' +
+                  '<td><span class="heat prio-' + r.priority + '">' + (PRIORITY_LABELS[r.priority] || r.priority) + '</span></td>' +
+                  '<td style="font-size:12.5px;color:var(--ink-soft)">' + (SECTION_TITLES[r.sectionId] || r.sectionId) + '</td>' +
+                  '<td>' +
+                    '<strong style="color:var(--ink);font-size:14px">' + esc(r.title) + '</strong>' +
+                    '<div style="color:var(--ink-soft);font-size:13px;margin-top:3px;line-height:1.4">' + esc(r.finding) + '</div>' +
+                    suppressBadge +
+                  '</td>' +
+                  '<td style="text-align:right">' +
+                    '<button class="btn btn-secondary btn-edit-risk" data-code="' + esc(r.code) + '" style="font-size:12px;padding:6px 12px">✏️ Править</button>' +
+                  '</td>' +
+                '</tr>';
+              }).join('') +
+            '</tbody>' +
+          '</table>' +
+        '</div>' +
+        '<div id="risk-modal-container"></div>';
+
+      // Event listeners
+      document.getElementById('filter-section').addEventListener('change', function (e) {
+        currentSection = e.target.value;
+        fetchAndRender();
+      });
+      document.getElementById('filter-severity').addEventListener('change', function (e) {
+        currentSeverity = e.target.value;
+        fetchAndRender();
+      });
+      document.getElementById('filter-priority').addEventListener('change', function (e) {
+        currentPriority = e.target.value;
+        fetchAndRender();
+      });
+      let searchTimeout;
+      document.getElementById('filter-search').addEventListener('input', function (e) {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(function () {
+          currentSearch = e.target.value;
+          fetchAndRender();
+        }, 300);
+      });
+
+      document.getElementById('btn-reset-risks').addEventListener('click', async function () {
+        if (confirm('Сбросить все риски и рекомендации к заводским эталонным значениям? Все внесённые правки будут возвращены к базовым.')) {
+          await api('POST', '/api/admin/risks/reset');
+          alert('Каталог рисков успешно сброшен к заводским эталонным настройкам.');
+          fetchAndRender();
+        }
+      });
+
+      el.querySelectorAll('.btn-edit-risk').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          const code = btn.getAttribute('data-code');
+          openEditRiskModal(code, fetchAndRender);
+        });
+      });
+
+      el.querySelectorAll('.risk-row').forEach(function (tr) {
+        tr.addEventListener('click', function () {
+          const code = tr.getAttribute('data-code');
+          openEditRiskModal(code, fetchAndRender);
+        });
+      });
+    }
+
+    await fetchAndRender();
+  }
+
+  async function openEditRiskModal(code, onSaved) {
+    const container = document.getElementById('risk-modal-container');
+    if (!container) return;
+
+    container.innerHTML =
+      '<div class="admin-modal-backdrop">' +
+        '<div class="admin-modal-box">' +
+          '<p style="color:var(--ink-faint)">Загрузка деталей риска ' + esc(code) + '…</p>' +
+        '</div>' +
+      '</div>';
+
+    try {
+      const risk = await api('GET', '/api/admin/risks/' + encodeURIComponent(code));
+
+      container.innerHTML =
+        '<div class="admin-modal-backdrop" id="risk-backdrop">' +
+          '<div class="admin-modal-box">' +
+            '<h3>✏️ Редактирование риска: <code>' + esc(risk.code) + '</code></h3>' +
+            '<form id="risk-edit-form">' +
+              '<div class="modal-grid-2">' +
+                '<div class="modal-field">' +
+                  '<label>Модуль</label>' +
+                  '<select id="m-section">' +
+                    Object.keys(SECTION_TITLES).map(function (k) {
+                      return '<option value="' + k + '"' + (k === risk.sectionId ? ' selected' : '') + '>' + SECTION_TITLES[k] + '</option>';
+                    }).join('') +
+                  '</select>' +
+                '</div>' +
+                '<div class="modal-field">' +
+                  '<label>Уровень опасности (Severity)</label>' +
+                  '<select id="m-severity">' +
+                    ['Blocker', 'Critical', 'High', 'Medium', 'Info'].map(function (s) {
+                      return '<option value="' + s + '"' + (s === risk.severity ? ' selected' : '') + '>' + s + '</option>';
+                    }).join('') +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+
+              '<div class="modal-grid-2">' +
+                '<div class="modal-field">' +
+                  '<label>Срок в Action Plan (Priority)</label>' +
+                  '<select id="m-priority">' +
+                    ['Now', 'ThirtyDays', 'BeforeRound', 'Later'].map(function (p) {
+                      return '<option value="' + p + '"' + (p === risk.priority ? ' selected' : '') + '>' + (PRIORITY_LABELS[p] || p) + '</option>';
+                    }).join('') +
+                  '</select>' +
+                '</div>' +
+                '<div class="modal-field">' +
+                  '<label>Корневая группа (Root Cause Group)</label>' +
+                  '<input id="m-rootcause" type="text" value="' + esc(risk.rootCauseGroup || 'GENERAL') + '">' +
+                '</div>' +
+              '</div>' +
+
+              '<div class="modal-field">' +
+                '<label>Заголовок риска (Title)</label>' +
+                '<input id="m-title" type="text" required value="' + esc(risk.title) + '" style="font-weight:600">' +
+              '</div>' +
+
+              '<div class="modal-field">' +
+                '<label>Что обнаружено (Finding / Формулировка проблемы)</label>' +
+                '<textarea id="m-finding" rows="3" required>' + esc(risk.finding) + '</textarea>' +
+              '</div>' +
+
+              '<div class="modal-field">' +
+                '<label>Почему это важно (Why It Matters / Последствия для фаундера и бизнеса)</label>' +
+                '<textarea id="m-why" rows="3" required>' + esc(risk.whyItMatters) + '</textarea>' +
+              '</div>' +
+
+              '<div class="modal-field">' +
+                '<label>Главная рекомендация (Recommendation)</label>' +
+                '<textarea id="m-rec" rows="2" required>' + esc(risk.recommendation) + '</textarea>' +
+              '</div>' +
+
+              '<div class="modal-field">' +
+                '<label>Пошаговый план решения (каждый пункт с новой строки)</label>' +
+                '<textarea id="m-recs" rows="3">' + esc((risk.recommendations || []).join('\n')) + '</textarea>' +
+              '</div>' +
+
+              '<div class="modal-grid-2">' +
+                '<div class="modal-field">' +
+                  '<label>Подавляемые коды рисков (через запятую)</label>' +
+                  '<input id="m-suppress" type="text" value="' + esc((risk.suppressCodes || []).join(', ')) + '" placeholder="FND_ROLE_AMBIGUITY, FND_DOCUMENTATION_GAP">' +
+                '</div>' +
+                '<div class="modal-field">' +
+                  '<label>Формат решения (Resolution)</label>' +
+                  '<select id="m-resolution">' +
+                    ['self', 'lawyer_review', 'lawyer_required', 'product_and_legal'].map(function (res) {
+                      return '<option value="' + res + '"' + (res === risk.resolution ? ' selected' : '') + '>' + res + '</option>';
+                    }).join('') +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+
+              '<div style="display:flex;align-items:center;gap:10px;margin-top:10px">' +
+                '<input id="m-lawyer" type="checkbox"' + (risk.lawyerRequired ? ' checked' : '') + ' style="width:auto;cursor:pointer">' +
+                '<label for="m-lawyer" style="cursor:pointer;font-size:14px;font-weight:600;color:var(--gold)">⚖️ Требуется профессиональная работа юриста Fenix Law</label>' +
+              '</div>' +
+
+              '<div class="modal-actions">' +
+                '<button type="button" class="btn-ghost" id="m-cancel">Отмена</button>' +
+                '<button type="submit" class="btn" id="m-save">Сохранить изменения</button>' +
+              '</div>' +
+            '</form>' +
+          '</div>' +
+        '</div>';
+
+      document.getElementById('m-cancel').addEventListener('click', function () {
+        container.innerHTML = '';
+      });
+
+      document.getElementById('risk-backdrop').addEventListener('click', function (e) {
+        if (e.target.id === 'risk-backdrop') container.innerHTML = '';
+      });
+
+      document.getElementById('risk-edit-form').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const saveBtn = document.getElementById('m-save');
+        saveBtn.textContent = 'Сохранение…';
+        saveBtn.disabled = true;
+
+        const updatedPayload = {
+          code: risk.code,
+          sectionId: document.getElementById('m-section').value,
+          severity: document.getElementById('m-severity').value,
+          priority: document.getElementById('m-priority').value,
+          rootCauseGroup: document.getElementById('m-rootcause').value.trim() || 'GENERAL',
+          title: document.getElementById('m-title').value.trim(),
+          finding: document.getElementById('m-finding').value.trim(),
+          whyItMatters: document.getElementById('m-why').value.trim(),
+          recommendation: document.getElementById('m-rec').value.trim(),
+          recommendations: document.getElementById('m-recs').value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean),
+          suppressCodes: document.getElementById('m-suppress').value.split(',').map(function (s) { return s.trim(); }).filter(Boolean),
+          resolution: document.getElementById('m-resolution').value,
+          lawyerRequired: document.getElementById('m-lawyer').checked,
+          serviceCode: risk.serviceCode || '',
+          cta: risk.cta || ''
+        };
+
+        try {
+          await api('PUT', '/api/admin/risks/' + encodeURIComponent(risk.code), updatedPayload);
+          container.innerHTML = '';
+          if (onSaved) onSaved();
+        } catch (err) {
+          alert('Ошибка при сохранении риска: ' + err.message);
+          saveBtn.textContent = 'Сохранить изменения';
+          saveBtn.disabled = false;
+        }
+      });
+
+    } catch (err) {
+      container.innerHTML = '<div class="admin-modal-backdrop"><div class="admin-modal-box"><p style="color:var(--critical)">Ошибка загрузки: ' + esc(err.message) + '</p><button class="btn-ghost" onclick="document.getElementById(\'risk-modal-container\').innerHTML=\'\'">Закрыть</button></div></div>';
+    }
   }
 
   // -----------------------------------------------------------------------

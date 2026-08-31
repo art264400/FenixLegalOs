@@ -32,8 +32,8 @@ public class SessionsControllerTests
         var scoringEngine = new ScoringEngine(qRepo);
         
         var testEnv = new TestWebHostEnvironment();
-        var pdfService = new TypstPdfService(testEnv);
         var aiReportService = new AiReportService(config);
+        var pdfService = new TypstPdfService(testEnv, aiReportService);
 
         _controller = new SessionsController(sRepo, lRepo, scoringEngine, pdfService, aiReportService, setRepo, qRepo);
     }

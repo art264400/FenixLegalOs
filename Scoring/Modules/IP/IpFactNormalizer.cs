@@ -31,6 +31,10 @@ public class IpFactNormalizer : IFactNormalizer
             {
                 f["ip.coreProductExists"] = stage != "idea";
                 f["product.stage"] = stage;
+                if (stage == "idea")
+                {
+                    f["ip.normativeModuleScore"] = 100;
+                }
             }
         }
 

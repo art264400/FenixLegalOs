@@ -63,7 +63,8 @@ public class LeadRepository
                 l.payment_amount AS PaymentAmount, 
                 l.payment_method AS PaymentMethod,
                 l.created_at AS CreatedAt, 
-                s.result AS SessionResult
+                s.result AS SessionResult,
+                s.answers AS SessionAnswers
             FROM leads l 
             LEFT JOIN sessions s ON s.id = l.session_id
 
@@ -85,7 +86,8 @@ public class LeadRepository
                 s.payment_amount AS PaymentAmount,
                 s.payment_method AS PaymentMethod,
                 s.created_at AS CreatedAt,
-                s.result AS SessionResult
+                s.result AS SessionResult,
+                s.answers AS SessionAnswers
             FROM sessions s
             WHERE s.id NOT IN (SELECT session_id FROM leads WHERE session_id IS NOT NULL)
               AND (s.completed_at IS NOT NULL OR LENGTH(s.answers) > 2)

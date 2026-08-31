@@ -17,8 +17,4 @@
     <None Remove="extracted_media\word\media\image10.png" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="extracted_media\word\media\" />
-  </ItemGroup>
-
 </Project>

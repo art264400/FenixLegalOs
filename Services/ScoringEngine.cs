@@ -109,14 +109,14 @@ public class ScoringEngine
 
         // 5. Findings Collection & Suppression (clean factStore — no stale-answer artifacts)
         var rawFindings = FindingProcessor.CollectRawFindings(factStore, allRisks, _moduleRuleEngines);
-        var mergedFindings = FindingProcessor.MergeAndSuppressFindings(rawFindings, factStore);
+        var mergedFindings = FindingProcessor.MergeAndSuppressFindings(rawFindings, factStore, allRisks);
 
         // 5b. Cross-Module Rules (Investment cross-module rules: SELF_AWARENESS_GAP, ROUND_BLOCKER)
         var crossFindings = InvestmentCrossModuleRuleEngine.Evaluate(mergedFindings, factStore, allRisks);
         if (crossFindings.Count > 0)
         {
             mergedFindings.AddRange(crossFindings);
-            mergedFindings = FindingProcessor.MergeAndSuppressFindings(mergedFindings, factStore);
+            mergedFindings = FindingProcessor.MergeAndSuppressFindings(mergedFindings, factStore, allRisks);
         }
 
         // 5c. Timing & Blocker Matrix Urgency Overlay (§17.3 / §18)

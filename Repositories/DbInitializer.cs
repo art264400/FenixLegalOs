@@ -18,16 +18,21 @@ public class DbInitializer
 
     public string ConnectionString => _connectionString;
 
+    private static readonly object _initLock = new object();
+    private static bool _initialized = false;
+
     public void Initialize()
     {
         // Fail closed at startup if questionnaire dependency graph has cycles or invalid authority
         RoutingDependencyValidator.Validate(DataBank.Questions);
 
-        using var conn = new SqliteConnection(_connectionString);
-        conn.Open();
-        conn.Execute("PRAGMA journal_mode = WAL;");
+        lock (_initLock)
+        {
+            using var conn = new SqliteConnection(_connectionString);
+            conn.Open();
+            conn.Execute("PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL;");
 
-        conn.Execute(@"
+            conn.Execute(@"
             CREATE TABLE IF NOT EXISTS sessions (
                 id TEXT PRIMARY KEY,
                 created_at TEXT NOT NULL,
@@ -185,7 +190,9 @@ public class DbInitializer
 
         // Seed or update Question Bank in DB
         SeedQuestionBank(conn);
+        _initialized = true;
     }
+}
 
     private void SeedQuestionBank(SqliteConnection conn)
     {

@@ -28,8 +28,17 @@ Templates/temp_report_*.pdf
 .DS_Store
 Thumbs.db
 
+*.db-wal
+*.db-shm
+TestResults/
+*.png
+*.typ
+*.docx
+cookies.txt
+fix_report_extracted.txt
+Microsoft/
+
 Properties/launchSettings.json
 appsettings.Development.json
 deploy.ps1
 publish/
-

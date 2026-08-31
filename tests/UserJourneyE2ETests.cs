@@ -16,6 +16,16 @@ using Xunit;
 
 namespace FenixLegalOs.Tests;
 
+/// <summary>
+/// Сквозные интеграционные E2E-тесты пользовательского пути (User Journey).
+/// 
+/// Тестируют полный жизненный цикл взаимодействия клиента с веб-сервисом:
+/// 1. Создание сессии;
+/// 2. Пошаговая навигация по динамической анкете с адаптивным роутингом;
+/// 3. Мутация ответов (когда пользователь возвращается назад и меняет ответ);
+/// 4. Стресс-фаззинг на десятках рандомизированных пользовательских сессий;
+/// 5. Расчёт итогового скоринга и фиксация лида в CRM.
+/// </summary>
 public class UserJourneyE2ETests
 {
     private readonly SessionsController _controller;
@@ -42,8 +52,8 @@ public class UserJourneyE2ETests
         _scoringEngine = new ScoringEngine(_questionRepo);
 
         var testEnv = new TestWebHostEnvironment();
-        var pdfService = new TypstPdfService(testEnv);
         var aiReportService = new AiReportService(config);
+        var pdfService = new TypstPdfService(testEnv, aiReportService);
 
         _controller = new SessionsController(_sessionRepo, _leadRepo, _scoringEngine, pdfService, aiReportService, setRepo, _questionRepo);
     }
@@ -58,6 +68,9 @@ public class UserJourneyE2ETests
         public Microsoft.Extensions.FileProviders.IFileProvider ContentRootFileProvider { get; set; } = null!;
     }
 
+    /// <summary>
+    /// Сводные результаты прохождения пользовательского пути.
+    /// </summary>
     private record JourneyResult(
         string SessionId,
         int StepCount,
@@ -65,17 +78,20 @@ public class UserJourneyE2ETests
         Dictionary<string, object> FinalAnswers,
         ScoreResult Result);
 
+    /// <summary>
+    /// Вспомогательный метод имитации пошагового прохождения анкеты пользователем.
+    /// </summary>
     private async Task<JourneyResult> RunUserJourneyAsync(
         Dictionary<string, object> personaAnswers,
         Action<int, string, Dictionary<string, object>>? onStep = null)
     {
-        // 1. Create Session
+        // 1. Создание сессии
         var createResult = _controller.CreateSession() as OkObjectResult;
         Assert.NotNull(createResult);
         var sessionId = createResult.Value?.GetType().GetProperty("id")?.GetValue(createResult.Value)?.ToString()!;
         Assert.NotNull(sessionId);
 
-        // 2. Start Navigation
+        // 2. Инициализация навигации по анкете
         var initNavBody = JsonDocument.Parse("{\"answers\":{},\"currentQuestionId\":null}").RootElement;
         var navResult = _controller.Navigate(sessionId, initNavBody) as OkObjectResult;
         Assert.NotNull(navResult);
@@ -87,16 +103,16 @@ public class UserJourneyE2ETests
         string? currentQId = navState.CurrentQuestionId;
         int steps = 0;
 
-        // 3. Step through questionnaire
+        // 3. Пошаговое прохождение вопросов
         while (!string.IsNullOrEmpty(currentQId) && steps < 100)
         {
             steps++;
             visitedQuestions.Add(currentQId);
 
-            // Optional mutation hook (e.g. user changes mind on step N)
+            // Хук для мутации ответа (например, пользователь изменил решение на шаге N)
             onStep?.Invoke(steps, currentQId, currentAnswers);
 
-            // Get or generate answer for current question
+            // Получение или генерация валидного ответа на текущий вопрос
             if (!currentAnswers.ContainsKey(currentQId))
             {
                 if (personaAnswers.TryGetValue(currentQId, out var val))
@@ -112,7 +128,6 @@ public class UserJourneyE2ETests
             var qObj = _questionRepo.GetQuestions().FirstOrDefault(q => q.Id == currentQId);
             string sectionId = qObj?.SectionId ?? "founders";
 
-            var answersJson = JsonSerializer.Serialize(currentAnswers);
             var saveBody = JsonDocument.Parse(JsonSerializer.Serialize(new
             {
                 answers = currentAnswers,
@@ -125,7 +140,7 @@ public class UserJourneyE2ETests
             {
                 var badRes = saveActionResult as BadRequestObjectResult;
                 var errJson = JsonSerializer.Serialize(badRes?.Value);
-                throw new Exception($"SaveAnswers failed on step {steps} for Q='{currentQId}'. Response: {errJson}");
+                throw new Exception($"SaveAnswers завершился с ошибкой на шаге {steps} для вопроса '{currentQId}': {errJson}");
             }
 
             var nextNav = saveResult.Value?.GetType().GetProperty("navigation")?.GetValue(saveResult.Value) as NavigationState;
@@ -134,7 +149,7 @@ public class UserJourneyE2ETests
             currentQId = nextNav.CurrentQuestionId;
         }
 
-        // 4. Complete Session
+        // 4. Финализация сессии и расчёт скоринга
         var completeBody = JsonDocument.Parse(JsonSerializer.Serialize(new
         {
             answers = currentAnswers
@@ -175,8 +190,10 @@ public class UserJourneyE2ETests
         return q.Options?.Count > 0 ? q.Options[0].Id : "none";
     }
 
-    // ─── 1. Solo Founder Short Journey ──────────────────────────────────────
-    [Fact(DisplayName = "1. E2E: Solo Founder with no entity and idea stage finishes in short adaptive path")]
+    // ─────────────────────────────────────────────────────────────────────────
+    // 1. КОРОТКИЙ ПУТЬ СОЛО-ФАУНДЕРА
+    // ─────────────────────────────────────────────────────────────────────────
+    [Fact(DisplayName = "1. E2E: Соло-фаундер на стадии идеи проходит короткий адаптивный путь без лишних вопросов")]
     public async Task Solo_Founder_Short_Journey_E2E()
     {
         var soloAnswers = new Dictionary<string, object>
@@ -198,8 +215,8 @@ public class UserJourneyE2ETests
 
         var journey = await RunUserJourneyAsync(soloAnswers);
 
-        // Verify that journey was short (~19 questions instead of 133)
-        Assert.True(journey.StepCount <= 25, $"Expected <= 25 steps, got {journey.StepCount}");
+        // Проверяем, что опрос был компактным (~19 вопросов вместо всех 133)
+        Assert.True(journey.StepCount <= 25, $"Ожидалось <= 25 шагов, получено {journey.StepCount}");
         Assert.Contains("FND-C01", journey.VisitedQuestionIds);
         Assert.Contains("COR-C01", journey.VisitedQuestionIds);
         Assert.Contains("IP-01", journey.VisitedQuestionIds);
@@ -209,18 +226,20 @@ public class UserJourneyE2ETests
         Assert.Contains("DATA-01", journey.VisitedQuestionIds);
         Assert.Contains("AI-01", journey.VisitedQuestionIds);
 
-        // Multi-founder questions must never have been visited
+        // Вопросы для команды кофаундеров не должны показываться соло-основателю
         Assert.DoesNotContain("FND-C02", journey.VisitedQuestionIds);
         Assert.DoesNotContain("FND-01", journey.VisitedQuestionIds);
         Assert.DoesNotContain("TEAM-02", journey.VisitedQuestionIds);
 
-        // Verify result
+        // Проверка корректности скоринга
         Assert.NotNull(journey.Result);
         Assert.True(journey.Result.Overall >= 0 && journey.Result.Overall <= 100);
     }
 
-    // ─── 2. Multi-Founder 50/50 Deadlock Journey ──────────────────────────
-    [Fact(DisplayName = "2. E2E: 2 Founders 50/50 without deadlock agreement triggers FND_DEADLOCK finding")]
+    // ─────────────────────────────────────────────────────────────────────────
+    // 2. ДВА КОФАУНДЕРА 50/50 БЕЗ ДЕДЛОК-СОГЛАШЕНИЯ
+    // ─────────────────────────────────────────────────────────────────────────
+    [Fact(DisplayName = "2. E2E: 2 кофаундера с долями 50/50 без механизма дедлока вызывают критический риск FND_DEADLOCK")]
     public async Task Multi_Founder_50_50_Deadlock_E2E()
     {
         var multiAnswers = new Dictionary<string, object>
@@ -237,7 +256,7 @@ public class UserJourneyE2ETests
             ["FND-05A"] = "none",
             ["FND-06"] = "none",
             ["FND-06A"] = "broad_unanimity",
-            ["FND-07"] = "none", // Deadlock: "Вопрос тупика вообще не продуман"
+            ["FND-07"] = "none", // Дедлок: «Вопрос тупика вообще не продуман»
             ["FND-08"] = "none",
             ["FND-09"] = "none",
             ["FND-10"] = "none",
@@ -283,17 +302,19 @@ public class UserJourneyE2ETests
 
         var journey = await RunUserJourneyAsync(multiAnswers);
 
-        // Must visit multi-founder branch
+        // Проверка: система перенаправила пользователя в ветку основателей
         Assert.Contains("FND-C02", journey.VisitedQuestionIds);
         Assert.Contains("FND-07", journey.VisitedQuestionIds);
 
-        // Must detect DEADLOCK
-        Assert.True(journey.Result.CriticalCount >= 1, "Must contain at least 1 critical risk");
+        // Проверка: обнаружен критический риск DEADLOCK
+        Assert.True(journey.Result.CriticalCount >= 1, "Должен быть обнаружен как минимум 1 критический риск");
         Assert.Contains(journey.Result.Risks, r => r.Code == "FND_DEADLOCK");
     }
 
-    // ─── 3. Answer Mutation: Changing Mind from Multi to Solo ──────────────
-    [Fact(DisplayName = "3. E2E: Changing answer from 2 founders to solo mid-way cleans up downstream state")]
+    // ─────────────────────────────────────────────────────────────────────────
+    // 3. МУТАЦИЯ ОТВЕТОВ: СМЕНА РЕШЕНИЯ С КОФАУНДЕРОВ НА СОЛО
+    // ─────────────────────────────────────────────────────────────────────────
+    [Fact(DisplayName = "3. E2E: Изменение ответа с 2 основателей на соло в середине пути корректно очищает состояние")]
     public async Task Answer_Mutation_Changing_Mind_Cleans_Downstream_State_E2E()
     {
         var initialMultiAnswers = new Dictionary<string, object>
@@ -314,14 +335,14 @@ public class UserJourneyE2ETests
 
         var journey = await RunUserJourneyAsync(initialMultiAnswers, onStep: (step, currentQ, currentAnswers) =>
         {
-            // On step 4, simulate user changing mind and switching FND-C01 to "solo"
+            // На шаге 4 пользователь меняет ответ FND-C01 на "solo"
             if (step == 4)
             {
                 currentAnswers["FND-C01"] = "solo";
             }
         });
 
-        // After mutation to solo, effective state must isolate multi-founder answers
+        // После мутации на соло старые ответы кофаундеров изолируются
         Assert.NotNull(journey.Result);
         var corporateSection = journey.Result.Sections.FirstOrDefault(d => d.SectionId == "corporate");
         Assert.NotNull(corporateSection);
@@ -332,19 +353,21 @@ public class UserJourneyE2ETests
         Assert.Equal(100, foundersSection.Score);
     }
 
-    // ─── 4. Random Walk Fuzzing: 30 Complete Valid Sessions ────────────────
-    [Fact(DisplayName = "4. E2E: Fuzzing 30 complete randomized user sessions completes 100% successfully")]
+    // ─────────────────────────────────────────────────────────────────────────
+    // 4. СТРЕСС-ТЕСТИРОВАНИЕ: 30 СЛУЧАЙНЫХ ПОЛЬЗОВАТЕЛЬСКИХ СЕССИЙ
+    // ─────────────────────────────────────────────────────────────────────────
+    [Fact(DisplayName = "4. E2E: Случайный фаззинг 30 полных сессий завершается со 100% успехом")]
     public async Task Random_Walk_Fuzzing_30_Sessions_E2E()
     {
         var rnd = new Random(42);
 
         for (int i = 0; i < 30; i++)
         {
-            // Create Session
+            // 1. Создание сессии
             var createResult = _controller.CreateSession() as OkObjectResult;
             var sessionId = createResult?.Value?.GetType().GetProperty("id")?.GetValue(createResult.Value)?.ToString()!;
 
-            // Init navigation
+            // 2. Инициализация навигации
             var initNavBody = JsonDocument.Parse("{\"answers\":{},\"currentQuestionId\":null}").RootElement;
             var navResult = _controller.Navigate(sessionId, initNavBody) as OkObjectResult;
             var navState = navResult?.Value as NavigationState;
@@ -359,7 +382,7 @@ public class UserJourneyE2ETests
                 var q = _questionRepo.GetQuestions().FirstOrDefault(item => item.Id == currentQId);
                 Assert.NotNull(q);
 
-                // Pick random valid answer
+                // Выбор случайного валидного варианта ответа
                 object answerVal;
                 if (q.Type == QuestionType.EquityInputs)
                 {
@@ -407,11 +430,11 @@ public class UserJourneyE2ETests
                 currentQId = nextNav.CurrentQuestionId;
             }
 
-            // Must reach completion
+            // Проверка достижения финала анкеты
             Assert.Null(currentQId);
-            Assert.True(steps > 0, "Journey must perform at least 1 step");
+            Assert.True(steps > 0, "Сессия должна выполнить как минимум 1 шаг");
 
-            // Complete session
+            // Финализация сессии
             var completeBody = JsonDocument.Parse(JsonSerializer.Serialize(new { answers = currentAnswers })).RootElement;
             var completeResult = _controller.CompleteSession(sessionId, completeBody) as OkObjectResult;
             Assert.NotNull(completeResult);
@@ -422,8 +445,10 @@ public class UserJourneyE2ETests
         }
     }
 
-    // ─── 5. Seed Scale EntityBuilder & Vesting Journey ──────────────────────
-    [Fact(DisplayName = "5. E2E: Scale startup with multiple entities, holding and subscription completes")]
+    // ─────────────────────────────────────────────────────────────────────────
+    // 5. МАСШТАБИРУЮЩИЙСЯ СТАРТАП С ХОЛДИНГОМ И ВЕСТИНГОМ
+    // ─────────────────────────────────────────────────────────────────────────
+    [Fact(DisplayName = "5. E2E: Масштабирующийся стартап с несколькими юрлицами, холдингом в США и вестингом")]
     public async Task Seed_Scale_EntityBuilder_And_Vesting_E2E()
     {
         var scaleAnswers = new Dictionary<string, object>
@@ -513,12 +538,14 @@ public class UserJourneyE2ETests
         var journey = await RunUserJourneyAsync(scaleAnswers);
 
         Assert.NotNull(journey.Result);
-        Assert.True(journey.Result.Overall >= 80, $"Expected strong Legal Score >= 80, got {journey.Result.Overall}");
+        Assert.True(journey.Result.Overall >= 80, $"Ожидался высокий Legal Score >= 80, получено {journey.Result.Overall}");
         Assert.Equal(0, journey.Result.CriticalCount);
     }
 
-    // ─── 6. Lead Generation from Session ──────────────────────────────────
-    [Fact(DisplayName = "6. E2E: Diagnostic completion creates consultation lead with computed heat score")]
+    // ─────────────────────────────────────────────────────────────────────────
+    // 6. ГЕНЕРАЦИЯ ЛИДА ИЗ ДИАГНОСТИЧЕСКОЙ СЕССИИ
+    // ─────────────────────────────────────────────────────────────────────────
+    [Fact(DisplayName = "6. E2E: Завершение диагностики создаёт лид на консультацию с расчётом индекса теплоты")]
     public async Task Lead_Generation_From_Diagnostic_Session_E2E()
     {
         var soloAnswers = new Dictionary<string, object>

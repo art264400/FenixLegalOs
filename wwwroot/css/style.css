@@ -1461,3 +1461,145 @@ table.data tr.clickable:hover td { background: rgba(89, 194, 255, 0.05); }
   gap: 6px;
 }
 
+/* Admin Risk Registry Styling */
+.risk-admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.risk-stats-bar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+.risk-stat-chip {
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px 14px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.risk-stat-chip strong {
+  font-weight: 700;
+  font-size: 14px;
+}
+.risk-filters-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 20px;
+  align-items: center;
+}
+.risk-filters-bar input,
+.risk-filters-bar select {
+  width: 100%;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+.risk-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+}
+.risk-row {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.risk-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+.sev-Blocker { background: rgba(241, 70, 53, 0.15); color: #ff5e4d; border: 1px solid rgba(241, 70, 53, 0.4); }
+.sev-Critical { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
+.sev-High { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
+.sev-Medium { background: rgba(89, 194, 255, 0.15); color: #59c2ff; border: 1px solid rgba(89, 194, 255, 0.4); }
+.sev-Low { background: rgba(148, 163, 184, 0.15); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.4); }
+.prio-Now { background: rgba(241, 70, 53, 0.12); color: #ff6b5b; }
+.prio-Next { background: rgba(212, 175, 55, 0.12); color: var(--gold); }
+.prio-Later { background: rgba(148, 163, 184, 0.12); color: #94a3b8; }
+
+/* Modal Editor */
+.admin-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 10, 19, 0.85);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.admin-modal-box {
+  background: var(--bg-card);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 780px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 32px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+}
+.admin-modal-box h3 {
+  font-size: 20px;
+  color: var(--ink);
+  margin-bottom: 20px;
+}
+.modal-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.modal-field label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.modal-field input,
+.modal-field select,
+.modal-field textarea {
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-family: inherit;
+}
+.modal-field textarea {
+  line-height: 1.5;
+  resize: vertical;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+

@@ -1043,101 +1043,7 @@
     );
   }
 
-  function aiMemoBlock(sessionId) {
-    return (
-      '<section class="ai-memo-card" id="ai-memo-section">' +
-        '<div class="ai-memo-header">' +
-          '<div class="ai-memo-badge">✨ AI Legal Assistant</div>' +
-          '<h2>Персональное заключение венчурного юриста</h2>' +
-          '<p class="ai-memo-sub">Автоматический юридический разбор ситуации фаундеров и корпоративной структуры на основе ваших ответов (стандарт LLM Contract v1.1).</p>' +
-        '</div>' +
-        '<div class="ai-memo-body" id="ai-memo-content">' +
-          '<div class="ai-memo-loading">' +
-            '<div class="spinner"></div>' +
-            '<span>Формируем индивидуальное заключение для вашей структуры…</span>' +
-          '</div>' +
-        '</div>' +
-      '</section>'
-    );
-  }
 
-  async function loadAiMemo(sessionId) {
-    const el = document.getElementById('ai-memo-content');
-    if (!el || !sessionId) return;
-    try {
-      const res = await api('POST', '/api/sessions/' + sessionId + '/ai-summary');
-      if (res && res.summary) {
-        el.innerHTML = formatMarkdown(res.summary);
-      } else {
-        el.innerHTML = '<p class="hint">Заключение сформировано и доступно при персональной консультации.</p>';
-      }
-    } catch (err) {
-      el.innerHTML = '<p class="hint">Не удалось загрузить онлайн-заключение. Ознакомьтесь с подробной картой рисков ниже.</p>';
-    }
-  }
-
-  function formatMarkdown(md) {
-    if (!md) return '';
-    const lines = md.split('\n');
-    let out = [];
-    let inUl = false;
-    let inOl = false;
-
-    for (let i = 0; i < lines.length; i++) {
-      let line = lines[i].trim();
-      if (!line) {
-        if (inUl) { out.push('</ul>'); inUl = false; }
-        if (inOl) { out.push('</ol>'); inOl = false; }
-        continue;
-      }
-
-      if (line.startsWith('### ')) {
-        if (inUl) { out.push('</ul>'); inUl = false; }
-        if (inOl) { out.push('</ol>'); inOl = false; }
-        out.push('<h3 class="ai-h3">' + esc(line.substring(4)) + '</h3>');
-        continue;
-      }
-
-      if (line.startsWith('## ')) {
-        if (inUl) { out.push('</ul>'); inUl = false; }
-        if (inOl) { out.push('</ol>'); inOl = false; }
-        out.push('<h2 class="ai-h2">' + esc(line.substring(3)) + '</h2>');
-        continue;
-      }
-
-      if (line.startsWith('* ') || line.startsWith('- ')) {
-        if (inOl) { out.push('</ol>'); inOl = false; }
-        if (!inUl) { out.push('<ul class="ai-ul">'); inUl = true; }
-        let text = line.substring(2).trim();
-        text = text.replace(/^(\d+(\.\d+)*\.\s*)+/, ''); // Strip redundant numbers like 1. 1.
-        text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-        out.push('<li class="ai-li">' + text + '</li>');
-        continue;
-      }
-
-      const numMatch = line.match(/^(\d+(\.\d+)*\.\s*)+(.*)$/);
-      if (numMatch) {
-        if (inUl) { out.push('</ul>'); inUl = false; }
-        if (!inOl) { out.push('<ol class="ai-ol">'); inOl = true; }
-        let text = numMatch[3].trim();
-        text = text.replace(/^(\d+(\.\d+)*\.\s*)+/, ''); // Strip any extra nested numbers
-        text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-        out.push('<li class="ai-oli">' + text + '</li>');
-        continue;
-      }
-
-      if (inUl) { out.push('</ul>'); inUl = false; }
-      if (inOl) { out.push('</ol>'); inOl = false; }
-
-      let text = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-      out.push('<p class="ai-p">' + text + '</p>');
-    }
-
-    if (inUl) out.push('</ul>');
-    if (inOl) out.push('</ol>');
-
-    return out.join('');
-  }
 
   function renderBlurredReportBackground(r, sessionId) {
     const bySeverity = { critical: [], high: [], medium: [] };
@@ -1148,27 +1054,8 @@
       else bySeverity.medium.push(x);
     });
 
-    const mockAiMemo =
-      '<section class="ai-memo-card" style="margin-bottom:28px">' +
-        '<div class="ai-memo-badge">AI Legal Assistant · Заключение венчурного юриста</div>' +
-        '<div class="ai-memo-header"><h2>Персональное юридическое заключение (Legal Memo)</h2></div>' +
-        '<div class="ai-memo-sub">Автоматический юридический разбор ситуации фаундеров, структуры и прав на продукт от венчурного юриста Fenix Law.</div>' +
-        '<div class="ai-memo-content markdown-body">' +
-          '<h3>🎯 1. Юридический профиль проекта</h3>' +
-          '<p>Комплексный анализ структуры владения и ключевых юридических активов компании выявил критические зоны внимания...</p>' +
-          '<h3>⚠️ 2. Ключевые точки внимания</h3>' +
-          '<p>• 🔴 Права на интеллектуальную собственность требуют срочного оформления передачи прав на компанию...</p>' +
-          '<p>• 🟠 Риск блокировки корпоративного управления и дедлока при отсутствии утвержденного регламента...</p>' +
-          '<h3>📋 3. Пошаговый Action Plan</h3>' +
-          '<p>1. <strong>Оформление долей и Vesting</strong>: Подготовить соглашение основателей с графиком перехода долей...</p>' +
-          '<p>2. <strong>Передача прав на интеллектуальную собственность</strong>: Подготовить и подписать IP Assignment договоры...</p>' +
-          '<p>3. <strong>Порядок принятия решений</strong>: Утвердить матрицу ключевых решений и процедуру преодоления тупиков...</p>' +
-        '</div>' +
-      '</section>';
-
     return (
       '<div class="blurred-preview-layer">' +
-        mockAiMemo +
         block('Критические вопросы', bySeverity.critical, 'Вопросы, которые могут влиять на контроль над компанией, принадлежность продукта или ближайшую сделку.') +
         block('Существенные вопросы', bySeverity.high, 'Пробелы, которые, вероятно, потребуется закрыть при росте или инвестиционном раунде.') +
         block('Умеренные вопросы', bySeverity.medium, 'Вопросы, требующие внимания в рабочем порядке.') +
@@ -1190,35 +1077,57 @@
     }
   }
 
+  let selectedTier = 'consultation';
+
+  function getSelectedPriceKzt() {
+    if (selectedTier === 'consultation') {
+      return currentPricing.consultationPriceKzt || 79900;
+    }
+    return currentPricing.priceKzt || 49990;
+  }
+
   function renderPaywallSection(sessionId) {
-    const p = currentPricing.priceKzt ? currentPricing.priceKzt.toLocaleString('ru') : '19 999';
-    const o = currentPricing.oldPriceKzt ? currentPricing.oldPriceKzt.toLocaleString('ru') : '49 990';
-    const disc = currentPricing.discountPercent != null ? currentPricing.discountPercent : 60;
+    const p = (currentPricing.priceKzt || 49990).toLocaleString('ru');
+    const c = (currentPricing.consultationPriceKzt || 79900).toLocaleString('ru');
+    const currentSelectedPrice = getSelectedPriceKzt().toLocaleString('ru');
 
     return (
       '<section class="pay-card-container" id="pay-section">' +
-        '<div class="pay-badge-top">🔥 Разблокировать полный отчёт</div>' +
-        '<h2 style="font-size:26px;color:#FFF;margin-bottom:8px">Полный юридический отчёт + AI-заключение + Action Plan</h2>' +
-        '<p style="color:var(--ink-soft);max-width:540px;margin:0 auto 16px;font-size:14.5px">Получите полную карту уязвимостей, детальные рекомендации венчурного юриста, AI-меморандум и официальный PDF-отчет для инвесторов.</p>' +
-        '<div class="pay-price-box">' +
-          '<span class="pay-price-current">' + p + ' ₸</span>' +
-          '<span class="pay-price-old">' + o + ' ₸</span>' +
-          '<span class="pay-price-discount">-' + disc + '%</span>' +
+        '<div class="pay-badge-top">🔥 Разблокировать полный отчёт & Action Plan</div>' +
+        '<h2 style="font-size:26px;color:#FFF;margin-bottom:8px">Выберите формат получения результатов</h2>' +
+        '<p style="color:var(--ink-soft);max-width:580px;margin:0 auto 20px;font-size:14.5px">Получите полную диагностическую матрицу 8 направлений, детальный разбор рисков и официальный 15-страничный PDF-отчет для основателей и инвесторов.</p>' +
+        
+        '<div class="tariff-grid">' +
+          '<div class="tariff-card ' + (selectedTier === 'report' ? 'selected' : '') + '" id="tier-card-report" data-tier="report">' +
+            '<div class="t-title">FENIX SLS — Отчёт</div>' +
+            '<div class="t-price">' + p + ' ₸</div>' +
+            '<ul class="tariff-checklist">' +
+              '<li><span class="chk">✓</span> Официальный 15-страничный PDF-отчёт Fenix SLS</li>' +
+              '<li><span class="chk">✓</span> Разблокировка всех выявленных рисков и рекомендаций</li>' +
+              '<li><span class="chk">✓</span> Пошаговый 30–60 дневный Action Plan для фаундеров</li>' +
+            '</ul>' +
+          '</div>' +
+
+          '<div class="tariff-card ' + (selectedTier === 'consultation' ? 'selected' : '') + '" id="tier-card-consultation" data-tier="consultation">' +
+            '<div class="tariff-badge">⭐ Рекомендуем для раунда</div>' +
+            '<div class="t-title">FENIX SLS + разбор с юристом</div>' +
+            '<div class="t-price">' + c + ' ₸</div>' +
+            '<ul class="tariff-checklist">' +
+              '<li><span class="chk">✓</span> Всё из тарифа FENIX SLS</li>' +
+              '<li><span class="chk">✓</span> 45 минут персонального разбора результатов с Fenix Law</li>' +
+              '<li><span class="chk">✓</span> Экспертная приоритизация блокеров перед инвесторами</li>' +
+              '<li><span class="chk">✓</span> Прямые ответы на вопросы по вашей структуре</li>' +
+            '</ul>' +
+          '</div>' +
         '</div>' +
-        '<ul class="tariff-checklist" style="max-width:440px;margin:0 auto 24px;text-align:left">' +
-          '<li><span class="chk">✓</span> Разблокировка всех выявленных рисков и персональных рекомендаций</li>' +
-          '<li><span class="chk">✓</span> Персональное AI-заключение венчурного юриста Fenix Law</li>' +
-          '<li><span class="chk">✓</span> Пошаговый 30–60 дневный Action Plan для фаундеров</li>' +
-          '<li><span class="chk">✓</span> Официальный PDF-отчёт Fenix Legal Score для инвесторов</li>' +
-          '<li><span class="chk">✓</span> Приоритетная скидка на персональную консультацию</li>' +
-        '</ul>' +
-        '<div style="max-width:440px;margin:0 auto 16px;text-align:left">' +
+
+        '<div style="max-width:480px;margin:0 auto 16px;text-align:left">' +
           '<div class="field"><label for="g-name" style="font-size:12.5px">Ваше имя (необязательно)</label><input id="g-name" placeholder="Фаундер / СЕО" maxlength="120"></div>' +
           '<div class="field" style="margin-top:10px"><label for="g-email" style="font-size:12.5px">Email (для отправки копии PDF)</label><input id="g-email" type="email" placeholder="founder@company.com" maxlength="200"></div>' +
           '<div class="field" style="margin-top:10px"><label for="g-msg" style="font-size:12.5px">WhatsApp / Telegram (необязательно)</label><input id="g-msg" placeholder="@username / +7..." maxlength="120"></div>' +
         '</div>' +
         '<div class="pay-btn-group">' +
-          '<button class="btn-kaspi" id="btn-pay-kaspi">🔴 Оплатить ' + p + ' ₸ через Kaspi Pay</button>' +
+          '<button class="btn-kaspi" id="btn-pay-kaspi">🔴 Оплатить ' + currentSelectedPrice + ' ₸ через Kaspi Pay</button>' +
           '<button class="btn-demo" id="btn-pay-demo">⚡ Демо-оплата в 1 клик (Бесплатно)</button>' +
         '</div>' +
         '<div class="form-error" id="pay-err" hidden style="margin-top:14px"></div>' +
@@ -1227,13 +1136,15 @@
   }
 
   function openKaspiPayModal(sessionId) {
-    const p = currentPricing.priceKzt ? currentPricing.priceKzt.toLocaleString('ru') : '19 999';
+    const p = getSelectedPriceKzt().toLocaleString('ru');
+    const tierTitle = selectedTier === 'consultation' ? 'Тариф «FENIX SLS + разбор с юристом»' : 'Тариф «FENIX SLS — Отчёт»';
 
     modalRoot.innerHTML =
       '<div class="paywall-modal-overlay" id="kaspi-overlay">' +
         '<div class="paywall-modal fade-in" role="dialog" aria-modal="true">' +
           '<button class="close-btn" id="kaspi-close" aria-label="Закрыть">×</button>' +
           '<h2 style="color:#F14635;display:flex;align-items:center;gap:10px">🔴 Оплата через Kaspi Pay</h2>' +
+          '<p style="color:var(--ink);font-weight:600;margin-top:6px">' + esc(tierTitle) + '</p>' +
           '<div class="pay-price-box" style="justify-content:flex-start;margin:16px 0">' +
             '<span class="pay-price-current" style="font-size:32px">' + p + ' ₸</span>' +
           '</div>' +
@@ -1272,7 +1183,8 @@
       try {
         await api('POST', '/api/leads', {
           sessionId: sessionId,
-          type: 'report_gate',
+          type: selectedTier === 'consultation' ? 'consultation' : 'report_gate',
+          interest: selectedTier === 'consultation' ? 'Тариф FENIX SLS + 45-мин разбор с юристом' : 'Тариф FENIX SLS Полный отчёт',
           name: name || 'Фаундер',
           email: email || 'demo@fenixlegal.kz',
           messenger: msg
@@ -1284,7 +1196,7 @@
 
     try {
       await api('POST', '/api/sessions/' + sessionId + '/pay', {
-        amount: currentPricing.priceKzt || 19999,
+        amount: getSelectedPriceKzt(),
         method: 'demo_instant'
       });
       isPaid = true;
@@ -1311,7 +1223,7 @@
     setProgress(1);
     track('score_viewed', { overall: r.overall });
 
-    const p = currentPricing.priceKzt ? currentPricing.priceKzt.toLocaleString('ru') : '19 999';
+    const p = getSelectedPriceKzt().toLocaleString('ru');
 
     render(
       heroBlock(r) +
@@ -1329,6 +1241,24 @@
     );
     animateGauges();
     track('report_gate_viewed');
+
+    function updateTierSelection(tier) {
+      selectedTier = tier;
+      const reportCard = document.getElementById('tier-card-report');
+      const consultCard = document.getElementById('tier-card-consultation');
+      if (reportCard) reportCard.classList.toggle('selected', tier === 'report');
+      if (consultCard) consultCard.classList.toggle('selected', tier === 'consultation');
+      const curP = getSelectedPriceKzt().toLocaleString('ru');
+      const kBtn = document.getElementById('btn-pay-kaspi');
+      if (kBtn) kBtn.textContent = '🔴 Оплатить ' + curP + ' ₸ через Kaspi Pay';
+      const sBtn = document.getElementById('sticky-pay-btn');
+      if (sBtn) sBtn.textContent = 'Разблокировать (' + curP + ' ₸)';
+    }
+
+    const reportCard = document.getElementById('tier-card-report');
+    if (reportCard) reportCard.addEventListener('click', function () { updateTierSelection('report'); });
+    const consultCard = document.getElementById('tier-card-consultation');
+    if (consultCard) consultCard.addEventListener('click', function () { updateTierSelection('consultation'); });
 
     const kaspiBtn = document.getElementById('btn-pay-kaspi');
     if (kaspiBtn) kaspiBtn.addEventListener('click', function () { openKaspiPayModal(state.sessionId); });
@@ -1429,10 +1359,12 @@
 
     const mainContent =
       heroBlock(r) +
-      '<div style="text-align:center;margin:28px 0">' +
-        '<button class="btn" id="download-pdf-btn" style="padding:14px 28px;font-size:15px">📥 Скачать официальный PDF-отчёт</button>' +
-      '</div>' +
-      aiMemoBlock(sessionId) +
+      '<section class="ai-memo-card" style="text-align:center;padding:32px 24px;margin:28px 0">' +
+        '<div class="ai-memo-badge" style="background:rgba(229,192,123,0.15);color:var(--gold);border-color:rgba(229,192,123,0.3)">📄 FENIX SLS · ЮРИДИЧЕСКИЙ ОТЧЕТ</div>' +
+        '<h2 style="font-size:24px;margin:12px 0 8px;color:#FFF">Официальный PDF-отчёт Fenix SLS</h2>' +
+        '<p class="ai-memo-sub" style="max-width:540px;margin:0 auto 24px">Полный 15-страничный юридический отчет с оценкой всех 8 направлений, детальным анализом ключевых рисков, фокус-разбором и пошаговой дорожной картой действий.</p>' +
+        '<button class="btn" id="download-pdf-btn" style="padding:16px 36px;font-size:16px;font-weight:600;box-shadow:0 4px 20px rgba(56,189,248,0.25)">📥 Скачать официальный PDF-отчёт</button>' +
+      '</section>' +
       strengths +
       '<section class="gate" style="margin-top:56px">' +
         '<h2>Персональный юридический разбор Fenix Law</h2>' +
@@ -1444,7 +1376,6 @@
 
     render(mainContent);
     animateGauges();
-    loadAiMemo(sessionId);
     bindRiskCtas();
 
     const pdfBtn = document.getElementById('download-pdf-btn');

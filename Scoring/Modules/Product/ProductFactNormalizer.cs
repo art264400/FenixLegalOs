@@ -21,6 +21,7 @@ public class ProductFactNormalizer : IFactNormalizer
                 case "prelaunch":
                     f["product.userStage"] = "prelaunch";
                     f["product.liveUsers"] = false;
+                    f["product.normativeModuleScore"] = 100;
                     break;
                 case "first":
                     f["product.userStage"] = "first_users";

@@ -32,12 +32,12 @@ public class ModuleScorer
             return (int)Math.Round(weightedDimensionScoreSum / totalApplicableDimensionWeight);
         }
 
-        // Generic normative policy: if module has a normative score registered in facts
-        // (e.g. {sectionId}.normativeModuleScore = 100 for solo founders)
         if (facts.Facts.TryGetValue($"{section.Id}.normativeModuleScore", out var normVal) && normVal != null)
         {
-            if (normVal is int normInt) return normInt;
-            if (int.TryParse(normVal.ToString(), out var parsedInt)) return parsedInt;
+            if (int.TryParse(normVal.ToString(), out int normScore))
+            {
+                return normScore;
+            }
         }
 
         return null;

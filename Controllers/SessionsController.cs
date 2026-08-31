@@ -176,26 +176,22 @@ public class SessionsController : ControllerBase
         if (session == null || string.IsNullOrEmpty(session.ResultJson))
             return NotFound(new { error = "not_found" });
 
-        var result = JsonSerializer.Deserialize<ScoreResult>(session.ResultJson);
+        var answersDict = !string.IsNullOrEmpty(session.AnswersJson)
+            ? JsonSerializer.Deserialize<Dictionary<string, object>>(session.AnswersJson) ?? new()
+            : new();
+
+        var result = answersDict.Count > 0
+            ? _scoringEngine.ComputeResult(answersDict)
+            : JsonSerializer.Deserialize<ScoreResult>(session.ResultJson);
+
         if (result == null) return NotFound(new { error = "invalid_result" });
 
-        string? aiSummary = null;
-        try
-        {
-            var answersDict = !string.IsNullOrEmpty(session.AnswersJson)
-                ? JsonSerializer.Deserialize<Dictionary<string, object>>(session.AnswersJson) ?? new()
-                : new();
-            aiSummary = await _aiReportService.GenerateExecutiveSummaryAsync(answersDict, result);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("[PDF AI Summary Error] " + ex.Message);
-        }
+        var facts = FenixLegalOs.Scoring.Core.FactNormalizer.NormalizeFacts(answersDict);
 
-        var pdfBytes = await _pdfService.GeneratePdfAsync(result, aiSummary);
+        var pdfBytes = await _pdfService.GeneratePdfAsync(result, facts, id, "Стартап");
         if (pdfBytes == null) return Problem("PDF generation failed");
 
-        return File(pdfBytes, "application/pdf", $"Fenix_Legal_Score_Report_{id}.pdf");
+        return File(pdfBytes, "application/pdf", $"Fenix_SLS_Report_{id}.pdf");
     }
 
     [HttpPost("{id}/pay")]
@@ -223,16 +219,19 @@ public class SessionsController : ControllerBase
 
         if (!session.Paid)
         {
-            return Ok(new { summary = "рџ”’ **AI-Р·Р°РєР»СЋС‡РµРЅРёРµ РґРѕСЃС‚СѓРїРЅРѕ РїРѕСЃР»Рµ РѕРїР»Р°С‚С‹**\n\nР Р°Р·Р±Р»РѕРєРёСЂСѓР№С‚Рµ РїРѕР»РЅС‹Р№ РѕС‚С‡С‘С‚ Fenix Legal OS, С‡С‚РѕР±С‹ РїРѕР»СѓС‡РёС‚СЊ РїРµСЂСЃРѕРЅР°Р»СЊРЅС‹Р№ СЋСЂРёРґРёС‡РµСЃРєРёР№ РјРµРјРѕСЂР°РЅРґСѓРј РІРµРЅС‡СѓСЂРЅРѕРіРѕ СЋСЂРёСЃС‚Р° Рё РїРѕС€Р°РіРѕРІС‹Р№ Action Plan." });
+            return Ok(new { summary = "🔒 **Аналитическое заключение доступно в полном отчете**\n\nРазблокируйте полный отчёт Fenix SLS, чтобы получить персональные выводы и пошаговый Action Plan." });
         }
 
         var result = JsonSerializer.Deserialize<ScoreResult>(session.ResultJson);
         if (result == null) return BadRequest(new { error = "invalid_result" });
 
         var answersDict = JsonSerializer.Deserialize<Dictionary<string, object>>(session.AnswersJson) ?? new();
-        var summary = await _aiReportService.GenerateExecutiveSummaryAsync(answersDict, result);
+        var facts = FenixLegalOs.Scoring.Core.FactNormalizer.NormalizeFacts(answersDict);
 
-        return Ok(new { summary });
+        var reportCtx = FenixLegalOs.Scoring.Report.ReportEngine.AssembleReportContext(result, facts, id, "Стартап");
+        var narratives = await _aiReportService.GenerateReportNarrativesAsync(reportCtx);
+
+        return Ok(new { summary = narratives.ExecutiveConclusion, narratives });
     }
 }
 

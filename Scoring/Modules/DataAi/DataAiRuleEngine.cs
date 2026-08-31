@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
 using FenixLegalOs.Models;
 using FenixLegalOs.Models.Enums;
 using FenixLegalOs.Scoring.Interfaces;
@@ -63,10 +61,10 @@ public class DataAiRuleEngine : IModuleRuleEngine
         }
 
         // ─── 2. DATA_PRIVACY_NOTICE_MISSING (§25, §24) ───────────────────────
-        // data.personalDataProcessed == true AND data.privacyNotice == none -> HIGH
-        if (personalDataProcessed && privacyNotice == "none")
+        // data.personalDataProcessed == true AND data.privacyNotice in [none, preparing] -> HIGH
+        if (personalDataProcessed && privacyNotice is "none" or "preparing")
         {
-            AddFinding(list, allRisks, "DATA_PRIVACY_NOTICE_MISSING", "DATA-06", privacyNotice, RiskSeverity.High);
+            AddFinding(list, allRisks, "DATA_PRIVACY_NOTICE_MISSING", "DATA-06", privacyNotice ?? "none", RiskSeverity.High);
         }
 
         // ─── 3. DATA_PRIVACY_NOTICE_OUTDATED (§27.2) ──────────────────────────

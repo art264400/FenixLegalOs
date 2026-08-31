@@ -26,6 +26,7 @@ public class FoundersFactNormalizer : IFactNormalizer
                     f["founders.activeCount"] = 1;
                     f["founders.isSolo"] = true;
                     f["founders.inactiveExists"] = false;
+                    f["founders.normativeModuleScore"] = 100;
                     break;
                 case "2":
                     f["founders.count"] = 2;
