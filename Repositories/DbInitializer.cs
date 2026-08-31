@@ -8,12 +8,13 @@ namespace FenixLegalOs.Repositories;
 
 public class DbInitializer
 {
+    private readonly string _dbPath;
     private readonly string _connectionString;
 
     public DbInitializer(IConfiguration config)
     {
-        var dbPath = config["FENIX_DB_PATH"] ?? Path.Combine(Directory.GetCurrentDirectory(), "fenix.db");
-        _connectionString = $"Data Source={dbPath}";
+        _dbPath = config["FENIX_DB_PATH"] ?? Path.Combine(Directory.GetCurrentDirectory(), "fenix.db");
+        _connectionString = $"Data Source={_dbPath}";
     }
 
     public string ConnectionString => _connectionString;
@@ -28,11 +29,53 @@ public class DbInitializer
 
         lock (_initLock)
         {
-            using var conn = new SqliteConnection(_connectionString);
-            conn.Open();
-            conn.Execute("PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL;");
+            try
+            {
+                ExecuteInitialization();
+            }
+            catch (SqliteException ex) when (ex.SqliteErrorCode == 11 || ex.Message.Contains("malformed"))
+            {
+                Console.WriteLine($"[DbInitializer] Corrupt database file detected ({ex.Message}). Auto-healing...");
+                SqliteConnection.ClearAllPools();
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
 
-            conn.Execute(@"
+                try
+                {
+                    var dir = Path.GetDirectoryName(_dbPath) ?? Directory.GetCurrentDirectory();
+                    var baseName = Path.GetFileNameWithoutExtension(_dbPath);
+                    foreach (var f in Directory.GetFiles(dir, $"{baseName}.db*"))
+                    {
+                        try
+                        {
+                            var backupPath = $"{f}.corrupt_{DateTime.UtcNow:yyyyMMddHHmmss}";
+                            File.Move(f, backupPath, overwrite: true);
+                            Console.WriteLine($"[DbInitializer] Moved corrupt file {f} -> {backupPath}");
+                        }
+                        catch (Exception moveEx)
+                        {
+                            Console.WriteLine($"[DbInitializer] Could not move {f}: {moveEx.Message}");
+                        }
+                    }
+                }
+                catch (Exception cleanupEx)
+                {
+                    Console.WriteLine($"[DbInitializer] Cleanup error: {cleanupEx.Message}");
+                }
+
+                ExecuteInitialization();
+                Console.WriteLine("[DbInitializer] Database successfully auto-healed and re-initialized!");
+            }
+        }
+    }
+
+    private void ExecuteInitialization()
+    {
+        using var conn = new SqliteConnection(_connectionString);
+        conn.Open();
+        conn.Execute("PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL;");
+
+        conn.Execute(@"
             CREATE TABLE IF NOT EXISTS sessions (
                 id TEXT PRIMARY KEY,
                 created_at TEXT NOT NULL,
@@ -192,7 +235,6 @@ public class DbInitializer
         SeedQuestionBank(conn);
         _initialized = true;
     }
-}
 
     private void SeedQuestionBank(SqliteConnection conn)
     {
