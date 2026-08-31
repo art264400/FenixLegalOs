@@ -135,7 +135,7 @@ public class ScenarioArtifactsGenerator
         public Microsoft.Extensions.FileProviders.IFileProvider ContentRootFileProvider { get; set; } = null!;
     }
 
-    private static Dictionary<string, object> CreateHealthyPreset() => new()
+    public static Dictionary<string, object> CreateHealthyPreset() => new()
     {
         ["FND-C01"] = "3",
         ["FND-C02"] = JsonSerializer.SerializeToElement(new Dictionary<string, object> { ["founder_1"] = 50, ["founder_2"] = 30, ["founder_3"] = 20 }),
@@ -220,7 +220,7 @@ public class ScenarioArtifactsGenerator
         ["INVEST-11"] = "current"
     };
 
-    private static Dictionary<string, object> CreateMediumPreset() => new()
+    public static Dictionary<string, object> CreateMediumPreset() => new()
     {
         ["FND-C01"] = "2",
         ["FND-C02"] = JsonSerializer.SerializeToElement(new Dictionary<string, object> { ["founder_1"] = 60, ["founder_2"] = 40 }),
@@ -271,7 +271,7 @@ public class ScenarioArtifactsGenerator
         ["INVEST-02"] = "no"
     };
 
-    private static Dictionary<string, object> CreateSeverePreset() => new()
+    public static Dictionary<string, object> CreateSeverePreset() => new()
     {
         ["FND-C01"] = "2",
         ["FND-C02"] = JsonSerializer.SerializeToElement(new Dictionary<string, object> { ["founder_1"] = 50, ["founder_2"] = 50 }),
@@ -328,7 +328,7 @@ public class ScenarioArtifactsGenerator
         ["INVEST-02"] = "no"
     };
 
-    private static Dictionary<string, object> CreateInvestmentBlockerHeavyPreset() => new()
+    public static Dictionary<string, object> CreateInvestmentBlockerHeavyPreset() => new()
     {
         ["FND-C01"] = "2",
         ["FND-C02"] = JsonSerializer.SerializeToElement(new Dictionary<string, object> { ["founder_1"] = 50, ["founder_2"] = 50 }),

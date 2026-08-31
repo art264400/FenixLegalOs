@@ -360,7 +360,7 @@ public class MultiScenarioE2EReportTests
     // 4. ОПИСАНИЕ ЭТАЛОННЫХ БИЗНЕС-СЦЕНАРИЕВ
     // =========================================================================
 
-    private static List<(ScenarioExpectation Expectation, Dictionary<string, object> Answers)> GetCanonicalScenarios()
+    public static List<(ScenarioExpectation Expectation, Dictionary<string, object> Answers)> GetCanonicalScenarios()
     {
         return new List<(ScenarioExpectation, Dictionary<string, object>)>
         {
