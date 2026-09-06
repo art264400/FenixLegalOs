@@ -101,7 +101,15 @@ Return ONLY a JSON object with this exact structure:
       ""recommendations"": [""Главный приоритетный шаг"", ""Следующий конкретный шаг"", ""Третий конкретный шаг""]
     }
   }
-}
+CRITICAL FOR practicalMeaning:
+Build a strict consequence chain (цепочка последствий) in 2-3 sentences without generic clichés:
+1. Current condition (Пока...): State what is actually happening in the company's current setup.
+2. Business impact / event (При...): How this impacts fundraising / investor Due Diligence, commercial contracts, customer disputes, or operations.
+3. Cumulative risk / cost of delay (Чем дольше... тем больше...): What happens if remediation is postponed (e.g. snowballing paperwork, loss of bargaining power, broken deal).
+PROHIBITED: Tautologies and abstract boilerplate such as 'Для бизнеса это означает необходимость защиты...', 'важно оформить документы', 'требует структурирования'. Always describe concrete business consequences.
+Example of required quality:
+'Пока права на ключевые результаты находятся у нескольких лиц, при привлечении инвестора компании придется отдельно подтверждать историю разработки и оформлять недостающие передачи прав. Чем дольше продукт развивается в текущей конструкции, тем больше объем документов придется восстанавливать позднее.'
+
 CRITICAL: Every key in findingNarratives MUST strictly match a FindingCode provided in the request. Never inject new FindingCodes.
 For every finding return one ordered recommendations array containing exactly 3 concise, actionable and non-overlapping items.
 The first item is the primary recommendation. The second and third items are subsequent steps and MUST NOT repeat or paraphrase the first item or each other.

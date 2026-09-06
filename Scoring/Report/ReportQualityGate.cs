@@ -11,6 +11,7 @@ public static class ReportQualityGate
     private static readonly Regex AiMentionPattern = new(@"\b(искусственный интеллект|нейросеть|LLM|языковая модель|нейросеть|наш ИИ|алгоритм ИИ|чат-бот)\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex EmojiPattern = new(@"[\uD83C-\uDBFF\uDC00-\uDFFF\u2600-\u26FF\u2700-\u27BF]", RegexOptions.Compiled);
     private static readonly Regex PlaceholderPattern = new(@"\b(Почему это нужно сделать|Ожидаемый практический результат|Action Title|FINDING_CODE|Section Title)\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex TautologyPattern = new(@"(Для бизнеса это означает необходимость защиты|требует структурирования для защиты устойчивости бизнеса|важно оформить документы)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     public static string ComputeContextFingerprint(ReportContext ctx)
     {
@@ -265,6 +266,7 @@ public static class ReportQualityGate
         if (TechnicalTermsPattern.IsMatch(text)) return true;
         if (AiMentionPattern.IsMatch(text)) return true;
         if (PlaceholderPattern.IsMatch(text)) return true;
+        if (TautologyPattern.IsMatch(text)) return true;
         return false;
     }
 

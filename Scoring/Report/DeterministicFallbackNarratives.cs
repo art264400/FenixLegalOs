@@ -75,7 +75,9 @@ public static class DeterministicFallbackNarratives
         var moduleNarrative = new ModuleNarrativeDto
         {
             Summary = summary,
-            PracticalMeaning = $"Вопросы в сфере «{focus.Title}» напрямую проверяются инвесторами и контрагентами. Своевременное оформление защищает интересы проекта и обеспечивает предсказуемость отношений."
+            PracticalMeaning = !string.IsNullOrWhiteSpace(focus.PracticalMeaning)
+                ? focus.PracticalMeaning
+                : $"Пока правовая основа направления «{focus.Title}» не формализована, компания накапливает скрытые риски. При проверке инвесторами или контрагентами неурегулированные вопросы затянут заключение сделок и потребуют восстановления истории документов."
         };
 
         foreach (var finding in focus.Findings)
