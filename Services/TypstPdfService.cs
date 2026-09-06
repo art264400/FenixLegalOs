@@ -947,28 +947,63 @@ public class TypstPdfService
         if (ctx.InvestmentReadiness != null && ctx.InvestmentReadiness.IsApplicable)
         {
             var inv = ctx.InvestmentReadiness;
-            var invColor = GetScoreColor(inv.ReadinessScore);
+            var baseColor = GetScoreColor(inv.BaseScore);
+            var dealColor = GetScoreColor(inv.ReadinessScore);
 
             sb.AppendLine(@"
 #section-header(""" + secNum++.ToString("D2") + @""", ""ГОТОВНОСТЬ К ИНВЕСТИЦИЯМ"", category: ""Инвесторский срез"") <sec-investment>
 #text(font: sans, size: 8.5pt, fill: rgb(""#94A3B8""))[Специальный аналитический срез готовности компании к инвестиционному раунду и проверке Due Diligence.]
 #v(0.4cm)
 
-#card(fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), inset: 14pt)[
-  #grid(
-    columns: (auto, 1fr),
-    gutter: 16pt,
-    align: horizon,
-    [
-      #text(font: serif, size: 38pt, weight: ""bold"", fill: rgb(""" + invColor + @"""))[" + inv.ReadinessScore + @"]
-      #text(font: sans, size: 14pt, fill: rgb(""#64748B""))[\/ 100]
-    ],
-    [
-      #text(font: serif, size: 12pt, weight: ""bold"", fill: rgb(""#E5C07B""))[" + EscapeTypst(inv.Category) + @"]
-      #v(3pt)
-      #text(font: sans, size: 8.5pt, fill: rgb(""#E2E8F0""))[" + EscapeTypst(inv.SummaryDescription) + @"]
+#grid(
+  columns: (1fr, 1fr),
+  gutter: 12pt,
+  [
+    #card(fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), inset: 12pt)[
+      #text(font: sans, size: 7.5pt, weight: ""bold"", fill: rgb(""#94A3B8""), tracking: 1pt)[СЛОЙ A · БАЗОВАЯ ГОТОВНОСТЬ ИНВЕСТ-БЛОКА]
+      #v(6pt)
+      #grid(
+        columns: (auto, 1fr),
+        gutter: 10pt,
+        align: horizon,
+        [
+          #text(font: serif, size: 28pt, weight: ""bold"", fill: rgb(""" + baseColor + @"""))[" + inv.BaseScore + @"]
+          #text(font: sans, size: 11pt, fill: rgb(""#64748B""))[\/ 100]
+        ],
+        [
+          #text(font: sans, size: 9pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[" + EscapeTypst(inv.BaseCategory) + @"]
+          #v(2pt)
+          #text(font: sans, size: 7.5pt, fill: rgb(""#94A3B8""))[Cap table, условия раунда, документы, метрики]
+        ]
+      )
     ]
-  )
+  ],
+  [
+    #card(fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), inset: 12pt)[
+      #text(font: sans, size: 7.5pt, weight: ""bold"", fill: rgb(""#94A3B8""), tracking: 1pt)[СЛОЙ B · ИТОГОВАЯ ГОТОВНОСТЬ К СДЕЛКЕ (DUE DILIGENCE)]
+      #v(6pt)
+      #grid(
+        columns: (auto, 1fr),
+        gutter: 10pt,
+        align: horizon,
+        [
+          #text(font: serif, size: 28pt, weight: ""bold"", fill: rgb(""" + dealColor + @"""))[" + inv.ReadinessScore + @"]
+          #text(font: sans, size: 11pt, fill: rgb(""#64748B""))[\/ 100]
+        ],
+        [
+          #text(font: sans, size: 9pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[" + EscapeTypst(inv.Category) + @"]
+          #v(2pt)
+          #text(font: sans, size: 7.5pt, fill: rgb(""#94A3B8""))[С учетом сквозных блокеров из всех зон компании]
+        ]
+      )
+    ]
+  ]
+)
+#v(0.3cm)
+#card(fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), inset: 11pt)[
+  #text(font: serif, size: 9.5pt, weight: ""bold"", fill: rgb(""#E5C07B""))[" + EscapeTypst(!string.IsNullOrWhiteSpace(inv.RoundVerdict) ? inv.RoundVerdict : "Общая готовность к раунду") + @"]
+  #v(2pt)
+  #text(font: sans, size: 8pt, fill: rgb(""#CBD5E1""))[" + EscapeTypst(inv.SummaryDescription) + @"]
 ]
 
 #v(0.4cm)
@@ -977,7 +1012,7 @@ public class TypstPdfService
   gutter: 14pt,
   [
     #card(fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), inset: 12pt)[
-      #text(font: serif, size: 10pt, weight: ""bold"", fill: rgb(""#F87171""))[ЧТО МОЖЕТ ЗАДЕРЖАТЬ РАУНД]
+      #text(font: serif, size: 10pt, weight: ""bold"", fill: rgb(""#F87171""))[ЧТО МОЖЕТ ОСЛОЖНИТЬ ИНВЕСТИЦИОННУЮ ПРОВЕРКУ]
       #v(8pt)
 ");
             if (inv.BlockerTitles.Count > 0)

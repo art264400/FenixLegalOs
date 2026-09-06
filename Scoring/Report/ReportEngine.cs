@@ -375,21 +375,38 @@ public static class ReportEngine
             ? "1 критическим блокером или существенным риском"
             : $"{displayedBlockerCount} критическими блокерами и существенными рисками";
 
+        var dealScore = isInvApplicable ? (crossBlockers.Count > 0 ? Math.Min(baseScore, 45) : baseScore) : 0;
+        var dealCategory = !isInvApplicable 
+            ? "Не применимо" 
+            : crossBlockers.Count > 0 
+                ? "Сквозные юридические блокеры" 
+                : baseCategory;
+
+        var roundVerdict = !isInvApplicable
+            ? "Привлечение инвестиций не заявлено как активная цель текущего этапа."
+            : displayedBlockerCount > 0
+                ? "Общая готовность к раунду: требует подготовки из-за юридических блокеров в других зонах."
+                : "Общая готовность к раунду: высокая, проект готов к юридической проверке и открытию Data Room.";
+
+        var summaryDesc = !isInvApplicable 
+            ? "Привлечение инвестиций не заявлено как активная цель текущего этапа."
+            : displayedBlockerCount > 0 
+                ? $"Параметры раунда и инвест-документы проработаны хорошо ({baseScore}/100), однако закрытие сделки ограничено {displayedBlockerPhrase} (структура, права, договоренности). Итоговая проходимость проверки: {dealScore}/100."
+                : $"Оценка инвестиционной готовности компании составляет {baseScore} / 100 ({baseCategory}). Критичных сквозных юридических блокеров не выявлено.";
+
         ctx.InvestmentReadiness = new InvestmentReadinessReportDto
         {
             IsApplicable = isInvApplicable,
-            ReadinessScore = isInvApplicable ? (crossBlockers.Count > 0 ? Math.Min(baseScore, 45) : baseScore) : 0,
+            ReadinessScore = dealScore,
             BaseScore = baseScore,
             BaseCategory = isInvApplicable ? baseCategory : "Не применимо",
-            Category = !isInvApplicable ? "Не применимо" : crossBlockers.Count > 0 ? "Сквозные юридические блокеры" : baseCategory,
+            Category = dealCategory,
+            RoundVerdict = roundVerdict,
             UnresolvedBlockersCount = allBlockerTitles.Count,
             BlockerTitles = allBlockerTitles,
+            CatalystTitles = result.InvestmentReadiness?.Blockers != null ? result.Strengths : new List<string>(),
             CrossModuleBlockers = crossBlockers,
-            SummaryDescription = !isInvApplicable 
-                ? "Привлечение инвестиций не заявлено как активная цель текущего этапа."
-                : displayedBlockerCount > 0 
-                    ? $"Базовая готовность инвест-блока составляет {baseScore}/100, однако общая готовность к сделке ограничена {displayedBlockerPhrase} (структура, права, договоренности)."
-                    : $"Оценка инвестиционной готовности компании составляет {baseScore} / 100 ({baseCategory}). Критичных сквозных юридических блокеров не выявлено."
+            SummaryDescription = summaryDesc
         };
 
         // 8. Unified Action Plan (Section 11)

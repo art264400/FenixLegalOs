@@ -188,6 +188,7 @@ public class InvestmentReadinessReportDto
     public List<string> CatalystTitles { get; set; } = new();
     public List<CrossModuleInvestmentBlockerDto> CrossModuleBlockers { get; set; } = new();
     public bool HasCrossModuleBlockers => CrossModuleBlockers.Count > 0;
+    public string RoundVerdict { get; set; } = string.Empty;
     public string SummaryDescription { get; set; } = string.Empty;
 }
 
