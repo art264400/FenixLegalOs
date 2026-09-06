@@ -677,7 +677,54 @@ public class TypstPdfService
                 navLinkText = "#link(<sec-compact>)[#text(font: sans, size: 6.5pt, fill: rgb(\"#64748B\"))[Кратко — стр. #context counter(page).at(<sec-compact>).first()]]";
             }
 
-            sb.AppendLine($@"
+            bool isInvestmentSplit = card.SectionId.Equals("investment", StringComparison.OrdinalIgnoreCase) &&
+                                     ctx.InvestmentReadiness != null &&
+                                     ctx.InvestmentReadiness.IsApplicable;
+
+            if (isInvestmentSplit)
+            {
+                var inv = ctx.InvestmentReadiness!;
+                var dealScore = inv.ReadinessScore;
+                var baseScore = inv.BaseScore;
+                var dealColor = GetScoreColor(dealScore);
+                var baseColor = GetScoreColor(baseScore);
+                var invStatusText = inv.Category;
+
+                sb.AppendLine($@"
+  rect(
+    width: 100%,
+    fill: rgb(""#0D1628""),
+    stroke: 0.75pt + rgb(""#1E2D4A""),
+    radius: 6pt,
+    inset: (x: 9pt, y: 10pt)
+  )[
+    #text(font: serif, size: 9pt, weight: ""bold"", fill: rgb(""#E5C07B""))[0{cardNum++}]
+    #v(2pt)
+    #block(height: 22pt)[
+      #text(font: sans, size: 7pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[{EscapeTypst(card.Title.ToUpperInvariant())}]
+    ]
+    #v(3pt)
+    #block(height: 24pt)[
+      #text(font: serif, size: 20pt, weight: ""bold"", fill: rgb(""{dealColor}""))[{dealScore}]
+      #text(font: sans, size: 7.5pt, fill: rgb(""#64748B""))[\/ 100]
+    ]
+    #v(2pt)
+    #block(height: 12pt)[
+      #text(font: sans, size: 6.5pt, fill: rgb(""#94A3B8""))[сделка (DD) · база: #text(weight: ""bold"", fill: rgb(""{baseColor}""))[{baseScore}]]
+    ]
+    #v(2pt)
+    #block(height: 14pt)[
+      #text(font: sans, size: 7pt, weight: ""medium"", fill: rgb(""{dealColor}""))[{EscapeTypst(invStatusText)}]
+    ]
+    #v(4pt)
+    #block(height: 14pt)[
+      {navLinkText}
+    ]
+  ],");
+            }
+            else
+            {
+                sb.AppendLine($@"
   rect(
     width: 100%,
     fill: rgb(""#0D1628""),
@@ -704,6 +751,7 @@ public class TypstPdfService
       {navLinkText}
     ]
   ],");
+            }
         }
         sb.AppendLine(@"
 )
