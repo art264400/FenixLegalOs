@@ -5,6 +5,7 @@ using FenixLegalOs.Models.Enums;
 using FenixLegalOs.Models.Report;
 using FenixLegalOs.Scoring.Report;
 using FenixLegalOs.Services;
+using Microsoft.Extensions.Configuration;
 using Xunit;
 
 namespace FenixLegalOs.Tests;
@@ -1003,4 +1004,49 @@ public class ChunkedNarrativePipelineTests
         Assert.DoesNotContain(legacyPrimary, normalized);
         Assert.Equal("Зафиксировать предмет разногласий и позиции сторон.", normalized[0]);
     }
+
+    [Fact(DisplayName = "StrictLlm: Throws InvalidOperationException if LLM is not configured")]
+    public async Task StrictLlm_Throws_WhenLlmNotConfigured()
+    {
+        var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AiSettings:StrictLlm"] = "true"
+            })
+            .Build();
+
+        var mockLlm = new MockLlmNarrativeClient { IsConfigured = false };
+        var service = new AiReportService(config, mockLlm);
+        var ctx = CreateSampleReportContext();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.GenerateReportNarrativesAsync(ctx));
+
+        Assert.Contains("LLM", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact(DisplayName = "StrictLlm: Throws InvalidOperationException if Module LLM fails")]
+    public async Task StrictLlm_Throws_WhenModuleFails()
+    {
+        var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AiSettings:StrictLlm"] = "true"
+            })
+            .Build();
+
+        var mockLlm = new MockLlmNarrativeClient
+        {
+            IsConfigured = true,
+            OnGenerateModule = _ => null // Simulates failure
+        };
+        var service = new AiReportService(config, mockLlm);
+        var ctx = CreateSampleReportContext();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.GenerateReportNarrativesAsync(ctx));
+
+        Assert.Contains("Module", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
 }
+

@@ -189,7 +189,7 @@ public class SessionsController : ControllerBase
         var facts = FenixLegalOs.Scoring.Core.FactNormalizer.NormalizeFacts(answersDict);
 
         var pdfBytes = await _pdfService.GeneratePdfAsync(result, facts, id, "Стартап");
-        if (pdfBytes == null) return Problem("PDF generation failed");
+        if (pdfBytes == null) return StatusCode(StatusCodes.Status500InternalServerError, new { error = "generation_failed", message = "Не удалось сформировать PDF-документ. Пожалуйста, повторите попытку позже." });
 
         return File(pdfBytes, "application/pdf", $"Fenix_SLS_Report_{id}.pdf");
     }

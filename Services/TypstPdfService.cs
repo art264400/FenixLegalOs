@@ -103,6 +103,10 @@ public class TypstPdfService
         catch (Exception ex)
         {
             Console.WriteLine("[AiReportService Exception] " + ex.Message);
+            if (_aiReportService.StrictLlm)
+            {
+                throw;
+            }
         }
 
         var typstContent = BuildTypstMarkup(reportCtx);

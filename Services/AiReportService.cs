@@ -22,9 +22,11 @@ public class AiReportService
     private readonly ILlmNarrativeClient _llmClient;
     private readonly NarrativeGenerationOptions _options;
     private readonly ConcurrentBag<NarrativeGenerationMetrics> _metrics = new();
+    private readonly bool _strictLlm;
 
     public NarrativeGenerationOptions Options => _options;
     public IReadOnlyList<NarrativeGenerationMetrics> LastMetrics => _metrics.ToList();
+    public bool StrictLlm => _strictLlm;
 
     public AiReportService(IConfiguration? config = null, ILlmNarrativeClient? llmClient = null)
     {
@@ -40,9 +42,23 @@ public class AiReportService
                 _options.RequestTimeoutSeconds = t;
         }
 
+        var strictEnv = Environment.GetEnvironmentVariable("STRICT_LLM");
+        if (!string.IsNullOrWhiteSpace(strictEnv) && bool.TryParse(strictEnv, out var strictFromEnv))
+        {
+            _strictLlm = strictFromEnv;
+        }
+        else if (config != null && bool.TryParse(config["AiSettings:StrictLlm"], out var strictFromConfig))
+        {
+            _strictLlm = strictFromConfig;
+        }
+        else
+        {
+            _strictLlm = false;
+        }
+
         _llmClient = llmClient ?? new LlmNarrativeClient(config);
 
-        Console.WriteLine($"[AiReportService] Initialized with Chunked Pipeline. Concurrency: {_options.MaxParallelModuleRequests}, BatchSize: {_options.ActionBatchSize}, Timeout: {_options.RequestTimeoutSeconds}s, Configured: {_llmClient.IsConfigured}");
+        Console.WriteLine($"[AiReportService] Initialized with Chunked Pipeline. Concurrency: {_options.MaxParallelModuleRequests}, BatchSize: {_options.ActionBatchSize}, Timeout: {_options.RequestTimeoutSeconds}s, Configured: {_llmClient.IsConfigured}, StrictLlm: {_strictLlm}");
     }
 
     public async Task<ReportNarrativesDto> GenerateReportNarrativesAsync(ReportContext context, CancellationToken ct = default)
@@ -52,6 +68,11 @@ public class AiReportService
 
         if (!_llmClient.IsConfigured)
         {
+            if (_strictLlm)
+            {
+                throw new InvalidOperationException("LLM is required (StrictLlm=true), but LLM API key is not configured.");
+            }
+
             Console.WriteLine("[AiReportService] LLM not configured -> Generating full granular deterministic fallback narratives.");
             var fallback = DeterministicFallbackNarratives.GenerateFallbackNarratives(context);
             fallback.IsReady = false;
@@ -119,13 +140,18 @@ public class AiReportService
                     {
                         metrics.FallbackUsed = true;
                         metrics.ErrorOrValidationFailure = error;
-                        Console.WriteLine($"[AiReportService] Module '{module.SectionId}' validation failed: {error} -> using granular module fallback.");
+                        Console.WriteLine($"[AiReportService] Module '{module.SectionId}' validation failed: {error}");
+                        if (_strictLlm)
+                        {
+                            throw new InvalidOperationException($"LLM generation failed for module '{module.SectionId}': {error}");
+                        }
+                        Console.WriteLine($"[AiReportService] Using granular module fallback for '{module.SectionId}'.");
                     }
 
                     moduleNarratives[module.SectionId] = sanitizedModule;
                     moduleFingerprints[module.SectionId] = ComputeModuleFingerprint(module);
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (!_strictLlm)
                 {
                     Console.WriteLine($"[AiReportService] Exception generating module '{module.SectionId}': {ex.Message} -> using granular module fallback.");
                     var fallbackModule = DeterministicFallbackNarratives.GenerateModuleFallback(context, module.SectionId);
@@ -190,7 +216,12 @@ public class AiReportService
                         {
                             metrics.FallbackUsed = true;
                             metrics.ErrorOrValidationFailure = error;
-                            Console.WriteLine($"[AiReportService] Action batch '{batchKey}' validation failed: {error} -> using granular batch fallback.");
+                            Console.WriteLine($"[AiReportService] Action batch '{batchKey}' validation failed: {error}");
+                            if (_strictLlm)
+                            {
+                                throw new InvalidOperationException($"LLM generation failed for action batch '{batchKey}': {error}");
+                            }
+                            Console.WriteLine($"[AiReportService] Using granular batch fallback for '{batchKey}'.");
                         }
 
                         foreach (var (k, v) in sanitizedBatch)
@@ -200,7 +231,7 @@ public class AiReportService
 
                         actionBatchFingerprints[batchKey] = ComputeBatchFingerprint(batch);
                     }
-                    catch (Exception ex)
+                    catch (Exception ex) when (!_strictLlm)
                     {
                         Console.WriteLine($"[AiReportService] Exception generating action batch '{batchKey}': {ex.Message} -> using granular batch fallback.");
                         var fallbackBatch = DeterministicFallbackNarratives.GenerateActionBatchFallback(context, batch.Select(a => a.ActionId));
@@ -283,12 +314,17 @@ public class AiReportService
                 {
                     execMetrics.FallbackUsed = true;
                     execMetrics.ErrorOrValidationFailure = execError;
-                    Console.WriteLine($"[AiReportService] Executive synthesis validation failed: {execError} -> using granular executive fallback.");
+                    Console.WriteLine($"[AiReportService] Executive synthesis validation failed: {execError}");
+                    if (_strictLlm)
+                    {
+                        throw new InvalidOperationException($"LLM generation failed for executive synthesis: {execError}");
+                    }
+                    Console.WriteLine($"[AiReportService] Using granular executive fallback.");
                 }
 
                 finalExecSynthesis = sanitizedExec;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!_strictLlm)
             {
                 Console.WriteLine($"[AiReportService] Exception generating executive synthesis: {ex.Message} -> using granular executive fallback.");
                 finalExecSynthesis = DeterministicFallbackNarratives.GenerateExecutiveFallback(context, moduleNarratives.ToDictionary(k => k.Key, v => v.Value));
@@ -328,7 +364,13 @@ public class AiReportService
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[AiReportService] Pipeline failure: {ex.Message} -> fallback.");
+            Console.WriteLine($"[AiReportService] Pipeline failure: {ex.Message}");
+            if (_strictLlm)
+            {
+                throw;
+            }
+
+            Console.WriteLine($"[AiReportService] Using fallback narratives due to: {ex.Message}");
             var fallback = DeterministicFallbackNarratives.GenerateFallbackNarratives(context);
             fallback.IsReady = false;
             fallback.FailedBlocks = new List<string> { $"Pipeline failure: {ex.Message}" };

@@ -86,6 +86,31 @@ else
     app.UseStaticFiles();
 }
 
+// Global exception handler: mask internal stack traces / exceptions from end users
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[Unhandled Exception] {context.Request.Method} {context.Request.Path}: {ex}");
+
+        if (!context.Response.HasStarted)
+        {
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            context.Response.ContentType = "application/json; charset=utf-8";
+            var userSafeResponse = new
+            {
+                error = "service_temporarily_unavailable",
+                message = "Произошла ошибка при формировании отчета. Пожалуйста, повторите попытку позже или обратитесь в поддержку Fenix Law."
+            };
+            await context.Response.WriteAsJsonAsync(userSafeResponse);
+        }
+    }
+});
+
 app.UseRouting();
 
 // Map Controller Endpoints
