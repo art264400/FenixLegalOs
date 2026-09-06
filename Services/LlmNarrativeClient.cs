@@ -242,7 +242,7 @@ Requirements:
 1. projectProfileNarrative: 2-3 concise sentences describing the current legal setup.
 2. executiveConclusion: 800-1200 characters synthesizing the overall situation, main vulnerabilities, business consequences, and what determines the score.
 3. rootCauseSummaries: short phrase (up to 150 chars) for each provided rootCause/topFinding.
-4. fenixLawRecommendation: conclusion on whether legal support is recommended based on requiresLegalWork and service areas.
+4. fenixLawRecommendation: conclusion on whether legal support is recommended based on requiresLegalWork and service areas. Follow format: 'По результатам скрининга несколько приоритетных вопросов требуют юридической работы: [направления]. Fenix Law может подключиться к устранению этих вопросов на основании уже сформированной диагностики SLS.'
 
 Return ONLY a JSON object with this exact structure:
 {

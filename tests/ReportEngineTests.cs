@@ -617,7 +617,7 @@ public class ReportEngineTests
         var rec = FenixLawRecommendationEvaluator.EvaluateRecommendation(findings, result);
 
         Assert.True(rec.RequiresLegalWork);
-        Assert.Contains("Ключевые задачи требуют профессиональной юридической работы", rec.SummaryText);
+        Assert.Contains("По результатам скрининга несколько приоритетных вопросов требуют юридической работы", rec.SummaryText);
         Assert.DoesNotContain(", ai ", rec.SummaryText, StringComparison.Ordinal);
         Assert.DoesNotContain(" и и ", rec.SummaryText);
     }

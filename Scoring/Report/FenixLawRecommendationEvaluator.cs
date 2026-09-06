@@ -202,7 +202,7 @@ public static class FenixLawRecommendationEvaluator
             _ => string.Join(", ", topServiceTitlesLower.Take(3)) + " и другие ключевые направления"
         };
 
-        var summaryText = $"Ключевые задачи требуют профессиональной юридической работы: {dynamicListStr}. Fenix Law может подключиться к комплексному устранению этих вопросов на основании уже сформированной диагностики SLS.";
+        var summaryText = $"По результатам скрининга несколько приоритетных вопросов требуют юридической работы: {dynamicListStr}.\n\nFenix Law может подключиться к устранению этих вопросов на основании уже сформированной диагностики SLS.";
 
         return new FenixLawRecommendationReportDto
         {
