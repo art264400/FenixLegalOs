@@ -14,7 +14,7 @@ public class DbInitializer
     public DbInitializer(IConfiguration config)
     {
         _dbPath = config["FENIX_DB_PATH"] ?? Path.Combine(Directory.GetCurrentDirectory(), "fenix.db");
-        _connectionString = $"Data Source={_dbPath}";
+        _connectionString = $"Data Source={_dbPath};Mode=ReadWriteCreate;Cache=Default;";
     }
 
     public string ConnectionString => _connectionString;
@@ -33,38 +33,50 @@ public class DbInitializer
             {
                 ExecuteInitialization();
             }
-            catch (SqliteException ex) when (ex.SqliteErrorCode == 11 || ex.Message.Contains("malformed"))
+            catch (SqliteException ex) when (ex.SqliteErrorCode == 10 || ex.SqliteErrorCode == 11 || ex.Message.Contains("disk I/O error") || ex.Message.Contains("malformed"))
             {
-                Console.WriteLine($"[DbInitializer] Corrupt database file detected ({ex.Message}). Auto-healing...");
+                Console.WriteLine($"[DbInitializer] Database issue detected ({ex.Message}). Cleaning locks and auto-healing...");
                 SqliteConnection.ClearAllPools();
                 GC.Collect();
                 GC.WaitForPendingFinalizers();
 
-                try
+                var dir = Path.GetDirectoryName(_dbPath) ?? Directory.GetCurrentDirectory();
+                var baseName = Path.GetFileNameWithoutExtension(_dbPath);
+
+                // Step 1: Clean orphaned WAL/SHM locks
+                foreach (var ext in new[] { "-shm", "-wal" })
                 {
-                    var dir = Path.GetDirectoryName(_dbPath) ?? Directory.GetCurrentDirectory();
-                    var baseName = Path.GetFileNameWithoutExtension(_dbPath);
-                    foreach (var f in Directory.GetFiles(dir, $"{baseName}.db*"))
-                    {
-                        try
-                        {
-                            var backupPath = $"{f}.corrupt_{DateTime.UtcNow:yyyyMMddHHmmss}";
-                            File.Move(f, backupPath, overwrite: true);
-                            Console.WriteLine($"[DbInitializer] Moved corrupt file {f} -> {backupPath}");
-                        }
-                        catch (Exception moveEx)
-                        {
-                            Console.WriteLine($"[DbInitializer] Could not move {f}: {moveEx.Message}");
-                        }
-                    }
-                }
-                catch (Exception cleanupEx)
-                {
-                    Console.WriteLine($"[DbInitializer] Cleanup error: {cleanupEx.Message}");
+                    var extra = Path.Combine(dir, $"{baseName}.db{ext}");
+                    try { if (File.Exists(extra)) File.Delete(extra); } catch { }
                 }
 
-                ExecuteInitialization();
-                Console.WriteLine("[DbInitializer] Database successfully auto-healed and re-initialized!");
+                try
+                {
+                    ExecuteInitialization();
+                    Console.WriteLine("[DbInitializer] Database recovered after clearing orphaned WAL/SHM locks!");
+                    return;
+                }
+                catch
+                {
+                    // Step 2: If still failing, move corrupt DB and recreate
+                    try
+                    {
+                        foreach (var f in Directory.GetFiles(dir, $"{baseName}.db*"))
+                        {
+                            try
+                            {
+                                var backupPath = $"{f}.corrupt_{DateTime.UtcNow:yyyyMMddHHmmss}";
+                                File.Move(f, backupPath, overwrite: true);
+                                Console.WriteLine($"[DbInitializer] Moved corrupt file {f} -> {backupPath}");
+                            }
+                            catch { }
+                        }
+                    }
+                    catch { }
+
+                    ExecuteInitialization();
+                    Console.WriteLine("[DbInitializer] Database successfully auto-healed and re-initialized!");
+                }
             }
         }
     }
@@ -73,7 +85,7 @@ public class DbInitializer
     {
         using var conn = new SqliteConnection(_connectionString);
         conn.Open();
-        conn.Execute("PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL;");
+        conn.Execute("PRAGMA busy_timeout = 10000; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;");
 
         conn.Execute(@"
             CREATE TABLE IF NOT EXISTS sessions (

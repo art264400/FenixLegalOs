@@ -48,11 +48,28 @@ public static class RootCauseMerger
                 _ => 0
             })
             .ThenByDescending(g => g.Priority == RiskPriority.Now ? 2 : g.Priority == RiskPriority.BeforeRound ? 1 : 0)
-            .Take(Math.Min(maxCount, 5))
             .ToList();
 
-        int idx = 1;
+        // Include all Blocker and Critical root causes; for High and below, include all if total <= maxCount, else at least all Critical + top High
+        var selectedGroups = new List<dynamic>();
         foreach (var grp in groups)
+        {
+            if (grp.MaxSeverity is RiskSeverity.Blocker or RiskSeverity.Critical)
+            {
+                selectedGroups.Add(grp);
+            }
+            else if (selectedGroups.Count < maxCount || grp.MaxSeverity == RiskSeverity.High && selectedGroups.Count < 8)
+            {
+                selectedGroups.Add(grp);
+            }
+        }
+        if (selectedGroups.Count == 0 && groups.Count > 0)
+        {
+            selectedGroups.AddRange(groups.Take(maxCount));
+        }
+
+        int idx = 1;
+        foreach (var grp in selectedGroups.Take(maxCount))
         {
             var dom = grp.DominantFinding;
             var sevLabel = dom.Severity switch

@@ -8,6 +8,18 @@ namespace FenixLegalOs.Models.Report;
 /// </summary>
 public class ReportNarrativesDto
 {
+    [JsonPropertyName("contextFingerprint")]
+    public string ContextFingerprint { get; set; } = string.Empty;
+
+    [JsonPropertyName("schemaVersion")]
+    public string SchemaVersion { get; set; } = "2.0";
+
+    [JsonPropertyName("isReady")]
+    public bool IsReady { get; set; } = true;
+
+    [JsonPropertyName("failedBlocks")]
+    public List<string> FailedBlocks { get; set; } = new();
+
     [JsonPropertyName("projectProfileNarrative")]
     public string ProjectProfileNarrative { get; set; } = string.Empty;
 
@@ -70,8 +82,12 @@ public class FindingNarrativeDto
     [JsonPropertyName("whyItMatters")]
     public string? WhyItMatters { get; set; }
 
-    [JsonPropertyName("recommendation")]
+    // Derived from Recommendations[0] after validation; not part of the LLM JSON contract.
+    [JsonIgnore]
     public string? Recommendation { get; set; }
+
+    [JsonPropertyName("recommendations")]
+    public List<string>? Recommendations { get; set; }
 }
 
 public class ActionNarrativeItemDto

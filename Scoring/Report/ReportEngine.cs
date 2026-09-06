@@ -90,8 +90,9 @@ public static class ReportEngine
             BottomExplanation = driversExplanation
         };
 
-        // 3. Top Root Causes (Section 04) - Max 5
-        ctx.TopFindings = RootCauseMerger.ExtractTopRootCauses(result.Risks, maxCount: 5);
+        // 3. Top Root Causes (Section 04) - Lossless all Critical/Blocker + grouped High
+        ctx.AllFindings = result.Risks.ToList();
+        ctx.TopFindings = RootCauseMerger.ExtractTopRootCauses(result.Risks, maxCount: 8);
 
         // 4. Positive Factors (Section 05)
         ctx.PositiveFactors = FactorBreakdownEvaluator.ExtractGlobalPositiveFactors(result);
@@ -179,37 +180,49 @@ public static class ReportEngine
                     neg.Add($"Низкий уровень юридической готовности по направлению «{s.Title}».");
                 }
 
-                var findingCards = sectionRisks.Select(r => new ReportFindingCardDto
+                var findingCards = sectionRisks.Select(r =>
                 {
-                    FindingCode = r.Code,
-                    Title = r.Title,
-                    Severity = r.Severity,
-                    SeverityLabel = r.Severity switch
+                    var resolvingAction = Data.ActionLibrary.ActionLibrary.ResolveActionForFinding(r);
+                    var effectiveMode = resolvingAction?.ResolutionMode ?? r.ResolutionMode;
+                    r.ResolutionMode = effectiveMode;
+
+                    return new ReportFindingCardDto
                     {
-                        RiskSeverity.Blocker => "Блокирующий",
-                        RiskSeverity.Critical => "Критический",
-                        RiskSeverity.High => "Высокий",
-                        RiskSeverity.Medium => "Умеренный",
-                        _ => "Низкий"
-                    },
-                    WhyFound = !string.IsNullOrWhiteSpace(r.Finding) ? r.Finding : r.Title,
-                    WhyItMatters = r.WhyItMatters,
-                    Recommendation = r.Recommendation,
-                    Priority = r.Priority,
-                    PriorityLabel = r.Priority switch
-                    {
-                        RiskPriority.Now => "В первую очередь",
-                        RiskPriority.ThirtyDays => "В течение 30 дней",
-                        RiskPriority.BeforeRound => "До раунда / сделки",
-                        _ => "Плановое улучшение"
-                    },
-                    ResolutionFormat = r.Resolution switch
-                    {
-                        ResolutionType.SelfService => "Можно исправить самостоятельно",
-                        ResolutionType.CheckWithLawyer => "Желательно проверить с юристом",
-                        ResolutionType.LawyerRequired => "Требуется юридическая работа",
-                        _ => "Желательно проверить с юристом"
-                    }
+                        FindingCode = r.Code,
+                        Title = r.Title,
+                        Severity = r.Severity,
+                        SeverityLabel = r.Severity switch
+                        {
+                            RiskSeverity.Blocker => "Блокирующий",
+                            RiskSeverity.Critical => "Критический",
+                            RiskSeverity.High => "Высокий",
+                            RiskSeverity.Medium => "Умеренный",
+                            _ => "Низкий"
+                        },
+                        WhyFound = !string.IsNullOrWhiteSpace(r.Finding) ? r.Finding : r.Title,
+                        WhyItMatters = r.WhyItMatters,
+                        Recommendation = r.Recommendation,
+                        Recommendations = r.Recommendations != null && r.Recommendations.Count > 0
+                            ? r.Recommendations
+                            : (!string.IsNullOrWhiteSpace(r.Recommendation) ? new List<string> { r.Recommendation } : new List<string>()),
+                        Priority = r.Priority,
+                        PriorityLabel = r.Priority switch
+                        {
+                            RiskPriority.Now => "В первую очередь",
+                            RiskPriority.ThirtyDays => "В течение 30 дней",
+                            RiskPriority.BeforeRound => "До раунда / сделки",
+                            _ => "Плановое улучшение"
+                        },
+                        ResolutionMode = effectiveMode,
+                        ResolutionFormat = effectiveMode switch
+                        {
+                            ResolutionMode.InternalAction => "Внутреннее действие команды",
+                            ResolutionMode.LegalReview => "Юридическая проверка",
+                            ResolutionMode.LegalWork => "Требуется юридическая работа",
+                            ResolutionMode.LegalAndProduct => "Юридическая и техническая доработка",
+                            _ => "Требуется юридическая работа"
+                        }
+                    };
                 }).ToList();
 
                 ctx.FocusModules.Add(new FocusModuleDetailDto
@@ -243,6 +256,12 @@ public static class ReportEngine
                     _ => $"В направлении «{s.Title}» выявлены критические уязвимости, требующие первоочередного вмешательства."
                 };
 
+                var nextStep = sectionRisks.Count > 0
+                    ? (!string.IsNullOrWhiteSpace(sectionRisks.OrderByDescending(r => r.Severity).First().Recommendation) 
+                        ? sectionRisks.OrderByDescending(r => r.Severity).First().Recommendation 
+                        : $"Систематизировать подтверждающие документы по направлению «{s.Title}».")
+                    : $"Поддерживать актуальность документов и регламентов по направлению «{s.Title}».";
+
                 ctx.CompactModules.Add(new CompactModuleDto
                 {
                     SectionId = s.SectionId,
@@ -252,18 +271,27 @@ public static class ReportEngine
                     StatusText = statusText,
                     Summary = compSummary,
                     NegativePoints = neg.Concat(att).Take(2).ToList(),
-                    PositivePoints = pos.Take(2).ToList()
+                    PositivePoints = pos.Take(2).ToList(),
+                    NextStep = nextStep
                 });
             }
             // If N/A Mode
             else if (mode == ReportRenderMode.NotApplicable)
             {
+                var fullReason = string.IsNullOrWhiteSpace(reasonIfNa)
+                    ? "Раздел не применим на текущем этапе развития компании."
+                    : reasonIfNa;
+                if (!fullReason.Contains("не влияет на общий Score", StringComparison.OrdinalIgnoreCase))
+                {
+                    fullReason = $"{fullReason.TrimEnd('.')} (не влияет на общий Score).";
+                }
+
                 ctx.NotApplicableModules.Add(new NotApplicableModuleDto
                 {
                     SectionId = s.SectionId,
                     Order = orderIdx,
                     Title = s.Title,
-                    ReasonText = reasonIfNa,
+                    ReasonText = fullReason,
                     TriggerEventText = triggerIfNa
                 });
             }
@@ -317,6 +345,13 @@ public static class ReportEngine
             })
             .ToList();
 
+        var allBlockerTitles = crossBlockers.Select(cb => $"{cb.ModuleTitle}: {cb.Title}").ToList();
+        if (result.InvestmentReadiness?.Blockers != null && result.InvestmentReadiness.Blockers.Count > 0)
+        {
+            allBlockerTitles.AddRange(result.InvestmentReadiness.Blockers);
+        }
+        allBlockerTitles = allBlockerTitles.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
         ctx.InvestmentReadiness = new InvestmentReadinessReportDto
         {
             IsApplicable = isInvApplicable,
@@ -324,8 +359,8 @@ public static class ReportEngine
             BaseScore = baseScore,
             BaseCategory = isInvApplicable ? baseCategory : "Не применимо",
             Category = !isInvApplicable ? "Не применимо" : crossBlockers.Count > 0 ? "Сквозные юридические блокеры" : baseCategory,
-            UnresolvedBlockersCount = crossBlockers.Count + (result.InvestmentReadiness?.Blockers.Count ?? 0),
-            BlockerTitles = result.InvestmentReadiness?.Blockers ?? new List<string>(),
+            UnresolvedBlockersCount = allBlockerTitles.Count,
+            BlockerTitles = allBlockerTitles,
             CrossModuleBlockers = crossBlockers,
             SummaryDescription = !isInvApplicable 
                 ? "Привлечение инвестиций не заявлено как активная цель текущего этапа."

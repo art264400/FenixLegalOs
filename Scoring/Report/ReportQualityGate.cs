@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using FenixLegalOs.Models.Enums;
 using FenixLegalOs.Models.Report;
 
 namespace FenixLegalOs.Scoring.Report;
@@ -11,6 +12,14 @@ public static class ReportQualityGate
     private static readonly Regex EmojiPattern = new(@"[\uD83C-\uDBFF\uDC00-\uDFFF\u2600-\u26FF\u2700-\u27BF]", RegexOptions.Compiled);
     private static readonly Regex PlaceholderPattern = new(@"\b(Почему это нужно сделать|Ожидаемый практический результат|Action Title|FINDING_CODE|Section Title)\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    public static string ComputeContextFingerprint(ReportContext ctx)
+    {
+        var key = $"{ctx.Overall.Score}|{ctx.AllFindings.Count}|{string.Join(",", ctx.TopFindings.Select(f => f.FindingCode))}";
+        using var sha = System.Security.Cryptography.SHA256.Create();
+        var bytes = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(key));
+        return Convert.ToHexString(bytes)[..16];
+    }
+
     public static ReportNarrativesDto ValidateAndSanitize(ReportNarrativesDto? rawNarratives, ReportContext ctx)
     {
         if (rawNarratives == null)
@@ -19,7 +28,19 @@ public static class ReportQualityGate
             return DeterministicFallbackNarratives.GenerateFallbackNarratives(ctx);
         }
 
-        var sanitized = new ReportNarrativesDto();
+        var expectedFingerprint = ComputeContextFingerprint(ctx);
+        if (!string.IsNullOrWhiteSpace(rawNarratives.ContextFingerprint) &&
+            !string.Equals(rawNarratives.ContextFingerprint, expectedFingerprint, StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine($"[ReportQualityGate] ContextFingerprint mismatch ('{rawNarratives.ContextFingerprint}' vs '{expectedFingerprint}') -> Discarding stale incompatible narratives and applying deterministic fallback.");
+            return DeterministicFallbackNarratives.GenerateFallbackNarratives(ctx);
+        }
+
+        var sanitized = new ReportNarrativesDto
+        {
+            ContextFingerprint = expectedFingerprint,
+            SchemaVersion = "2.0"
+        };
 
         // 1. Validate & Sanitize Project Profile Narrative
         var profileText = rawNarratives.ProjectProfileNarrative?.Trim();
@@ -34,7 +55,10 @@ public static class ReportQualityGate
 
         // 2. Validate & Sanitize Executive Conclusion
         var execText = rawNarratives.ExecutiveConclusion?.Trim();
-        if (string.IsNullOrWhiteSpace(execText) || execText.Length < 150 || ContainsProhibitedContent(execText) || !IsFactuallyGrounded(execText, ctx))
+        var isComplexScenario = ctx.AllFindings.Count(f => f.Severity is RiskSeverity.Blocker or RiskSeverity.Critical or RiskSeverity.High) >= 5;
+        var minExecLen = isComplexScenario ? 300 : 150;
+
+        if (string.IsNullOrWhiteSpace(execText) || execText.Length < minExecLen || ContainsProhibitedContent(execText) || !IsFactuallyGrounded(execText, ctx))
         {
             sanitized.ExecutiveConclusion = ctx.ExecutiveConclusion;
         }
@@ -98,6 +122,10 @@ public static class ReportQualityGate
                 {
                     if (modDto.FindingNarratives.TryGetValue(finding.FindingCode, out var fNarrative) && fNarrative != null)
                     {
+                        var recList = (fNarrative.Recommendations != null && fNarrative.Recommendations.Count > 0)
+                            ? fNarrative.Recommendations.Where(r => !string.IsNullOrWhiteSpace(r) && !ContainsProhibitedContent(r) && IsFactuallyGrounded(r, ctx)).Select(SanitizeText).ToList()
+                            : finding.Recommendations;
+
                         findingNarratives[finding.FindingCode] = new FindingNarrativeDto
                         {
                             WhyFound = !string.IsNullOrWhiteSpace(fNarrative.WhyFound) && !ContainsProhibitedContent(fNarrative.WhyFound) && IsFactuallyGrounded(fNarrative.WhyFound, ctx)
@@ -105,7 +133,8 @@ public static class ReportQualityGate
                             WhyItMatters = !string.IsNullOrWhiteSpace(fNarrative.WhyItMatters) && !ContainsProhibitedContent(fNarrative.WhyItMatters) && IsFactuallyGrounded(fNarrative.WhyItMatters, ctx)
                                 ? SanitizeText(fNarrative.WhyItMatters) : finding.WhyItMatters,
                             Recommendation = !string.IsNullOrWhiteSpace(fNarrative.Recommendation) && !ContainsProhibitedContent(fNarrative.Recommendation) && IsFactuallyGrounded(fNarrative.Recommendation, ctx)
-                                ? SanitizeText(fNarrative.Recommendation) : finding.Recommendation
+                                ? SanitizeText(fNarrative.Recommendation) : finding.Recommendation,
+                            Recommendations = recList.Count > 0 ? recList : finding.Recommendations
                         };
                     }
                     else
@@ -114,7 +143,8 @@ public static class ReportQualityGate
                         {
                             WhyFound = finding.WhyFound,
                             WhyItMatters = finding.WhyItMatters,
-                            Recommendation = finding.Recommendation
+                            Recommendation = finding.Recommendation,
+                            Recommendations = finding.Recommendations
                         };
                     }
                 }
@@ -148,8 +178,8 @@ public static class ReportQualityGate
             var whyNow = (actNarrative != null && !string.IsNullOrWhiteSpace(actNarrative.WhyNow) && !ContainsProhibitedContent(actNarrative.WhyNow) && IsFactuallyGrounded(actNarrative.WhyNow, ctx))
                 ? SanitizeText(actNarrative.WhyNow) : action.WhyNow;
 
-            var expectedResult = (actNarrative != null && !string.IsNullOrWhiteSpace(actNarrative.ExpectedResult) && !ContainsProhibitedContent(actNarrative.ExpectedResult) && IsFactuallyGrounded(actNarrative.ExpectedResult, ctx))
-                ? SanitizeText(actNarrative.ExpectedResult) : action.ExpectedResult;
+            // Invariant P0: ExpectedResult is canonical legal deliverable and protected against LLM semantic distortion
+            var expectedResult = action.ExpectedResult;
 
             var item = new ActionNarrativeItemDto
             {
@@ -179,7 +209,7 @@ public static class ReportQualityGate
     }
 
     private static readonly Regex InventedDepartureRegex = new(@"(разработчик[а-я]*.*(покинул[а-я]*|ушел|ушл[а-я]*|уволил[а-я]*|бросил[а-я]*|уход[а-я]*)|уход[а-я]*.*разработчик[а-я]*)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly Regex ExtremeGuaranteeRegex = new(@"((институциональн[а-я]*\s+)?инвестор[а-я]*\s+(откажут[а-я]*|не\s+войдут|отвергнут[а-я]*|заблокируют)|гарантированн[а-я]*\s+отказ\s+инвестор[а-я]*|100%\s+срыв)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex ExtremeGuaranteeRegex = new(@"((институциональн[а-я]*\s+)?инвестор[а-я]*\s+(откажут[а-я]*|не\s+войдут|отвергнут[а-я]*|заблокируют|приостанов[а-я]*|откаж[а-я]*)|гарантированн[а-я]*\s+отказ\s+инвестор[а-я]*|100%\s+срыв)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex AbsoluteAbsenceRegex = new(@"((никогда\s+не\s+(существовал[а-я]*|заключал[а-я]*|подписывал[а-я]*|составлял[а-я]*))|акт[а-я]*.*(вовсе|полностью)\s+отсутствуют|договор[а-я]*.*никогда\s+не\s+составлялись)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex InventedDisputeMotiveRegex = new(@"(конфликт[а-я]*.*из-за\s+(денег|невыплат[а-я]*|гонорар[а-я]*)|спор[а-я]*\s+из-за\s+оплат[а-я]*)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex DefinitiveNegativeOnUnknownRegex = new(@"(точно\s+отсутствуют|достоверно\s+не\s+ведется|гарантированно\s+нет)", RegexOptions.Compiled | RegexOptions.IgnoreCase);

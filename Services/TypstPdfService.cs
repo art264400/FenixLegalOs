@@ -81,6 +81,8 @@ public class TypstPdfService
                             if (!string.IsNullOrWhiteSpace(fNarrative.WhyFound)) f.WhyFound = fNarrative.WhyFound;
                             if (!string.IsNullOrWhiteSpace(fNarrative.WhyItMatters)) f.WhyItMatters = fNarrative.WhyItMatters;
                             if (!string.IsNullOrWhiteSpace(fNarrative.Recommendation)) f.Recommendation = fNarrative.Recommendation;
+                            if (fNarrative.Recommendations != null && fNarrative.Recommendations.Count > 0)
+                                f.Recommendations = fNarrative.Recommendations;
                         }
                     }
                 }
@@ -360,7 +362,7 @@ public class TypstPdfService
         {
             sb.AppendLine(@"
 #v(0.4cm)
-#text(font: serif, size: 11pt, weight: ""bold"", fill: rgb(""#E5C07B""))[КЛЮЧЕВЫЕ ФАКТОРЫ ТЕКУЩЕЙ ОЦЕНКИ]
+#text(font: serif, size: 11pt, weight: ""bold"", fill: rgb(""#E5C07B""))[ЗОНЫ, КОТОРЫЕ СИЛЬНЕЕ ВСЕГО СНИЖАЮТ ОБЩУЮ ОЦЕНКУ]
 #v(0.2cm)
 #grid(
   columns: (" + string.Join(", ", Enumerable.Repeat("1fr", topDriverCards.Count)) + @"),
@@ -410,7 +412,7 @@ public class TypstPdfService
         var fMap = ctx.Profile.KeyFacts.ToDictionary(f => f.Key, f => f, StringComparer.OrdinalIgnoreCase);
 
         sb.AppendLine(@"
-#section-header(""" + secNum++.ToString("D2") + @""", ""ВВОДНЫЕ ДАННЫЕ И ПРОФИЛЬ ПРОЕКТА"", category: ""Контекст анализа"")
+#section-header(""" + secNum++.ToString("D2") + @""", ""КАК СЕЙЧАС УСТРОЕН ПРОЕКТ"", category: ""Контекст анализа"")
 #text(font: sans, size: 8.5pt, fill: rgb(""#94A3B8""))[Факты зафиксированы на основе ваших ответов и определяют контекст юридической оценки.]
 #v(0.4cm)
 
@@ -482,37 +484,12 @@ public class TypstPdfService
 
 #v(0.4cm)
 #card(fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), inset: 13pt)[
-  #text(font: sans, size: 8pt, fill: rgb(""#94A3B8""), tracking: 1.2pt, weight: ""medium"")[СИНТЕЗ ТЕКУЩЕЙ КОНФИГУРАЦИИ]
+  #text(font: sans, size: 8pt, fill: rgb(""#94A3B8""), tracking: 1.2pt, weight: ""medium"")[ТЕКУЩАЯ КОНФИГУРАЦИЯ ПРОЕКТА]
   #v(4pt)
   #text(font: serif, size: 9.5pt, fill: rgb(""#E2E8F0""), style: ""italic"")[" + EscapeTypst(ctx.Profile.ConfigurationNarrative) + @"]
 ]
 #pagebreak()
 ");
-
-        // =========================================================================
-        // PRECOMPUTE DYNAMIC PAGE NUMBERING FOR 8-ZONE MAP & NAVIGATION
-        // =========================================================================
-        var pageMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        int curPage = 7; // Sections 01..06 occupy pages 1..6
-
-        foreach (var focus in ctx.FocusModules)
-        {
-            pageMap[focus.SectionId] = curPage;
-            curPage += 1;
-        }
-
-        int compactPage = curPage;
-        if (ctx.CompactModules.Count > 0 || ctx.NotApplicableModules.Count > 0)
-        {
-            curPage += 1;
-        }
-
-        int invPage = curPage;
-        if (ctx.InvestmentReadiness != null && ctx.InvestmentReadiness.IsApplicable)
-        {
-            pageMap["investment"] = invPage;
-            curPage += 1;
-        }
 
         // =========================================================================
         // SECTION 03: Executive Conclusion (Итоговый вывод)
@@ -575,7 +552,7 @@ public class TypstPdfService
   [#text(font: sans, size: 8pt, weight: ""bold"", fill: rgb(""#94A3B8""))[УРОВЕНЬ РИСКА]],
   [#text(font: sans, size: 8pt, weight: ""bold"", fill: rgb(""#94A3B8""))[ПРИОРИТЕТ]],
 ");
-            foreach (var r in allCriticalBlockers.Take(8))
+            foreach (var r in allCriticalBlockers)
             {
                 var fColor = r.Severity is RiskSeverity.Blocker or RiskSeverity.Critical ? "#F87171" : "#FB923C";
                 var sevLabel = r.Severity switch
@@ -667,8 +644,6 @@ public class TypstPdfService
         int cardNum = 1;
         foreach (var card in ctx.ModuleCards)
         {
-            var isDetailed = card.RenderMode == ReportRenderMode.Focus ||
-                             (card.SectionId.Equals("investment", StringComparison.OrdinalIgnoreCase) && card.RenderMode != ReportRenderMode.NotApplicable);
             var isNa = card.RenderMode == ReportRenderMode.NotApplicable;
 
             var scoreText = isNa ? "—" : $"{card.Score ?? 0}";
@@ -682,17 +657,16 @@ public class TypstPdfService
             }
             else if (card.RenderMode == ReportRenderMode.Focus)
             {
-                var targetP = pageMap.GetValueOrDefault(card.SectionId, 7);
-                navLinkText = $"#text(font: sans, size: 6.5pt, weight: \"bold\", fill: rgb(\"#38BDF8\"))[Подробный разбор — стр. {targetP}]";
+                var labelName = $"sec-{card.SectionId.ToLowerInvariant()}";
+                navLinkText = $"#link(<{labelName}>)[#text(font: sans, size: 6.5pt, weight: \"bold\", fill: rgb(\"#38BDF8\"))[Разбор — стр. #context counter(page).at(<{labelName}>).first()]]";
             }
-            else if (card.SectionId.Equals("investment", StringComparison.OrdinalIgnoreCase))
+            else if (card.SectionId.Equals("investment", StringComparison.OrdinalIgnoreCase) && ctx.InvestmentReadiness != null && ctx.InvestmentReadiness.IsApplicable)
             {
-                var targetP = pageMap.GetValueOrDefault("investment", compactPage + 1);
-                navLinkText = $"#text(font: sans, size: 6.5pt, weight: \"bold\", fill: rgb(\"#38BDF8\"))[Инвест-срез — стр. {targetP}]";
+                navLinkText = "#link(<sec-investment>)[#text(font: sans, size: 6.5pt, weight: \"bold\", fill: rgb(\"#38BDF8\"))[Инвест-срез — стр. #context counter(page).at(<sec-investment>).first()]]";
             }
             else
             {
-                navLinkText = $"#text(font: sans, size: 6.5pt, fill: rgb(\"#64748B\"))[Краткий обзор — стр. {compactPage}]";
+                navLinkText = "#link(<sec-compact>)[#text(font: sans, size: 6.5pt, fill: rgb(\"#64748B\"))[Кратко — стр. #context counter(page).at(<sec-compact>).first()]]";
             }
 
             sb.AppendLine($@"
@@ -740,7 +714,7 @@ public class TypstPdfService
   columns: (1fr, auto),
   align: horizon,
   [
-    #section-header(""" + secNum++.ToString("D2") + @""", """ + EscapeTypst(focus.Title.ToUpperInvariant()) + @""", category: ""Глубокий анализ зоны"")
+    #section-header(""" + secNum++.ToString("D2") + @""", """ + EscapeTypst(focus.Title.ToUpperInvariant()) + @""", category: ""Глубокий анализ зоны"") <sec-" + focus.SectionId.ToLowerInvariant() + @">
   ],
   [#nav-marker()]
 )
@@ -762,13 +736,10 @@ public class TypstPdfService
 ");
             if (focus.Findings.Count > 0)
             {
-                var fullFindings = focus.Findings.Take(2).ToList();
-                var remainingFindings = focus.Findings.Skip(2).ToList();
-
-                sb.AppendLine(@"#text(font: serif, size: 11pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[КЛЮЧЕВЫЕ РИСКИ]");
+                sb.AppendLine(@"#text(font: serif, size: 11pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[ВЫЯВЛЕННЫЕ РИСКИ И РЕКОМЕНДАЦИИ]");
                 sb.AppendLine(@"#v(0.2cm)");
 
-                foreach (var finding in fullFindings)
+                foreach (var finding in focus.Findings)
                 {
                     var fColor = finding.Severity is RiskSeverity.Critical or RiskSeverity.Blocker ? "#F87171" : "#FB923C";
                     sb.AppendLine($@"
@@ -782,11 +753,20 @@ public class TypstPdfService
     [#badge(""{finding.SeverityLabel}"", stroke: rgb(""{fColor}""), text-color: rgb(""{fColor}""))]
   )
   #v(5pt)
-  #text(font: sans, size: 8pt, fill: rgb(""#94A3B8""))[*Почему выявлено:* {EscapeTypst(finding.WhyFound)}]
-  #v(3pt)
-  #text(font: sans, size: 8pt, fill: rgb(""#CBD5E1""))[*Почему важно:* {EscapeTypst(finding.WhyItMatters)}]
-  #v(3pt)
-  #text(font: sans, size: 8pt, fill: rgb(""#E5C07B""))[*Что рекомендуется сделать:* {EscapeTypst(finding.Recommendation)}]
+  #text(font: sans, size: 7.5pt, weight: ""bold"", fill: rgb(""#94A3B8""))[ЧТО ВЫЯВЛЕНО]
+  #v(2pt)
+  #text(font: sans, size: 8pt, fill: rgb(""#E2E8F0""))[{EscapeTypst(finding.WhyFound)}]
+  #v(4pt)
+  #text(font: sans, size: 7.5pt, weight: ""bold"", fill: rgb(""#38BDF8""))[ПОЧЕМУ ЭТО ВАЖНО]
+  #v(2pt)
+  #text(font: sans, size: 8pt, fill: rgb(""#E2E8F0""))[{EscapeTypst(finding.WhyItMatters)}]
+  #v(4pt)
+  #text(font: sans, size: 7.5pt, weight: ""bold"", fill: rgb(""#E5C07B""))[ЧТО РЕКОМЕНДУЕТСЯ СДЕЛАТЬ]
+  #v(2pt)
+  {(finding.Recommendations != null && finding.Recommendations.Count > 0
+      ? string.Join("\n#v(3pt)\n", finding.Recommendations.Select((step, index) =>
+          $"  #grid(columns: (auto, 1fr), gutter: 5pt, align: top, [#text(font: sans, size: 7.5pt, weight: \"bold\", fill: rgb(\"#E5C07B\"))[{index + 1}.]], [#text(font: sans, size: 8pt, fill: rgb(\"#E2E8F0\"))[{EscapeTypst(step)}]])"))
+      : $"#text(font: sans, size: 8pt, fill: rgb(\"#E2E8F0\"))[{EscapeTypst(finding.Recommendation)}]")}
   #v(6pt)
   #line(length: 100%, stroke: 0.5pt + rgb(""#1E2D4A""))
   #v(4pt)
@@ -798,34 +778,6 @@ public class TypstPdfService
 ]
 #v(0.2cm)
 ");
-                }
-
-                if (remainingFindings.Count > 0)
-                {
-                    sb.AppendLine(@"#v(0.1cm)");
-                    sb.AppendLine(@"#text(font: serif, size: 10pt, weight: ""bold"", fill: rgb(""#E5C07B""))[ДРУГИЕ ВЫЯВЛЕННЫЕ РИСКИ]");
-                    sb.AppendLine(@"#v(0.15cm)");
-
-                    foreach (var finding in remainingFindings)
-                    {
-                        var fColor = finding.Severity is RiskSeverity.Critical or RiskSeverity.Blocker ? "#F87171" : "#FB923C";
-                        sb.AppendLine($@"
-#card(fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), inset: 9pt)[
-  #grid(
-    columns: (auto, 1fr),
-    gutter: 8pt,
-    align: horizon,
-    [#badge(""{finding.SeverityLabel}"", stroke: rgb(""{fColor}""), text-color: rgb(""{fColor}""))],
-    [#text(font: sans, size: 8.5pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[{EscapeTypst(finding.Title)}]]
-  )
-  #v(3pt)
-  #text(font: sans, size: 7.5pt, fill: rgb(""#94A3B8""))[{EscapeTypst(finding.WhyFound)}]
-  #v(2pt)
-  #text(font: sans, size: 7.5pt, fill: rgb(""#E5C07B""))[→ {EscapeTypst(finding.Recommendation)}]
-]
-#v(0.15cm)
-");
-                    }
                 }
             }
             else
@@ -917,7 +869,7 @@ public class TypstPdfService
         if (ctx.CompactModules.Count > 0 || ctx.NotApplicableModules.Count > 0)
         {
             sb.AppendLine(@"
-#section-header(""" + secNum++.ToString("D2") + @""", ""ОСТАЛЬНЫЕ НАПРАВЛЕНИЯ (КОМПАКТНО)"", category: ""Обзорный срез"")
+#section-header(""" + secNum++.ToString("D2") + @""", ""ОСТАЛЬНЫЕ НАПРАВЛЕНИЯ (КОМПАКТНО)"", category: ""Обзорный срез"") <sec-compact>
 #text(font: sans, size: 8.5pt, fill: rgb(""#94A3B8""))[Короткая расшифровка оценок по направлениям, не вошедшим в основной фокус отчета, и неприменимым блокам.]
 #v(0.4cm)
 
@@ -937,7 +889,33 @@ public class TypstPdfService
                 sb.AppendLine("    #v(2pt)");
                 sb.AppendLine($"    #text(font: sans, size: 7.5pt, fill: rgb(\"{sc}\"))[{EscapeTypst(comp.StatusText)}]");
                 sb.AppendLine("    #v(4pt)");
-                sb.AppendLine($"    #text(font: sans, size: 8pt, fill: rgb(\"#E2E8F0\"))[{EscapeTypst(comp.Summary)}]");
+                if (comp.NegativePoints.Count > 0)
+                {
+                    sb.AppendLine($"    #text(font: sans, size: 7pt, weight: \"bold\", fill: rgb(\"#FBBF24\"))[ЧТО ТРЕБУЕТ ВНИМАНИЯ:]");
+                    foreach (var np in comp.NegativePoints)
+                    {
+                        sb.AppendLine($"    #text(font: sans, size: 7.5pt, fill: rgb(\"#E2E8F0\"))[· {EscapeTypst(np)}]");
+                    }
+                    sb.AppendLine("    #v(2pt)");
+                }
+                if (comp.PositivePoints.Count > 0)
+                {
+                    sb.AppendLine($"    #text(font: sans, size: 7pt, weight: \"bold\", fill: rgb(\"#34D399\"))[ЧТО УЖЕ ВЫСТРОЕНО:]");
+                    foreach (var pp in comp.PositivePoints)
+                    {
+                        sb.AppendLine($"    #text(font: sans, size: 7.5pt, fill: rgb(\"#E2E8F0\"))[· {EscapeTypst(pp)}]");
+                    }
+                    sb.AppendLine("    #v(2pt)");
+                }
+                if (!string.IsNullOrWhiteSpace(comp.NextStep))
+                {
+                    sb.AppendLine($"    #text(font: sans, size: 7pt, weight: \"bold\", fill: rgb(\"#38BDF8\"))[СЛЕДУЮЩИЙ ШАГ:]");
+                    sb.AppendLine($"    #text(font: sans, size: 7.5pt, fill: rgb(\"#CBD5E1\"))[{EscapeTypst(comp.NextStep)}]");
+                }
+                else
+                {
+                    sb.AppendLine($"    #text(font: sans, size: 8pt, fill: rgb(\"#E2E8F0\"))[{EscapeTypst(comp.Summary)}]");
+                }
                 sb.AppendLine("  ],");
             }
 
@@ -968,7 +946,7 @@ public class TypstPdfService
             var invColor = GetScoreColor(inv.ReadinessScore);
 
             sb.AppendLine(@"
-#section-header(""" + secNum++.ToString("D2") + @""", ""ГОТОВНОСТЬ К ИНВЕСТИЦИЯМ"", category: ""Инвесторский срез"")
+#section-header(""" + secNum++.ToString("D2") + @""", ""ГОТОВНОСТЬ К ИНВЕСТИЦИЯМ"", category: ""Инвесторский срез"") <sec-investment>
 #text(font: sans, size: 8.5pt, fill: rgb(""#94A3B8""))[Специальный аналитический срез готовности компании к инвестиционному раунду и проверке Due Diligence.]
 #v(0.4cm)
 
@@ -1041,7 +1019,7 @@ public class TypstPdfService
         // SECTION N+3: Unified Action Plan (Project Roadmap)
         // =========================================================================
         sb.AppendLine(@"
-#section-header(""" + secNum++.ToString("D2") + @""", ""ЕДИНЫЙ ПЛАН ДЕЙСТВИЙ · ДОРОЖНАЯ КАРТА"", category: ""Исполнительный план"")
+#section-header(""" + secNum++.ToString("D2") + @""", ""ЕДИНЫЙ ПЛАН ДЕЙСТВИЙ · ДОРОЖНАЯ КАРТА"", category: ""Исполнительный план"") <sec-action-plan>
 #text(font: sans, size: 8.5pt, fill: rgb(""#94A3B8""))[Порядок шагов выстроен по реальному влиянию на защиту бизнеса и сроки заключения сделок.]
 #v(0.4cm)
 ");

@@ -347,26 +347,52 @@
     function renderAiColumn(colAi) {
       if (currentAiMemo) {
         const narr = currentAiMemo.narratives || {};
+        const isReady = currentAiMemo.isReady !== false && narr.isReady !== false;
+        const failedBlocks = currentAiMemo.failedBlocks || narr.failedBlocks || [];
         const rootCausesMap = narr.rootCauseSummaries || narr.topRiskSummaries || {};
         const topRisksList = Object.keys(rootCausesMap).length ? Object.keys(rootCausesMap).map(function(k) {
           return '<li style="margin-bottom:6px"><code style="font-size:11px;font-weight:700">' + esc(k) + '</code>: ' + esc(rootCausesMap[k]) + '</li>';
         }).join('') : '';
 
+        const readyBadge = isReady
+          ? '<span class="badge" style="background:rgba(52,211,153,0.15);color:#34D399;font-weight:700;font-size:11px">✓ Все блоки LLM готовы</span>'
+          : '<span class="badge" style="background:rgba(248,113,113,0.15);color:#F87171;font-weight:700;font-size:11px">⚠ Не все блоки LLM ответили</span>';
+
+        const downloadButtonAttr = isReady
+          ? 'style="padding:4px 10px;font-size:11.5px;background:#38BDF8;color:#060A13;font-weight:700;cursor:pointer"'
+          : 'disabled title="Отчёт заблокирован: дождитесь успешного ответа всех блоков LLM" style="padding:4px 10px;font-size:11.5px;background:#334155;color:#94A3B8;cursor:not-allowed;opacity:0.6"';
+
+        const warningBanner = !isReady
+          ? '<div style="background:rgba(239,68,68,0.1);border:1px solid #EF4444;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#FCA5A5">' +
+              '<b>⛔ Скачивание отчёта заблокировано:</b> нейросеть не ответила или вернула ошибку для блоков:<br>' +
+              '<ul style="margin:4px 0 0 16px;padding:0">' + failedBlocks.map(function(b) { return '<li>' + esc(b) + '</li>'; }).join('') + '</ul>' +
+            '</div>'
+          : '';
+
+        // Prepare chunked inputs
+        const chunks = currentAiMemo.inputPayload || {};
+        const sharedCtx = chunks.sharedProjectContext || {};
+        const moduleReqs = chunks.moduleRequests || {};
+        const actionReqs = chunks.actionBatchRequests || [];
+        const execReq = chunks.executiveRequest || {};
+
         colAi.innerHTML =
           '<div class="tb-col-header" style="flex-wrap:wrap;gap:8px">' +
             '<h3>🤖 3. Полный отчёт</h3>' +
             '<div style="display:flex;gap:6px;align-items:center">' +
-              '<button class="btn btn-sm" id="tb-download-pdf-btn" style="padding:4px 10px;font-size:11.5px;background:#38BDF8;color:#060A13;font-weight:700">📥 Скачать PDF</button>' +
+              '<button class="btn btn-sm" id="tb-download-pdf-btn" ' + downloadButtonAttr + '>📥 Скачать PDF</button>' +
               '<button class="btn btn-secondary btn-sm" id="tb-regen-ai-btn" style="padding:4px 10px;font-size:11.5px">🔄 Перегенерировать</button>' +
             '</div>' +
           '</div>' +
           '<div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--ink-soft);background:var(--bg-elev);padding:6px 12px;border-radius:6px;margin-bottom:10px">' +
             '<span>Модель: <b style="color:var(--accent)">' + esc(currentAiMemo.model) + '</b></span>' +
+            readyBadge +
             '<span>Время: <b style="color:var(--positive)">' + (currentAiMemo.durationMs / 1000).toFixed(2) + ' сек</b></span>' +
           '</div>' +
-          '<div class="tb-ai-tabs" style="display:flex;gap:6px;margin-bottom:10px">' +
+          warningBanner +
+          '<div class="tb-ai-tabs" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">' +
             '<button class="btn btn-sm tb-tab-btn active" id="btn-tab-synthesis" style="font-size:11.5px;padding:4px 10px">📝 Текстовый синтез</button>' +
-            '<button class="btn btn-secondary btn-sm tb-tab-btn" id="btn-tab-input-json" style="font-size:11.5px;padding:4px 10px">🔍 Input JSON (В нейросеть)</button>' +
+            '<button class="btn btn-secondary btn-sm tb-tab-btn" id="btn-tab-input-json" style="font-size:11.5px;padding:4px 10px">🔍 Input Chunks (' + (Object.keys(moduleReqs).length + actionReqs.length + 2) + ' запросов)</button>' +
             '<button class="btn btn-secondary btn-sm tb-tab-btn" id="btn-tab-output-json" style="font-size:11.5px;padding:4px 10px">📤 Output JSON (Из нейросети)</button>' +
           '</div>' +
           '<div id="tb-ai-view-synthesis" class="ai-memo-body" style="background:var(--bg-elev);border:1px solid var(--line);border-radius:8px;padding:16px;overflow-y:auto;max-height:640px;font-size:13px;line-height:1.55">' +
@@ -376,7 +402,16 @@
             (narr.fenixLawRecommendation ? '<div><h4 style="color:var(--positive);font-size:14px;margin-bottom:6px">⚖️ Заключение Fenix Law:</h4><p style="color:var(--ink-soft)">' + esc(narr.fenixLawRecommendation) + '</p></div>' : '') +
           '</div>' +
           '<div id="tb-ai-view-input-json" style="display:none;background:var(--bg-elev);border:1px solid var(--line);border-radius:8px;padding:12px;overflow-y:auto;max-height:640px">' +
-            '<pre style="color:#a5d6ff;font-size:11.5px;margin:0;font-family:monospace;white-space:pre-wrap">' + esc(JSON.stringify(currentAiMemo.inputPayload, null, 2)) + '</pre>' +
+            '<div style="margin-bottom:10px;display:flex;align-items:center;gap:8px">' +
+              '<label style="font-size:11.5px;color:var(--ink-soft);font-weight:600">Выберите чанк запроса в LLM:</label>' +
+              '<select id="tb-input-chunk-select" style="background:var(--bg-card);color:#FFF;border:1px solid var(--line);padding:4px 8px;border-radius:4px;font-size:11.5px">' +
+                '<option value="shared">1. Shared Project Context</option>' +
+                Object.keys(moduleReqs).map(function(sec) { return '<option value="mod_' + sec + '">2. Module: ' + esc(sec) + '</option>'; }).join('') +
+                actionReqs.map(function(b) { return '<option value="act_' + b.batchNumber + '">3. Action Batch #' + b.batchNumber + '</option>'; }).join('') +
+                '<option value="exec">4. Executive Synthesis Request</option>' +
+              '</select>' +
+            '</div>' +
+            '<pre id="tb-input-chunk-pre" style="color:#a5d6ff;font-size:11.5px;margin:0;font-family:monospace;white-space:pre-wrap">' + esc(JSON.stringify(sharedCtx, null, 2)) + '</pre>' +
           '</div>' +
           '<div id="tb-ai-view-output-json" style="display:none;background:var(--bg-elev);border:1px solid var(--line);border-radius:8px;padding:12px;overflow-y:auto;max-height:640px">' +
             '<pre style="color:#7ee787;font-size:11.5px;margin:0;font-family:monospace;white-space:pre-wrap">' + esc(JSON.stringify(currentAiMemo.narratives, null, 2)) + '</pre>' +
@@ -384,7 +419,7 @@
 
         document.getElementById('tb-regen-ai-btn').addEventListener('click', triggerAiGeneration);
         const pdfBtn = document.getElementById('tb-download-pdf-btn');
-        if (pdfBtn) pdfBtn.addEventListener('click', downloadTestBenchPdf);
+        if (pdfBtn && isReady) pdfBtn.addEventListener('click', downloadTestBenchPdf);
 
         const tabSyn = document.getElementById('btn-tab-synthesis');
         const tabIn = document.getElementById('btn-tab-input-json');
@@ -411,6 +446,28 @@
           tabIn.className = 'btn btn-secondary btn-sm tb-tab-btn';
           vOut.style.display = 'block'; vSyn.style.display = 'none'; vIn.style.display = 'none';
         });
+
+        const chunkSelect = document.getElementById('tb-input-chunk-select');
+        const chunkPre = document.getElementById('tb-input-chunk-pre');
+        if (chunkSelect && chunkPre) {
+          chunkSelect.addEventListener('change', function() {
+            const val = chunkSelect.value;
+            let displayData = sharedCtx;
+            if (val === 'shared') {
+              displayData = sharedCtx;
+            } else if (val.startsWith('mod_')) {
+              const sec = val.replace('mod_', '');
+              displayData = moduleReqs[sec] || {};
+            } else if (val.startsWith('act_')) {
+              const bNum = parseInt(val.replace('act_', ''), 10);
+              const b = actionReqs.find(function(x) { return x.batchNumber === bNum; });
+              displayData = b ? b.request : {};
+            } else if (val === 'exec') {
+              displayData = execReq;
+            }
+            chunkPre.textContent = JSON.stringify(displayData, null, 2);
+          });
+        }
       } else {
         colAi.innerHTML =
           '<div class="tb-col-header">' +
@@ -418,19 +475,21 @@
             '<span class="badge" style="background:rgba(255,255,255,0.08);color:var(--ink-soft)">Ожидание</span>' +
           '</div>' +
           '<div style="text-align:center;padding:30px 20px;display:flex;flex-direction:column;align-items:center;gap:12px">' +
-            '<p style="color:var(--ink-soft);font-size:13px;max-width:280px">Сгенерируйте отчёт с нейросетевым синтезом или скачайте типографический PDF сразу.</p>' +
+            '<p style="color:var(--ink-soft);font-size:13px;max-width:280px">Для формирования и скачивания отчёта запустите генерацию всех блоков через нейросеть.</p>' +
             '<button class="btn" id="tb-gen-ai-btn" style="padding:10px 20px;font-size:13.5px">⚡ Сгенерировать отчёт (LLM)</button>' +
-            '<button class="btn btn-secondary" id="tb-download-direct-pdf-btn" style="padding:9px 18px;font-size:12.5px">📥 Скачать PDF-отчёт напрямую</button>' +
+            '<button class="btn btn-secondary" disabled title="Сначала сгенерируйте все блоки отчёта" style="padding:9px 18px;font-size:12.5px;cursor:not-allowed;opacity:0.5">📥 Скачать PDF (ожидает генерации)</button>' +
           '</div>';
 
         document.getElementById('tb-gen-ai-btn').addEventListener('click', triggerAiGeneration);
-        const directPdfBtn = document.getElementById('tb-download-direct-pdf-btn');
-        if (directPdfBtn) directPdfBtn.addEventListener('click', downloadTestBenchPdf);
       }
     }
 
     async function downloadTestBenchPdf() {
-      const btn = document.getElementById('tb-download-pdf-btn') || document.getElementById('tb-download-direct-pdf-btn');
+      if (!currentAiMemo || !currentAiMemo.isReady) {
+        alert('Отчёт не может быть скачан: не все блоки LLM готовы. Запустите генерацию.');
+        return;
+      }
+      const btn = document.getElementById('tb-download-pdf-btn');
       const originalText = btn ? btn.innerHTML : '📥 Скачать PDF';
       if (btn) {
         btn.disabled = true;
@@ -446,7 +505,10 @@
             narratives: currentAiMemo ? currentAiMemo.narratives : null
           })
         });
-        if (!res.ok) throw new Error('Ошибка генерации PDF: ' + res.status);
+        if (!res.ok) {
+          const errData = await res.json().catch(function() { return {}; });
+          throw new Error(errData.message || ('Ошибка генерации PDF: ' + res.status));
+        }
         const blob = await res.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');

@@ -27,7 +27,7 @@ public static class FactorBreakdownEvaluator
                 positiveFactors.Add(new PositiveFactorDto
                 {
                     Title = s,
-                    Category = "General",
+                    Category = InferCategoryFromTitle(s),
                     Icon = "check_circle"
                 });
             }
@@ -54,7 +54,7 @@ public static class FactorBreakdownEvaluator
                         positiveFactors.Add(new PositiveFactorDto
                         {
                             Title = dimTitle,
-                            Category = section.SectionId,
+                            Category = GetSectionCategoryRu(section.SectionId),
                             Icon = "check_circle"
                         });
                     }
@@ -208,5 +208,33 @@ public static class FactorBreakdownEvaluator
         }
 
         return false;
+    }
+
+    private static string GetSectionCategoryRu(string sectionId) => sectionId?.ToLowerInvariant() switch
+    {
+        "founders" => "Сооснователи",
+        "corporate" => "Корпоративная структура",
+        "ip" => "Интеллектуальная собственность",
+        "team" => "Команда и сотрудники",
+        "product" => "Продукт и пользователи",
+        "data" => "Данные и ИИ",
+        "contracts" => "Договоры и контрагенты",
+        "investment" => "Инвестиционная готовность",
+        _ => "Общая правовая модель"
+    };
+
+    private static string InferCategoryFromTitle(string title)
+    {
+        if (string.IsNullOrWhiteSpace(title)) return "Общая правовая модель";
+        var t = title.ToLowerInvariant();
+        if (t.Contains("основател") || t.Contains("соосновател") || t.Contains("долей") || t.Contains("доли")) return "Сооснователи";
+        if (t.Contains("юрлиц") || t.Contains("компан") || t.Contains("корпорат") || t.Contains("устав") || t.Contains("юридическ") || t.Contains("регистрац")) return "Корпоративная структура";
+        if (t.Contains("ис") || t.Contains("интеллектуал") || t.Contains("автор") || t.Contains("товарн") || t.Contains("код") || t.Contains("разработ")) return "Интеллектуальная собственность";
+        if (t.Contains("команд") || t.Contains("сотрудник") || t.Contains("работ") || t.Contains("подрядчик")) return "Команда и сотрудники";
+        if (t.Contains("продукт") || t.Contains("оферт") || t.Contains("пользовател")) return "Продукт и пользователи";
+        if (t.Contains("данн") || t.Contains("пд") || t.Contains("ии") || t.Contains("ai") || t.Contains("privacy")) return "Данные и ИИ";
+        if (t.Contains("договор") || t.Contains("контракт") || t.Contains("клиент")) return "Договоры и контрагенты";
+        if (t.Contains("инвест") || t.Contains("раунд") || t.Contains("due diligence")) return "Инвестиционная готовность";
+        return "Общая правовая модель";
     }
 }

@@ -176,13 +176,33 @@ public class SessionsControllerTests
             ["INVEST-01"] = "none"
         };
 
-        var generateBody = JsonDocument.Parse(JsonSerializer.Serialize(new { answers = fullAnswers, projectName = "AdminTestCo" })).RootElement;
+        var readyNarratives = new FenixLegalOs.Models.Report.ReportNarrativesDto
+        {
+            IsReady = true,
+            ExecutiveConclusion = "Test Memo",
+            ModuleNarratives = new Dictionary<string, FenixLegalOs.Models.Report.ModuleNarrativeDto>
+            {
+                ["sec_founders"] = new FenixLegalOs.Models.Report.ModuleNarrativeDto
+                {
+                    Summary = "Founders summary",
+                    PracticalMeaning = "Practical meaning"
+                }
+            }
+        };
+
+        var generateBody = JsonDocument.Parse(JsonSerializer.Serialize(new { answers = fullAnswers, projectName = "AdminTestCo", narratives = readyNarratives })).RootElement;
         var pdfResult = await adminCtrl.GenerateTestBenchPdf(generateBody) as FileContentResult;
 
         Assert.NotNull(pdfResult);
         Assert.Equal("application/pdf", pdfResult.ContentType);
         Assert.True(pdfResult.FileContents.Length > 1000, "PDF content must be non-empty");
         Assert.StartsWith("%PDF-", System.Text.Encoding.ASCII.GetString(pdfResult.FileContents.Take(5).ToArray()));
+
+        // Check that without ready narratives it returns BadRequest (report not ready)
+        var unreadyBody = JsonDocument.Parse(JsonSerializer.Serialize(new { answers = fullAnswers, projectName = "AdminTestCo" })).RootElement;
+        var badResult = await adminCtrl.GenerateTestBenchPdf(unreadyBody) as ObjectResult;
+        Assert.NotNull(badResult);
+        Assert.Equal(400, badResult.StatusCode);
     }
 }
 

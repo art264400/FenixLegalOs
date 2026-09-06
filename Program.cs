@@ -9,6 +9,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Register Controllers
 builder.Services.AddControllers();
+builder.Services.AddMemoryCache();
 
 // Register Services & Repositories
 builder.Services.AddSingleton<DbInitializer>();

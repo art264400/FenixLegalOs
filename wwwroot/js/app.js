@@ -293,6 +293,55 @@
             '<div class="synth-conclusion">Не просто вопросы. Системная юридическая диагностика бизнеса.</div>' +
           '</div>' +
         '</div>' +
+        '<div class="stats-section" id="stats">' +
+          '<div class="stats-header">' +
+            '<div class="stats-badge">ОТРАСЛЕВОЙ БЕНЧМАРК SLS</div>' +
+            '<h2 class="stats-title">FENIX SLS в цифрах</h2>' +
+            '<p class="stats-sub">Агрегированная статистика юридической зрелости технологических компаний на основе реальных скринингов</p>' +
+          '</div>' +
+          '<div class="stats-grid">' +
+            '<div class="stat-card">' +
+              '<div class="stat-top">' +
+                '<span class="stat-icon">🏢</span>' +
+                '<span class="stat-tag">ВЫБОРКА</span>' +
+              '</div>' +
+              '<div class="stat-value stat-value--gold" id="stat-val-count">...</div>' +
+              '<div class="stat-label">технологических компаний прошли скрининг</div>' +
+            '</div>' +
+            '<div class="stat-card">' +
+              '<div class="stat-top">' +
+                '<span class="stat-icon">🌍</span>' +
+                '<span class="stat-tag">МАСШТАБ</span>' +
+              '</div>' +
+              '<div class="stat-value"><span id="stat-val-countries">...</span> <span class="stat-unit">стран</span></div>' +
+              '<div class="stat-label">представлены в выборке диагностики</div>' +
+            '</div>' +
+            '<div class="stat-card">' +
+              '<div class="stat-top">' +
+                '<span class="stat-icon">⚖️</span>' +
+                '<span class="stat-tag">ИНДЕКС</span>' +
+              '</div>' +
+              '<div class="stat-value"><span id="stat-val-score">...</span> <span class="stat-max">/ 100</span></div>' +
+              '<div class="stat-progress"><div class="stat-progress-fill stat-progress-fill--score" id="stat-bar-score" style="width:0%"></div></div>' +
+              '<div class="stat-label">средняя юридическая готовность проектов</div>' +
+            '</div>' +
+            '<div class="stat-card">' +
+              '<div class="stat-top">' +
+                '<span class="stat-icon">🛡️</span>' +
+                '<span class="stat-tag">ФОКУС-ЗОНА</span>' +
+              '</div>' +
+              '<div class="stat-value stat-value--accent" id="stat-val-ip">...</div>' +
+              '<div class="stat-progress"><div class="stat-progress-fill stat-progress-fill--risk" id="stat-bar-ip" style="width:0%"></div></div>' +
+              '<div class="stat-label">компаний имеют существенные риски в правах на продукт</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="stats-disclaimer">' +
+            '<div class="stats-disclaimer-icon">ℹ️</div>' +
+            '<div class="stats-disclaimer-text">' +
+              '<strong>Конфиденциальность:</strong> Данные рассчитываются онлайн из базы завершенных скринингов. Статистика агрегирована и не содержит информации об отдельных компаниях.' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
         '<div class="trust-firm-section">' +
           '<div class="trust-firm-copy">' +
             '<h2>Экспертиза Fenix Law в основе системы</h2>' +
@@ -404,6 +453,26 @@
       if (p2 && currentPricing.consultationPriceKzt) {
         p2.innerHTML = currentPricing.consultationPriceKzt.toLocaleString('ru') + ' <span>₸</span>';
       }
+    });
+
+    // Загрузка актуальной статистики из БД
+    api('GET', '/api/stats/benchmark').then(function (d) {
+      if (!d) return;
+      var elCount = document.getElementById('stat-val-count');
+      var elCountries = document.getElementById('stat-val-countries');
+      var elScore = document.getElementById('stat-val-score');
+      var elIp = document.getElementById('stat-val-ip');
+      var elBarScore = document.getElementById('stat-bar-score');
+      var elBarIp = document.getElementById('stat-bar-ip');
+
+      if (elCount && d.totalScreenings !== undefined) elCount.textContent = d.totalScreenings;
+      if (elCountries && d.countriesCount !== undefined) elCountries.textContent = d.countriesCount;
+      if (elScore && d.averageScore !== undefined) elScore.textContent = d.averageScore;
+      if (elIp && d.ipRiskPercentage !== undefined) elIp.textContent = d.ipRiskPercentage + '%';
+      if (elBarScore && d.averageScore !== undefined) elBarScore.style.width = Math.min(100, Math.max(0, d.averageScore)) + '%';
+      if (elBarIp && d.ipRiskPercentage !== undefined) elBarIp.style.width = Math.min(100, Math.max(0, d.ipRiskPercentage)) + '%';
+    }).catch(function (e) {
+      console.warn('[Stats] Failed to load benchmark stats:', e);
     });
   }
 

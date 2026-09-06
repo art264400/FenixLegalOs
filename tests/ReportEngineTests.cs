@@ -985,9 +985,11 @@ public class ReportEngineTests
 
         var markup = pdfService.BuildTypstMarkup(ctx);
 
-        Assert.Contains("КЛЮЧЕВЫЕ РИСКИ", markup);
-        Assert.Contains("ДРУГИЕ ВЫЯВЛЕННЫЕ РИСКИ", markup);
+        Assert.Contains("ВЫЯВЛЕННЫЕ РИСКИ И РЕКОМЕНДАЦИИ", markup);
         Assert.Contains("Дополнительный риск 3", markup);
+        Assert.Contains("Причина 3", markup);
+        Assert.Contains("Важность 3", markup);
+        Assert.Contains("Действие 3", markup);
     }
 
     [Fact(DisplayName = "8. InvestmentReadiness_UsesSpecializedDetailedSectionWithoutDuplication")]

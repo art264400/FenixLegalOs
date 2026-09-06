@@ -145,9 +145,11 @@ public class ReportFindingCardDto
     public string WhyFound { get; set; } = string.Empty;
     public string WhyItMatters { get; set; } = string.Empty;
     public string Recommendation { get; set; } = string.Empty;
+    public List<string> Recommendations { get; set; } = new();
     public RiskPriority Priority { get; set; }
     public string PriorityLabel { get; set; } = string.Empty;
-    public string ResolutionFormat { get; set; } = "Желательно проверить с юристом";
+    public ResolutionMode ResolutionMode { get; set; } = ResolutionMode.LegalWork;
+    public string ResolutionFormat { get; set; } = "Требуется юридическая работа";
 }
 
 public class CompactModuleDto
@@ -160,6 +162,7 @@ public class CompactModuleDto
     public string Summary { get; set; } = string.Empty;
     public List<string> NegativePoints { get; set; } = new();
     public List<string> PositivePoints { get; set; } = new();
+    public string NextStep { get; set; } = string.Empty;
 }
 
 public class NotApplicableModuleDto

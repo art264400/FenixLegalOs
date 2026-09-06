@@ -39,7 +39,7 @@ public static class ActionLibrary
             ResolutionMode = ResolutionMode.LegalWork,
             DefaultPriority = RiskPriority.Now,
             SectionId = "founders",
-            BusinessReason = "Устные договоренности или фрагментарные переписки в мессенджерах не имеют обязательной юридической силы и создают прямую угрозу пересмотра долей при первом успехе компании.",
+            BusinessReason = "Устные договоренности или несистематизированные переписки сложно однозначно доказать в спорной ситуации, что создает риск разногласий по структуре владения при росте оценки компании.",
             RequiredOutcome = "Подписан юридически обязывающий документ, комплексно фиксирующий доли, порядок голосования, ограничения на продажу долей третьим лицам и ключевые обязательства сторон.",
             WhatToDo = "Подготовить проект соглашения между основателями, согласовать существенные условия и зафиксировать подписями всех участников.",
             Dependencies = new(),
@@ -53,7 +53,7 @@ public static class ActionLibrary
             ResolutionMode = ResolutionMode.LegalWork,
             DefaultPriority = RiskPriority.ThirtyDays,
             SectionId = "founders",
-            BusinessReason = "Если основатель прекратит участие на раннем этапе, сохраняя полную долю в компании (dead equity), проект станет токсичным и практически непривлекательным для венчурных инвесторов.",
+            BusinessReason = "Если основатель прекратит участие на раннем этапе, сохраняя полную долю в компании (dead equity), это заблокирует пул долей для новых партнеров и существенно осложнит переговоры с венчурными инвесторами.",
             RequiredOutcome = "В корпоративном договоре закреплен график поэтапного перехода прав на доли в зависимости от срока и вклада основателя, а также правила выкупа долей при добровольном или вынужденном выходе из проекта.",
             WhatToDo = "Включить положения о вестинге и правах выкупа долей при уходе основателя в корпоративный договор.",
             Dependencies = new() { "ACT_FOUNDER_AGREEMENT_SHA" },
@@ -128,8 +128,8 @@ public static class ActionLibrary
             DefaultPriority = RiskPriority.Now,
             SectionId = "corporate",
             BusinessReason = "Расхождение между зарегистрированным составом участников и фактическими договоренностями является прямым стоп-фактором при юридической проверке инвестором (Due Diligence).",
-            RequiredOutcome = "Официальный реестр участников и учредительные документы приведены в полное соответствие с фактическим согласованным распределением долей.",
-            WhatToDo = "Сопоставить реестр участников со всеми соглашениями, провести необходимые корпоративные действия и внести изменения в государственный реестр.",
+            RequiredOutcome = "Сформирована единая актуальная таблица капитала (Cap Table), и корпоративные документы согласованы с фактическим распределением долей и опционных обязательств.",
+            WhatToDo = "Свести все соглашения, опционы и инвестиционные обязательства в единую таблицу капитала (Cap Table) и при необходимости оформить соответствующие корпоративные решения.",
             Dependencies = new(),
             SupportedFindingCodes = new() { "COR_OWNERSHIP_DISPUTE", "COR_OWNERSHIP_MISMATCH", "COR_UNDOCUMENTED_EQUITY", "COR_CAP_TABLE_UNCLEAR", "COR_CAP_TABLE_UNRELIABLE" }
         },
@@ -247,25 +247,25 @@ public static class ActionLibrary
             ResolutionMode = ResolutionMode.LegalWork,
             DefaultPriority = RiskPriority.Now,
             SectionId = "team",
-            BusinessReason = "Работа команды и привлеченных специалистов без письменного оформления создает риски споров по оплате и юридической утраты прав на созданный ими программный код.",
+            BusinessReason = "Работа команды и привлеченных специалистов без письменного оформления создает риски споров по оплате и правовой неопределенности в отношении созданного программного кода.",
             RequiredOutcome = "Со всеми постоянными членами команды заключены официальные трудовые договоры или договоры оказания услуг с разделами о служебных произведениях.",
             WhatToDo = "Внедрить типовой пакет договоров найма и привлечения подрядчиков с обязательным положением об отчуждении IP.",
             Dependencies = new(),
-            SupportedFindingCodes = new() { "TEAM_NO_WRITTEN_CONTRACTS", "TEAM_WRITTEN_AGREEMENTS_MISSING", "TEAM_ORAL_ONLY" }
+            SupportedFindingCodes = new() { "TEAM_NO_WRITTEN_CONTRACTS", "TEAM_NO_WRITTEN_AGREEMENTS", "TEAM_WRITTEN_AGREEMENTS_MISSING", "TEAM_ORAL_ONLY", "TEAM_KEY_PERSON_UNDOCUMENTED", "TEAM_UNCLEAR_TERMS" }
         },
         new()
         {
             ActionId = "ACT_TEAM_IP_TRANSFER_ACTS",
-            Title = "Внедрить процедуру регулярного подписания актов передачи прав на служебные произведения",
-            ActionType = "PROCESS_SETUP",
-            ResolutionMode = ResolutionMode.InternalAction,
-            DefaultPriority = RiskPriority.ThirtyDays,
+            Title = "Оформить переход прав на служебные произведения и разработки команды",
+            ActionType = "LEGAL_DRAFTING",
+            ResolutionMode = ResolutionMode.LegalWork,
+            DefaultPriority = RiskPriority.Now,
             SectionId = "team",
-            BusinessReason = "Одного трудового договора недостаточно: создание конкретных модулей должно подтверждаться служебными заданиями и актами приема-передачи результатов.",
+            BusinessReason = "Для подтверждения перехода исключительных прав на результаты интеллектуальной деятельности необходимо оформление актов приема-передачи или служебных заданий.",
             RequiredOutcome = "В компании внедрен регулярный регламент оформления служебных заданий и ежемесячных актов сдачи-приемки созданного кода и дизайна.",
-            WhatToDo = "Настроить шаблон служебного задания и внедрить ежемесячное подписание актов с разработчиками.",
+            WhatToDo = "Настроить шаблон служебного задания и подписать закрывающие акты с разработчиками.",
             Dependencies = new() { "ACT_TEAM_CONTRACTS_FORMALIZATION" },
-            SupportedFindingCodes = new() { "TEAM_IP_TRANSFER_GAP", "TEAM_IP_CREATION_UNRECORDED" }
+            SupportedFindingCodes = new() { "TEAM_RIGHTS_TO_WORK_GAP", "TEAM_IP_TRANSFER_GAP", "TEAM_IP_CREATION_UNRECORDED" }
         },
         new()
         {
@@ -275,11 +275,11 @@ public static class ActionLibrary
             ResolutionMode = ResolutionMode.LegalReview,
             DefaultPriority = RiskPriority.ThirtyDays,
             SectionId = "team",
-            BusinessReason = "Признание отношений с самозанятыми/ИП трудовыми влечет доначисление налогов, социальных платежей и крупные административные штрафы.",
+            BusinessReason = "Признание отношений с самозанятыми/ИП трудовыми влечет доначисление налогов, социальных платежей и административные штрафы.",
             RequiredOutcome = "Из договоров с контрагентами исключены признаки трудового распорядка (фиксированные часы работы, подчинение графику, постоянное рабочее место).",
             WhatToDo = "Провести аудит договоров с внешними специалистами и скорректировать формулировки на предмет отсутствия трудовых признаков.",
             Dependencies = new(),
-            SupportedFindingCodes = new() { "TEAM_EMPLOYMENT_RECLASSIFICATION", "TEAM_LABOR_RECLASSIFICATION_RISK" }
+            SupportedFindingCodes = new() { "TEAM_WORK_FORMAT_MISMATCH", "TEAM_EMPLOYMENT_RECLASSIFICATION", "TEAM_LABOR_RECLASSIFICATION_RISK" }
         },
         new()
         {
@@ -293,7 +293,49 @@ public static class ActionLibrary
             RequiredOutcome = "Утверждено официальное положение об опционной программе (Option Pool / Phantom Shares) с прозрачными правилами вестинга, клиффа и условий исполнения.",
             WhatToDo = "Разработать опционную документацию и согласовать размер пула с текущими участниками компании.",
             Dependencies = new() { "ACT_FOUNDER_AGREEMENT_SHA" },
-            SupportedFindingCodes = new() { "TEAM_ORAL_OPTION_PROMISES", "TEAM_OPTION_AMBIGUITY", "TEAM_ESOP_UNSTRUCTURED" }
+            SupportedFindingCodes = new() { "TEAM_ORAL_OPTION_PROMISES", "TEAM_EQUITY_PROMISE", "TEAM_OPTION_AMBIGUITY", "TEAM_ESOP_UNSTRUCTURED" }
+        },
+        new()
+        {
+            ActionId = "ACT_TEAM_ACCESS_LIST_AUDIT",
+            Title = "Составить перечень критических информационных систем и администраторов доступов",
+            ActionType = "PROCESS_SETUP",
+            ResolutionMode = ResolutionMode.InternalAction,
+            DefaultPriority = RiskPriority.ThirtyDays,
+            SectionId = "team",
+            BusinessReason = "Отсутствие единого учета доступов к коду, серверам и базам данных повышает риск сохранения несанкционированных доступов и зависимости от отдельных лиц.",
+            RequiredOutcome = "Сформирован и утвержден актуальный перечень критических систем с минимально необходимыми уровнями доступа и ответственными администраторами.",
+            WhatToDo = "Провести ревизию всех используемых систем (Git, Cloud, DB, CRM), составить реестр доступов и ограничить права по принципу минимальной достаточности.",
+            Dependencies = new(),
+            SupportedFindingCodes = new() { "TEAM_ACCESS_CONTROL_GAP", "TEAM_ACCESS_TOO_BROAD" }
+        },
+        new()
+        {
+            ActionId = "ACT_TEAM_OFFBOARDING_CHECKLIST",
+            Title = "Сформировать регламент и чек-лист действий при уходе участников команды",
+            ActionType = "PROCESS_SETUP",
+            ResolutionMode = ResolutionMode.InternalAction,
+            DefaultPriority = RiskPriority.ThirtyDays,
+            SectionId = "team",
+            BusinessReason = "Отсутствие стандартизированного процесса ухода сотрудников и подрядчиков приводит к сохранению рабочих доступов, утере документации и риску утечки данных.",
+            RequiredOutcome = "Утвержден обязательный чек-лист ухода (отзыв доступов, передача репозиториев и оборудования, подписание закрывающих документов).",
+            WhatToDo = "Разработать внутренний регламент офбординга и назначить ответственного за отзыв доступов при прекращении сотрудничества.",
+            Dependencies = new(),
+            SupportedFindingCodes = new() { "TEAM_OFFBOARDING_GAP", "TEAM_FORMER_ACCESS_RISK" }
+        },
+        new()
+        {
+            ActionId = "ACT_TEAM_PERSONAL_ACCOUNT_MIGRATION",
+            Title = "Перенести сервисы с личных учетных записей на корпоративные аккаунты",
+            ActionType = "PROCESS_SETUP",
+            ResolutionMode = ResolutionMode.InternalAction,
+            DefaultPriority = RiskPriority.ThirtyDays,
+            SectionId = "team",
+            BusinessReason = "Использование личных аккаунтов для рабочих сервисов создает риск потери доступа к инфраструктуре при смене или уходе участников команды.",
+            RequiredOutcome = "Все ключевые рабочие сервисы, домены и репозитории переведены на корпоративные учетные записи с резервным администрированием.",
+            WhatToDo = "Провести инвентаризацию сервисов и перевести критические учетные записи под централизованный корпоративный контроль.",
+            Dependencies = new(),
+            SupportedFindingCodes = new() { "TEAM_PERSONAL_ACCOUNT_DEPENDENCY", "IP_ACCESS_CONTROL", "TEAM_KEY_PERSON_DEPENDENCY" }
         },
         new()
         {
@@ -303,11 +345,25 @@ public static class ActionLibrary
             ResolutionMode = ResolutionMode.InternalAction,
             DefaultPriority = RiskPriority.ThirtyDays,
             SectionId = "team",
-            BusinessReason = "Отсутствие NDA и неконтролируемые доступы к репозиториям и базам данных создают угрозу утечки коммерческой тайны при увольнении сотрудников.",
+            BusinessReason = "Отсутствие NDA и неконтролируемые доступы к репозиториям и базам данных создают угрозу утечки конфиденциальной информации при увольнении сотрудников.",
             RequiredOutcome = "Со всеми специалистами подписаны соглашения о неразглашении конфиденциальной информации и настроен ролевой доступ к критическим сервисам.",
-            WhatToDo = "Подписать NDA со всеми участниками и провести ревизию доступов в Git, серверах и базах данных.",
+            WhatToDo = "Подписать типовые NDA со всеми участниками команды и провести ревизию доступов к внутренним ресурсам компании.",
             Dependencies = new(),
-            SupportedFindingCodes = new() { "TEAM_NO_NDA", "TEAM_ACCESS_CONTROL_GAP" }
+            SupportedFindingCodes = new() { "TEAM_NO_NDA", "TEAM_CONFIDENTIALITY_GAP" }
+        },
+        new()
+        {
+            ActionId = "ACT_TEAM_FOREIGN_ARRANGEMENT_REVIEW",
+            Title = "Проверить трансграничную модель привлечения иностранных специалистов",
+            ActionType = "LEGAL_REVIEW",
+            ResolutionMode = ResolutionMode.LegalReview,
+            DefaultPriority = RiskPriority.BeforeRound,
+            SectionId = "team",
+            BusinessReason = "Международный найм без учета локального законодательства создает налоговые риски и риски признания постоянного представительства.",
+            RequiredOutcome = "Договорная модель с иностранными специалистами проверена с учетом налоговых и трудовых норм целевых юрисдикций.",
+            WhatToDo = "Сверить договоры с иностранными участниками команды с юристом по международному праву.",
+            Dependencies = new(),
+            SupportedFindingCodes = new() { "TEAM_FOREIGN_TEAM_REVIEW" }
         },
 
         // =====================================================================
@@ -325,7 +381,7 @@ public static class ActionLibrary
             RequiredOutcome = "Утверждены актуальные условия сервиса с ограничением ответственности, и в интерфейсе продукта реализован обязательный явный акцепт (клик-согласие).",
             WhatToDo = "Составить Пользовательское соглашение и интегрировать обязательный чекбокс согласия при регистрации и оформлении заказов.",
             Dependencies = new(),
-            SupportedFindingCodes = new() { "PROD_RULES_DISCREPANCY", "PROD_NO_TERMS_OF_SERVICE", "PROD_TERMS_MISMATCH", "PROD_LIABILITY_UNLIMITED" }
+            SupportedFindingCodes = new() { "PROD_RULES_MISSING", "PROD_RULES_DISCREPANCY", "PROD_NO_TERMS_OF_SERVICE", "PROD_TERMS_MISMATCH", "PROD_LIABILITY_UNLIMITED", "PROD_OFFER_UNCLEAR", "PROD_ROLE_UNCLEAR", "PROD_ACCEPTANCE_WEAK" }
         },
         new()
         {
@@ -335,11 +391,39 @@ public static class ActionLibrary
             ResolutionMode = ResolutionMode.LegalAndProduct,
             DefaultPriority = RiskPriority.ThirtyDays,
             SectionId = "product",
-            BusinessReason = "Автоматические списания без предварительного уведомления и отсутствие прозрачных правил возврата ведут к чарджбэкам, блокировкам платежных шлюзов и штрафам.",
+            BusinessReason = "Автоматические списания без предварительного уведомления и отсутствие прозрачных правил возврата ведут к чарджбэкам, блокировкам платежных шлюзов и регуляторным претензиям.",
             RequiredOutcome = "В оферте и интерфейсе внедрены прозрачные условия отмены подписок, автопродления и регламент возврата денежных средств.",
             WhatToDo = "Настроить информирование пользователей перед регулярными списаниями и опубликовать правила возврата.",
             Dependencies = new() { "ACT_PROD_TERMS_OF_SERVICE" },
-            SupportedFindingCodes = new() { "PROD_SUBSCRIPTION_AUTO_RENEWAL", "PROD_REFUND_POLICY_GAP" }
+            SupportedFindingCodes = new() { "PROD_SUBSCRIPTION_RULES", "PROD_SUBSCRIPTION_AUTO_RENEWAL", "PROD_REFUND_RULES", "PROD_REFUND_POLICY_GAP", "PROD_PAYMENT_TRANSPARENCY", "PROD_ACCOUNT_RESTRICTIONS" }
+        },
+        new()
+        {
+            ActionId = "ACT_PROD_UGC_RULES",
+            Title = "Внедрить правила модерации пользовательского контента (UGC) и механизм подачи жалоб",
+            ActionType = "PRODUCT_INTEGRATION",
+            ResolutionMode = ResolutionMode.LegalAndProduct,
+            DefaultPriority = RiskPriority.ThirtyDays,
+            SectionId = "product",
+            BusinessReason = "Размещение пользователями собственных материалов без прозрачных правил модерации создает риски ответственности сервиса за незаконный контент и нарушения прав третьих лиц.",
+            RequiredOutcome = "В пользовательские правила включены ограничения на контент (UGC Policy), в интерфейсе реализован механизм жалоб (Notice and Takedown) и регламентированы права компании на материалы.",
+            WhatToDo = "Разработать раздел правил сервиса о пользовательском контенте и настроить в продукте кнопку отправки жалоб на нарушения.",
+            Dependencies = new() { "ACT_PROD_TERMS_OF_SERVICE" },
+            SupportedFindingCodes = new() { "PROD_USER_CONTENT_RULES", "PROD_UGC_UNREGULATED" }
+        },
+        new()
+        {
+            ActionId = "ACT_PROD_MINORS_COMPLIANCE",
+            Title = "Внедрить проверку возраста (Age Gate) и специальные условия для несовершеннолетних пользователей",
+            ActionType = "PRODUCT_INTEGRATION",
+            ResolutionMode = ResolutionMode.LegalAndProduct,
+            DefaultPriority = RiskPriority.Now,
+            SectionId = "product",
+            BusinessReason = "Работа сервиса с несовершеннолетними пользователями требует соблюдения специальных регуляторных норм о согласии родителей и защите детских данных.",
+            RequiredOutcome = "В продукте внедрена механика проверки возраста при регистрации, и пользовательские документы адаптированы под требования законодательства о защите прав несовершеннолетних.",
+            WhatToDo = "Интегрировать проверку даты рождения / возраста на этапе онбординга и предусмотреть форму согласия законных представителей.",
+            Dependencies = new() { "ACT_PROD_TERMS_OF_SERVICE" },
+            SupportedFindingCodes = new() { "PROD_MINORS_REVIEW", "PROD_AGE_GATE_MISSING" }
         },
         new()
         {
@@ -349,16 +433,30 @@ public static class ActionLibrary
             ResolutionMode = ResolutionMode.LegalReview,
             DefaultPriority = RiskPriority.BeforeRound,
             SectionId = "product",
-            BusinessReason = "Трансграничные продажи B2C-продуктов могут подпадать под специальные требования о защите прав потребителей, маркировке и возрастных ограничениях.",
-            RequiredOutcome = "Подтверждено соответствие продукта регуляторным требованиям ключевых стран пользователей (age verification, disclosures, consumer protections).",
-            WhatToDo = "Провести юридический анализ регуляторных ограничений на целевых рынках и внести необходимые изменения в продукт.",
+            BusinessReason = "Специализированные модели сервисов (платежи, финтех, образование, телемедицина) могут требовать лицензий или соблюдения специальных отраслевых стандартов.",
+            RequiredOutcome = "Проведен анализ применимого отраслевого и потребительского законодательства целевых стран и подтверждено соответствие продукта регуляторным нормам.",
+            WhatToDo = "Провести юридическую оценку отраслевых требований на ключевых рынках запуска и составить матрицу необходимых комплаенс-мер.",
             Dependencies = new(),
-            SupportedFindingCodes = new() { "PROD_REGULATORY_RISK", "PROD_AGE_GATE_MISSING", "PROD_CROSS_BORDER_CONSUMER_RISK" }
+            SupportedFindingCodes = new() { "PROD_REGULATORY_REVIEW", "PROD_MULTI_COUNTRY_REVIEW", "PROD_REGULATORY_RISK", "PROD_CROSS_BORDER_CONSUMER_RISK" }
         },
 
         // =====================================================================
         // 6. ДАННЫЕ И ИИ (DATA & AI)
         // =====================================================================
+        new()
+        {
+            ActionId = "ACT_DATA_MAPPING_INTERNAL",
+            Title = "Составить карту типов данных и внешних сервисов (Data Mapping)",
+            ActionType = "PROCESS_SETUP",
+            ResolutionMode = ResolutionMode.InternalAction,
+            DefaultPriority = RiskPriority.Now,
+            SectionId = "data",
+            BusinessReason = "Без актуальной карты движения данных невозможно обеспечить соблюдение законодательства о персональных данных, контролировать внешние интеграции и корректно удалять информацию.",
+            RequiredOutcome = "Сформирован детальный реестр потоков данных (Data Map), фиксирующий категории собираемых данных, цели их обработки, сроки хранения и перечень получателей.",
+            WhatToDo = "Провести инвентаризацию всех точек сбора пользовательских данных, используемых внешних сервисов и составить карту потоков данных компании.",
+            Dependencies = new(),
+            SupportedFindingCodes = new() { "DATA_MAP_INCOMPLETE", "DATA_THIRD_PARTY_UNKNOWN", "DATA_SECONDARY_USE_UNCLEAR" }
+        },
         new()
         {
             ActionId = "ACT_DATA_PRIVACY_POLICY_CREATE",
@@ -367,11 +465,11 @@ public static class ActionLibrary
             ResolutionMode = ResolutionMode.LegalWork,
             DefaultPriority = RiskPriority.Now,
             SectionId = "data",
-            BusinessReason = "Использование шаблонной или неполной политики конфиденциальности является нарушением законодательства о персональных данных (GDPR / местный закон о ПД) и влечет крупные штрафы.",
+            BusinessReason = "Несоответствие публичной политики конфиденциальности реальным процессам обработки персональных данных создает регуляторные риски и претензии со стороны пользователей и надзорных органов.",
             RequiredOutcome = "Разработана точная Политика конфиденциальности, описывающая реальные потоки данных, цели обработки, сроки хранения и перечень третьих лиц, получающих данные.",
-            WhatToDo = "Провести картирование потоков данных (Data Mapping) и составить индивидуальную Политику конфиденциальности с юристом.",
-            Dependencies = new(),
-            SupportedFindingCodes = new() { "DATA_PRIVACY_NOTICE_MISSING", "DATA_NO_PRIVACY_POLICY", "DATA_PRIVACY_POLICY_INADEQUATE" }
+            WhatToDo = "Составить индивидуальную Политику конфиденциальности с юристом на основе карты движения данных и опубликовать документ на сайте и в приложении.",
+            Dependencies = new() { "ACT_DATA_MAPPING_INTERNAL" },
+            SupportedFindingCodes = new() { "DATA_PRIVACY_NOTICE_MISSING", "DATA_PRIVACY_NOTICE_OUTDATED", "DATA_NO_PRIVACY_POLICY", "DATA_PRIVACY_POLICY_INADEQUATE" }
         },
         new()
         {
@@ -395,11 +493,11 @@ public static class ActionLibrary
             ResolutionMode = ResolutionMode.LegalReview,
             DefaultPriority = RiskPriority.Now,
             SectionId = "data",
-            BusinessReason = "Передача пользовательских данных сторонним нейросетям (OpenAI, Anthropic и др.) без проверки условий может привести к использованию коммерческих данных для обучения публичных моделей.",
-            RequiredOutcome = "Проверены условия выбранного API-режима провайдера (Enterprise / Zero Data Retention), подписано соглашение об обработке данных (DPA) и включены уведомления пользователей.",
-            WhatToDo = "Провести аудит API-настроек провайдера, активировать режим запрета обучения на данных пользователей и отразить использование ИИ в политике конфиденциальности.",
+            BusinessReason = "Передача пользовательских данных сторонним сервисам и моделям ИИ без проверки правовых условий создает риски несанкционированного раскрытия информации.",
+            RequiredOutcome = "Проанализированы правовые условия и настройки API используемых ИИ-сервисов, подтвержден режим конфиденциальности данных пользователей и актуализированы документы.",
+            WhatToDo = "Провести ревизию условий использования внешних ИИ-провайдеров и при необходимости активировать режим запрета обучения на данных пользователей.",
             Dependencies = new(),
-            SupportedFindingCodes = new() { "AI_SENSITIVE_DATA_TRANSFER", "AI_PROVIDER_TERMS_UNCHECKED", "AI_DATA_LEAKAGE_RISK", "AI_TRAINING_OPT_OUT_GAP" }
+            SupportedFindingCodes = new() { "AI_USER_DATA_TRANSFER", "AI_SENSITIVE_DATA_TRANSFER", "AI_PROVIDER_TERMS_UNKNOWN", "AI_PROVIDER_TERMS_UNCHECKED", "AI_DATA_LEAKAGE_RISK", "AI_TRAINING_OPT_OUT_GAP", "AI_TRAINING_NOT_DISCLOSED", "DATA_AI_TRAINING_UNCHECKED" }
         },
         new()
         {
@@ -409,11 +507,11 @@ public static class ActionLibrary
             ResolutionMode = ResolutionMode.LegalAndProduct,
             DefaultPriority = RiskPriority.ThirtyDays,
             SectionId = "data",
-            BusinessReason = "Невозможность исполнить запрос пользователя на удаление его данных (Right to Erasure) является прямым нарушением регуляторных требований.",
+            BusinessReason = "Невозможность исполнить запрос пользователя на удаление его данных (Right to Erasure) создает риски регуляторных претензий и жалоб пользователей в юрисдикциях с развитым законодательством о защите данных.",
             RequiredOutcome = "Реализован рабочий сценарий полного удаления или деперсонализации данных пользователя из базы и внешних интеграций по первому требованию.",
             WhatToDo = "Разработать технический скрипт удаления данных и утвердить внутренний регламент реагирования на запросы субъектов данных.",
             Dependencies = new() { "ACT_DATA_PRIVACY_POLICY_CREATE" },
-            SupportedFindingCodes = new() { "DATA_RETENTION_UNDEFINED", "DATA_DELETION_FLOW_MISSING", "DATA_SUBJECT_RIGHTS_UNSUPPORTED" }
+            SupportedFindingCodes = new() { "DATA_RETENTION_UNDEFINED", "DATA_DELETION_GAP", "DATA_DELETION_FLOW_MISSING", "DATA_SUBJECT_RIGHTS_UNSUPPORTED" }
         },
         new()
         {
@@ -423,11 +521,11 @@ public static class ActionLibrary
             ResolutionMode = ResolutionMode.LegalReview,
             DefaultPriority = RiskPriority.BeforeRound,
             SectionId = "data",
-            BusinessReason = "Нарушение законов о локализации персональных данных грозит блокировкой доменного имени сервиса уполномоченным государственным органом.",
+            BusinessReason = "Нарушение законодательства о локализации персональных данных создает риски предписаний регулятора и ограничения доступа к инфраструктуре сервиса.",
             RequiredOutcome = "Серверная инфраструктура и базы данных размещены в соответствии с нормами локализации целевых стран с применением шифрования данных при передаче и хранении.",
             WhatToDo = "Проверить физическое расположение серверов хранения персональных данных и внедрить политику безопасности информации.",
             Dependencies = new(),
-            SupportedFindingCodes = new() { "DATA_LOCALIZATION_RISK", "DATA_CROSS_BORDER_TRANSFER_GAP", "DATA_SECURITY_MEASURES_WEAK" }
+            SupportedFindingCodes = new() { "DATA_CROSS_BORDER_REVIEW", "DATA_LOCALIZATION_RISK", "DATA_CROSS_BORDER_TRANSFER_GAP", "DATA_SECURITY_MEASURES_WEAK" }
         },
 
         // =====================================================================
@@ -445,7 +543,7 @@ public static class ActionLibrary
             RequiredOutcome = "Создан стандартный пакет типовых договоров оказания услуг и лицензионных соглашений с прозрачными условиями оплаты и приемки результатов.",
             WhatToDo = "Подготовить типовые договоры, инструкции для менеджеров по продажам и матрицу допустимых правовых уступок при согласовании.",
             Dependencies = new(),
-            SupportedFindingCodes = new() { "CONTRACTS_NOT_FORMALIZED", "CONTRACT_NO_WRITTEN_FORMS", "CONTRACT_MODEL_MISMATCH" }
+            SupportedFindingCodes = new() { "CONTRACTS_NOT_FORMALIZED", "CONTRACT_SCOPE_UNCLEAR", "CONTRACT_NO_WRITTEN_FORMS", "CONTRACT_MODEL_MISMATCH" }
         },
         new()
         {
@@ -459,7 +557,7 @@ public static class ActionLibrary
             RequiredOutcome = "В типовых и действующих договорах закреплен разумный баланс ответственности, установлены соразмерные пределы возмещения убытков и защитные условия для компании.",
             WhatToDo = "Провести аудит действующих контрактов и подписать дополнительные соглашения об ограничении ответственности.",
             Dependencies = new(),
-            SupportedFindingCodes = new() { "CONTRACT_RISK_ALLOCATION_WEAK", "CONTRACT_UNLIMITED_LIABILITY", "CONTRACT_TERMINATION_RISK" }
+            SupportedFindingCodes = new() { "CONTRACT_RISK_ALLOCATION_WEAK", "CONTRACT_UNLIMITED_LIABILITY", "CONTRACT_TERMINATION_RISK", "CONTRACT_LARGE_DEAL_REVIEW" }
         },
         new()
         {
@@ -491,7 +589,7 @@ public static class ActionLibrary
             RequiredOutcome = "Сформирована юридически выверенная таблица капитализации и долей с расчетом размытия при конвертации инвестиционных инструментов (SAFE / Convertible Notes).",
             WhatToDo = "Собрать все предварительные договоренности с инвесторами и оформить единую таблицу капитализации.",
             Dependencies = new() { "ACT_CORP_CAP_TABLE_CLEANUP" },
-            SupportedFindingCodes = new() { "INVEST_CAP_TABLE_UNCLEAR", "INVEST_VALUATION_PROMISES_DISPUTED" }
+            SupportedFindingCodes = new() { "INVEST_PRIOR_INVESTMENT_UNCLEAR", "INVEST_FUTURE_CAP_TABLE_UNCLEAR", "INVEST_CAP_TABLE_UNCLEAR", "INVEST_VALUATION_PROMISES_DISPUTED", "INVEST_DILUTION_NOT_MODELED" }
         },
         new()
         {
@@ -501,11 +599,11 @@ public static class ActionLibrary
             ResolutionMode = ResolutionMode.LegalWork,
             DefaultPriority = RiskPriority.BeforeRound,
             SectionId = "investment",
-            BusinessReason = "Инвестор приостановит сделку или откажется от раунда, если при юридической проверке (Due Diligence) обнаружит отсутствие прав на продукт или корпоративный тупик.",
+            BusinessReason = "Наличие неурегулированных споров по структуре компании или правам на продукт может существенно затянуть инвестиционную проверку (Due Diligence) и осложнить согласование условий сделки.",
             RequiredOutcome = "Создана структурированная виртуальная комната данных (Data Room), содержащая закрывающие документы по корпоративной структуре, IP, команде и договорам.",
             WhatToDo = "Собрать и структурировать полный юридический архив компании по стандартному инвестиционному чек-листу.",
             Dependencies = new() { "ACT_FOUNDER_AGREEMENT_SHA", "ACT_IP_FOUNDER_ASSIGNMENT", "ACT_TEAM_CONTRACTS_FORMALIZATION" },
-            SupportedFindingCodes = new() { "INVEST_ROUND_BLOCKER", "INVEST_DATA_ROOM_MISSING", "INVEST_TIMING_IMMEDIATE_UNPREPARED" }
+            SupportedFindingCodes = new() { "INVEST_ROUND_BLOCKER", "INVEST_DATA_ROOM_MISSING", "INVEST_TIMING_IMMEDIATE_UNPREPARED", "INVEST_ROUND_NOT_DEFINED", "INVEST_RUNWAY_WARNING", "INVEST_FIN_MODEL_WEAK" }
         },
         new()
         {
@@ -580,39 +678,52 @@ public static class ActionLibrary
         if (code.Contains("DEADLOCK")) return GetById("ACT_FOUNDER_DEADLOCK_RESOLVE")!;
         if (code.Contains("VESTING") || code.Contains("LEAVER")) return GetById("ACT_FOUNDER_VESTING_LEAVER")!;
         if (code.Contains("DISPUTE")) return GetById("ACT_FOUNDER_DISPUTE_SETTLE")!;
+        if (code.Contains("ROLE") || code.Contains("COMMITMENT")) return GetById("ACT_FOUNDER_ROLES_COMMITMENT")!;
+        if (code.Contains("PERSONAL_INVESTMENT") || code.Contains("LOAN")) return GetById("ACT_FOUNDER_PERSONAL_INVESTMENTS")!;
         if (sec == "founders" || code.StartsWith("FND")) return GetById("ACT_FOUNDER_AGREEMENT_SHA")!;
 
         if (code.Contains("ENTITY")) return GetById("ACT_CORP_INCORPORATION")!;
         if (code.Contains("CAP_TABLE") || code.Contains("OWNERSHIP")) return GetById("ACT_CORP_CAP_TABLE_CLEANUP")!;
+        if (code.Contains("HOLDING")) return GetById("ACT_CORP_HOLDING_STRUCTURING")!;
         if (sec == "corporate" || code.StartsWith("COR")) return GetById("ACT_CORP_GOVERNANCE_SYSTEMATIZE")!;
 
         if (code.Contains("FOUNDER")) return GetById("ACT_IP_FOUNDER_ASSIGNMENT")!;
         if (code.Contains("CONTRACTOR") || code.Contains("STUDIO")) return GetById("ACT_IP_CONTRACTOR_ASSIGNMENT")!;
         if (code.Contains("OPEN_SOURCE") || code.Contains("THIRD_PARTY")) return GetById("ACT_IP_OPEN_SOURCE_COMPLIANCE")!;
+        if (code.Contains("CONTENT") || code.Contains("MEDIA")) return GetById("ACT_IP_CONTENT_LICENSING_AUDIT") ?? GetById("ACT_IP_CONSOLIDATION_AUDIT")!;
+        if (code.Contains("DOMAIN") || code.Contains("BRAND_CONTROL")) return GetById("ACT_IP_DOMAIN_BRAND_TRANSFER") ?? GetById("ACT_IP_TRADEMARK_PROTECTION")!;
         if (code.Contains("TRADEMARK") || code.Contains("BRAND")) return GetById("ACT_IP_TRADEMARK_PROTECTION")!;
         if (sec == "ip" || code.StartsWith("IP")) return GetById("ACT_IP_CONSOLIDATION_AUDIT")!;
 
-        if (code.Contains("NDA") || code.Contains("ACCESS")) return GetById("ACT_TEAM_NDA_ACCESS_CONTROL")!;
-        if (code.Contains("OPTION") || code.Contains("ESOP")) return GetById("ACT_TEAM_OPTION_POOL_FORMALIZATION")!;
-        if (code.Contains("RECLASSIFICATION") || code.Contains("LABOR")) return GetById("ACT_TEAM_RECLASSIFICATION_RISK")!;
+        if (code.Contains("ACCESS") || code.Contains("SYS_LIST")) return GetById("ACT_TEAM_ACCESS_LIST_AUDIT") ?? GetById("ACT_TEAM_NDA_ACCESS_CONTROL")!;
+        if (code.Contains("OFFBOARDING")) return GetById("ACT_TEAM_OFFBOARDING_CHECKLIST") ?? GetById("ACT_TEAM_NDA_ACCESS_CONTROL")!;
+        if (code.Contains("PERSONAL_ACCOUNT")) return GetById("ACT_TEAM_PERSONAL_ACCOUNT_MIGRATION") ?? GetById("ACT_TEAM_NDA_ACCESS_CONTROL")!;
+        if (code.Contains("NDA") || code.Contains("CONFIDENTIALITY")) return GetById("ACT_TEAM_NDA_ACCESS_CONTROL")!;
+        if (code.Contains("OPTION") || code.Contains("ESOP") || code.Contains("EQUITY_PROMISE")) return GetById("ACT_TEAM_OPTION_POOL_FORMALIZATION")!;
+        if (code.Contains("RECLASSIFICATION") || code.Contains("LABOR") || code.Contains("WORK_FORMAT")) return GetById("ACT_TEAM_RECLASSIFICATION_RISK")!;
+        if (code.Contains("RIGHTS") || code.Contains("WORK_GAP")) return GetById("ACT_TEAM_IP_TRANSFER_ACTS")!;
+        if (code.Contains("FOREIGN")) return GetById("ACT_TEAM_FOREIGN_ARRANGEMENT_REVIEW") ?? GetById("ACT_TEAM_CONTRACTS_FORMALIZATION")!;
         if (sec == "team" || code.StartsWith("TEAM")) return GetById("ACT_TEAM_CONTRACTS_FORMALIZATION")!;
 
-        if (code.Contains("TERMS") || code.Contains("RULES") || code.Contains("OFFER")) return GetById("ACT_PROD_TERMS_OF_SERVICE")!;
-        if (code.Contains("SUBSCRIPTION") || code.Contains("REFUND")) return GetById("ACT_PROD_PAYMENT_REFUND_FLOW")!;
+        if (code.Contains("UGC") || code.Contains("USER_CONTENT")) return GetById("ACT_PROD_UGC_RULES") ?? GetById("ACT_PROD_TERMS_OF_SERVICE")!;
+        if (code.Contains("MINOR") || code.Contains("AGE")) return GetById("ACT_PROD_MINORS_COMPLIANCE") ?? GetById("ACT_PROD_TERMS_OF_SERVICE")!;
+        if (code.Contains("SUBSCRIPTION") || code.Contains("REFUND") || code.Contains("PAYMENT")) return GetById("ACT_PROD_PAYMENT_REFUND_FLOW")!;
+        if (code.Contains("REGULATORY") || code.Contains("MULTI_COUNTRY")) return GetById("ACT_PROD_REGULATORY_COMPLIANCE")!;
         if (sec == "product" || code.StartsWith("PROD")) return GetById("ACT_PROD_TERMS_OF_SERVICE")!;
 
+        if (code.Contains("DATA_MAP") || code.Contains("INVENTORY") || code.Contains("THIRD_PARTY") || code.Contains("SECONDARY")) return GetById("ACT_DATA_MAPPING_INTERNAL") ?? GetById("ACT_DATA_PRIVACY_POLICY_CREATE")!;
         if (code.Contains("AI")) return GetById("ACT_DATA_AI_PROVIDER_REVIEW")!;
         if (code.Contains("CONSENT")) return GetById("ACT_DATA_CONSENT_FLOW_SETUP")!;
         if (code.Contains("DELETION") || code.Contains("RETENTION")) return GetById("ACT_DATA_RETENTION_DELETION")!;
-        if (code.Contains("LOCALIZATION")) return GetById("ACT_DATA_LOCALIZATION_SECURITY")!;
+        if (code.Contains("LOCALIZATION") || code.Contains("CROSS_BORDER")) return GetById("ACT_DATA_LOCALIZATION_SECURITY")!;
         if (sec == "data" || code.StartsWith("DATA")) return GetById("ACT_DATA_PRIVACY_POLICY_CREATE")!;
 
-        if (code.Contains("RISK_ALLOCATION") || code.Contains("LIABILITY")) return GetById("ACT_CONTRACT_RISK_ALLOCATION_REVIEW")!;
+        if (code.Contains("RISK_ALLOCATION") || code.Contains("LIABILITY") || code.Contains("LARGE_DEAL")) return GetById("ACT_CONTRACT_RISK_ALLOCATION_REVIEW")!;
         if (code.Contains("DEPENDENCY") || code.Contains("VENDOR")) return GetById("ACT_CONTRACT_DEPENDENCY_HEDGING")!;
         if (sec == "contracts" || code.StartsWith("CONTRACT") || code.StartsWith("CTR")) return GetById("ACT_CONTRACT_TEMPLATES_DEVELOPMENT")!;
 
-        if (code.Contains("ROUND") || code.Contains("BLOCKER") || code.Contains("DATA_ROOM")) return GetById("ACT_INVEST_DATA_ROOM_DD_PACK")!;
-        if (code.Contains("CAP_TABLE")) return GetById("ACT_INVEST_CAP_TABLE_PREPARATION")!;
+        if (code.Contains("CAP_TABLE") || code.Contains("DILUTION")) return GetById("ACT_INVEST_CAP_TABLE_PREPARATION")!;
+        if (code.Contains("AWARENESS_GAP")) return GetById("ACT_INVEST_SELF_AWARENESS_GAP")!;
         if (sec == "investment" || code.StartsWith("INVEST") || code.StartsWith("INV")) return GetById("ACT_INVEST_DATA_ROOM_DD_PACK")!;
 
         // Fallback default

@@ -108,10 +108,10 @@ public static class UnifiedActionPlanBuilder
 
             var resolutionLabel = def.ResolutionMode switch
             {
-                ResolutionMode.InternalAction => "Можно сделать внутри команды",
-                ResolutionMode.LegalReview => "Желательно проверить с юристом",
+                ResolutionMode.InternalAction => "Внутреннее действие команды",
+                ResolutionMode.LegalReview => "Юридическая проверка",
                 ResolutionMode.LegalWork => "Требуется юридическая работа",
-                ResolutionMode.LegalAndProduct => "Юридическая работа + доработка продукта",
+                ResolutionMode.LegalAndProduct => "Юридическая и техническая доработка",
                 _ => "Требуется юридическая работа"
             };
 

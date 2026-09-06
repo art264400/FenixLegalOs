@@ -615,57 +615,129 @@ public class AdminController : ControllerBase
         var facts = FenixLegalOs.Scoring.Core.FactNormalizer.NormalizeFacts(answers);
         var reportCtx = FenixLegalOs.Scoring.Report.ReportEngine.AssembleReportContext(result, facts, "admin-test", "Стартап");
         
-        // Build the exact JSON input payload we send to LLM
-        var inputPayload = new
-        {
-            projectProfile = new
+        // Build structured chunked payloads matching the real pipeline requests
+        var sharedContext = FenixLegalOs.Scoring.Report.ContextSelector.ExtractCompactSharedContext(reportCtx);
+        var applicableModules = reportCtx.FocusModules
+            .Where(m => !reportCtx.NotApplicableModules.Any(na => string.Equals(na.SectionId, m.SectionId, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        var moduleRequests = applicableModules.ToDictionary(
+            m => m.SectionId,
+            m => new FenixLegalOs.Models.Report.ModuleNarrativeRequestDto
             {
-                projectName = reportCtx.ProjectName,
-                keyFacts = reportCtx.Profile.KeyFacts.Select(f => new { f.Label, f.Value }),
-                baselineNarrative = reportCtx.Profile.ConfigurationNarrative
-            },
-            overall = new
-            {
-                score = reportCtx.Overall.Score,
-                band = reportCtx.Overall.Band,
-                confidence = reportCtx.Overall.Confidence,
-                topDrivers = reportCtx.Overall.TopDrivers
-            },
-            focusModules = reportCtx.FocusModules.Select(m => new
-            {
-                sectionId = m.SectionId,
-                title = m.Title,
-                score = m.Score,
-                band = m.ScoreBand,
-                maxSeverity = m.MaxSeverity.ToString(),
-                findings = m.Findings.Select(f => new
+                ProjectContext = sharedContext,
+                CrossModuleSignals = FenixLegalOs.Scoring.Report.ContextSelector.SelectCrossModuleSignals(reportCtx, m.SectionId),
+                Module = new FenixLegalOs.Models.Report.ModuleNarrativeInputDto
                 {
-                    findingCode = f.FindingCode,
-                    title = f.Title,
-                    severity = f.Severity.ToString(),
-                    whyFound = f.WhyFound,
-                    whyItMatters = f.WhyItMatters,
-                    recommendation = f.Recommendation
-                })
-            }),
-            topFindings = reportCtx.TopFindings.Select(t => new
+                    SectionId = m.SectionId,
+                    Title = m.Title,
+                    Score = m.Score,
+                    Band = m.ScoreBand,
+                    MaxSeverity = m.MaxSeverity.ToString(),
+                    Findings = m.Findings.Select(f => new FenixLegalOs.Models.Report.ModuleFindingInputDto
+                    {
+                        FindingCode = f.FindingCode,
+                        RootCauseCode = !string.IsNullOrWhiteSpace(f.FindingCode) ? f.FindingCode : string.Empty,
+                        Title = f.Title,
+                        Severity = f.Severity.ToString(),
+                        Priority = f.Priority.ToString(),
+                        WhyFound = f.WhyFound,
+                        WhyItMatters = f.WhyItMatters,
+                        Recommendation = f.Recommendation,
+                        Recommendations = f.Recommendations ?? new List<string>()
+                    }).ToList()
+                }
+            });
+
+        var actionBatches = reportCtx.ActionPlan
+            .Select((action, index) => new { action, index })
+            .GroupBy(x => x.index / _aiReportService.Options.ActionBatchSize)
+            .Select((g, bIdx) => new
             {
-                findingCode = t.FindingCode,
-                title = t.Title,
-                severity = t.Severity.ToString(),
-                shortSummary = t.ShortSummary
-            }),
-            actionPlan = reportCtx.ActionPlan.Select(a => new
+                batchNumber = bIdx + 1,
+                request = new FenixLegalOs.Models.Report.ActionBatchRequestDto
+                {
+                    ProjectContext = sharedContext,
+                    Actions = g.Select(x => new FenixLegalOs.Models.Report.ActionNarrativeInputDto
+                    {
+                        ActionId = x.action.ActionId,
+                        Title = x.action.Title,
+                        WhatToDo = x.action.WhatToDo,
+                        PriorityGroup = x.action.PriorityGroup,
+                        ResolutionMode = x.action.ResolutionMode.ToString(),
+                        SourceFindings = x.action.CoveredFindingCodes.Select(code =>
+                        {
+                            var f = reportCtx.AllFindings.FirstOrDefault(fnd => fnd.Code == code);
+                            return new FenixLegalOs.Models.Report.ActionSourceFindingDto
+                            {
+                                FindingCode = code,
+                                Severity = f?.Severity.ToString() ?? "High",
+                                WhyFound = f?.Finding ?? string.Empty
+                            };
+                        }).ToList()
+                    }).ToList()
+                }
+            }).ToList();
+
+        var executiveRequest = new FenixLegalOs.Models.Report.ExecutiveSynthesisRequestDto
+        {
+            ProjectProfile = new FenixLegalOs.Models.Report.CompactProjectProfileExecutiveDto
             {
-                number = a.Number,
-                title = a.Title,
-                priorityGroup = a.PriorityGroup
-            }),
-            fenixLaw = new
+                Jurisdiction = sharedContext.Jurisdiction,
+                EntityStatus = sharedContext.EntityStatus,
+                Founders = sharedContext.Founders,
+                Ownership = sharedContext.Ownership,
+                ProductStage = sharedContext.ProductStage,
+                ProductCreators = sharedContext.ProductCreators,
+                Users = sharedContext.Users,
+                Fundraising = sharedContext.Fundraising
+            },
+            OverallScore = reportCtx.Overall?.Score ?? 0,
+            OverallBand = reportCtx.Overall?.Band ?? string.Empty,
+            OverallLevelTitle = reportCtx.Overall?.LevelTitle ?? string.Empty,
+            OverallConfidence = reportCtx.Overall?.Confidence ?? 0,
+            RiskCounts = new Dictionary<string, int>
             {
-                requiresLegalWork = reportCtx.FenixLaw.RequiresLegalWork,
-                serviceAreas = reportCtx.FenixLaw.ServiceCards.Select(s => s.Title)
-            }
+                ["blocker"] = reportCtx.AllFindings.Count(f => f.Severity == FenixLegalOs.Models.Enums.RiskSeverity.Blocker),
+                ["critical"] = reportCtx.AllFindings.Count(f => f.Severity == FenixLegalOs.Models.Enums.RiskSeverity.Critical),
+                ["high"] = reportCtx.AllFindings.Count(f => f.Severity == FenixLegalOs.Models.Enums.RiskSeverity.High)
+            },
+            TopFindings = reportCtx.TopFindings.Take(5).Select(t => new FenixLegalOs.Models.Report.TopFindingExecutiveSummaryDto
+            {
+                FindingCode = t.FindingCode,
+                RootCauseCode = t.RootCauseCode,
+                Title = t.Title,
+                Severity = t.Severity.ToString(),
+                Summary = t.ShortSummary
+            }).ToList(),
+            ModuleSummaries = applicableModules.Select(m => new FenixLegalOs.Models.Report.ModuleExecutiveSummaryDto
+            {
+                SectionId = m.SectionId,
+                Title = m.Title,
+                Score = m.Score,
+                MaxSeverity = m.MaxSeverity.ToString(),
+                Summary = $"[Синтез модуля {m.Title}]"
+            }).ToList(),
+            TopActions = reportCtx.ActionPlan.Take(3).Select(a => a.Title).ToList(),
+            PositiveFactors = reportCtx.PositiveFactors.Take(3).Select(p => p.Title).ToList(),
+            InvestmentReadiness = reportCtx.InvestmentReadiness != null ? new FenixLegalOs.Models.Report.CompactInvestmentReadinessDto
+            {
+                IsApplicable = reportCtx.InvestmentReadiness.IsApplicable,
+                ReadinessScore = reportCtx.InvestmentReadiness.ReadinessScore,
+                Category = reportCtx.InvestmentReadiness.Category,
+                UnresolvedBlockersCount = reportCtx.InvestmentReadiness.UnresolvedBlockersCount,
+                BlockerTitles = reportCtx.InvestmentReadiness.BlockerTitles.Take(3).ToList()
+            } : null,
+            RequiresLegalWork = reportCtx.FenixLaw?.RequiresLegalWork ?? false,
+            FenixLawServiceAreas = reportCtx.FenixLaw?.ServiceAreas ?? new List<string>()
+        };
+
+        var inputChunks = new
+        {
+            sharedProjectContext = sharedContext,
+            moduleRequests,
+            actionBatchRequests = actionBatches,
+            executiveRequest
         };
 
         var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -674,9 +746,11 @@ public class AdminController : ControllerBase
 
         return Ok(new
         {
+            isReady = narratives.IsReady,
+            failedBlocks = narratives.FailedBlocks,
             memo = narratives.ExecutiveConclusion,
             narratives,
-            inputPayload,
+            inputPayload = inputChunks,
             durationMs = sw.ElapsedMilliseconds,
             model = "gpt-5.6-sol"
         });
@@ -704,6 +778,19 @@ public class AdminController : ControllerBase
         if (body.TryGetProperty("narratives", out var nProp) && nProp.ValueKind == JsonValueKind.Object)
         {
             rawNarratives = JsonSerializer.Deserialize<FenixLegalOs.Models.Report.ReportNarrativesDto>(nProp.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+
+        // Enforce: Report cannot be downloaded until all blocks are ready and LLM responded
+        if (rawNarratives == null || !rawNarratives.IsReady)
+        {
+            var reasons = rawNarratives?.FailedBlocks != null && rawNarratives.FailedBlocks.Count > 0
+                ? string.Join("; ", rawNarratives.FailedBlocks)
+                : "Отчёт не сформирован нейросетью или содержит неготовые блоки.";
+            return BadRequest(new
+            {
+                error = "report_not_ready",
+                message = $"Отчёт не может быть сформирован и скачан: {reasons}. Дождитесь успешного ответа всех блоков LLM."
+            });
         }
 
         var pdfBytes = await _pdfService.GeneratePdfAsync(result, facts, sessionId, projectName, rawNarratives: rawNarratives);

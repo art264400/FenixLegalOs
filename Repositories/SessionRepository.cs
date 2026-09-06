@@ -2,16 +2,20 @@ using System.Text.Json;
 using Dapper;
 using FenixLegalOs.Models;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace FenixLegalOs.Repositories;
 
 public class SessionRepository
 {
     private readonly DbInitializer _db;
+    private readonly IMemoryCache? _cache;
+    private const string BenchmarkCacheKey = "benchmark_stats_v1";
 
-    public SessionRepository(DbInitializer db)
+    public SessionRepository(DbInitializer db, IMemoryCache? cache = null)
     {
         _db = db;
+        _cache = cache;
     }
 
     private SqliteConnection GetConn()
@@ -75,6 +79,9 @@ public class SessionRepository
             eng = result.Versions.ScoringEngine,
             risk = result.Versions.RiskLibrary
         });
+
+        // Invalidate cached benchmark stats on session completion
+        _cache?.Remove(BenchmarkCacheKey);
     }
 
     public bool MarkSessionPaid(string id, int amount, string method)
@@ -84,5 +91,107 @@ public class SessionRepository
         int sRows = conn.Execute("UPDATE sessions SET paid = 1, paid_at = @now, payment_amount = @amount, payment_method = @method WHERE id = @id", new { now, amount, method, id });
         conn.Execute("UPDATE leads SET paid = 1, paid_at = @now, payment_amount = @amount, payment_method = @method WHERE session_id = @id", new { now, amount, method, id });
         return sRows > 0;
+    }
+
+    public BenchmarkStatsDto GetBenchmarkStats()
+    {
+        // 1. Return from memory cache if present (instant, 0ms DB load)
+        if (_cache != null && _cache.TryGetValue(BenchmarkCacheKey, out BenchmarkStatsDto? cached) && cached != null)
+        {
+            return cached;
+        }
+
+        using var conn = GetConn();
+        var rows = conn.Query<DiagnosticSession>(
+            "SELECT answers AS AnswersJson, result AS ResultJson FROM sessions WHERE result IS NOT NULL"
+        ).ToList();
+
+        int completedCount = rows.Count;
+        if (completedCount == 0)
+        {
+            var empty = new BenchmarkStatsDto
+            {
+                TotalScreenings = 0,
+                CountriesCount = 0,
+                AverageScore = 0,
+                IpRiskPercentage = 0
+            };
+            _cache?.Set(BenchmarkCacheKey, empty, TimeSpan.FromMinutes(10));
+            return empty;
+        }
+
+        var scores = new List<int>();
+        int ipRiskCount = 0;
+        var countries = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var row in rows)
+        {
+            if (!string.IsNullOrWhiteSpace(row.AnswersJson))
+            {
+                try
+                {
+                    var ans = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(row.AnswersJson);
+                    if (ans != null)
+                    {
+                        foreach (var key in new[] { "COR-01", "COR-C01", "c_inc", "jurisdiction", "fnd_jurisdiction" })
+                        {
+                            if (ans.TryGetValue(key, out var val))
+                            {
+                                var strVal = val.ToString()?.Trim();
+                                if (!string.IsNullOrWhiteSpace(strVal) && strVal != "unknown" && strVal != "in_progress")
+                                {
+                                    countries.Add(strVal);
+                                }
+                            }
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            if (!string.IsNullOrWhiteSpace(row.ResultJson))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(row.ResultJson);
+                    if (doc.RootElement.TryGetProperty("Overall", out var ov) && ov.TryGetInt32(out var sc))
+                    {
+                        scores.Add(sc);
+                    }
+                    if (doc.RootElement.TryGetProperty("Risks", out var risks) && risks.ValueKind == JsonValueKind.Array)
+                    {
+                        bool hasIpRisk = false;
+                        foreach (var rk in risks.EnumerateArray())
+                        {
+                            var code = rk.TryGetProperty("Code", out var c) ? c.GetString() ?? "" : "";
+                            var sec = rk.TryGetProperty("SectionId", out var s) ? s.GetString() ?? "" : "";
+                            if (code.StartsWith("IP_", StringComparison.OrdinalIgnoreCase) || sec.Equals("ip", StringComparison.OrdinalIgnoreCase))
+                            {
+                                hasIpRisk = true;
+                                break;
+                            }
+                        }
+                        if (hasIpRisk) ipRiskCount++;
+                    }
+                }
+                catch { }
+            }
+        }
+
+        int avgScore = scores.Count > 0 ? (int)Math.Round(scores.Average()) : 0;
+        int ipPercent = completedCount > 0 ? (int)Math.Round((double)ipRiskCount / completedCount * 100) : 0;
+        int countriesCount = countries.Count > 0 ? countries.Count : 1;
+
+        var stats = new BenchmarkStatsDto
+        {
+            TotalScreenings = completedCount,
+            CountriesCount = countriesCount,
+            AverageScore = avgScore,
+            IpRiskPercentage = ipPercent
+        };
+
+        // Cache for 10 minutes (also invalidated immediately upon CompleteSession)
+        _cache?.Set(BenchmarkCacheKey, stats, TimeSpan.FromMinutes(10));
+        return stats;
     }
 }

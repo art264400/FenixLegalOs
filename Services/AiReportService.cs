@@ -1,563 +1,352 @@
-using System.Net.Http.Headers;
+using System.Collections.Concurrent;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using FenixLegalOs.Models.Enums;
 using FenixLegalOs.Models.Report;
 using FenixLegalOs.Scoring.Report;
+using Microsoft.Extensions.Configuration;
 
 namespace FenixLegalOs.Services;
 
+public class NarrativeGenerationOptions
+{
+    public int MaxParallelModuleRequests { get; set; } = 4;
+    public int ActionBatchSize { get; set; } = 5;
+    public int RequestTimeoutSeconds { get; set; } = 30;
+    public bool EnableMetricsLogging { get; set; } = true;
+}
+
 public class AiReportService
 {
-    private readonly HttpClient _httpClient;
-    private readonly string? _apiKey;
-    private readonly string _baseUrl;
-    private readonly string _model;
+    private readonly ILlmNarrativeClient _llmClient;
+    private readonly NarrativeGenerationOptions _options;
+    private readonly ConcurrentBag<NarrativeGenerationMetrics> _metrics = new();
 
-    public AiReportService(IConfiguration? config = null)
+    public NarrativeGenerationOptions Options => _options;
+    public IReadOnlyList<NarrativeGenerationMetrics> LastMetrics => _metrics.ToList();
+
+    public AiReportService(IConfiguration? config = null, ILlmNarrativeClient? llmClient = null)
     {
-        _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(45) };
-        _apiKey = Environment.GetEnvironmentVariable("AI_API_KEY") 
-                  ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY") 
-                  ?? Environment.GetEnvironmentVariable("DEEPSEEK_API_KEY")
-                  ?? config?["AiSettings:ApiKey"];
-        _baseUrl = Environment.GetEnvironmentVariable("AI_BASE_URL") 
-                   ?? config?["AiSettings:BaseUrl"] 
-                   ?? "https://api.openai.com/v1";
-        _model = Environment.GetEnvironmentVariable("AI_MODEL") 
-                 ?? config?["AiSettings:Model"] 
-                 ?? "gpt-5.6-sol";
+        _options = new NarrativeGenerationOptions();
 
-        var keyStatus = string.IsNullOrWhiteSpace(_apiKey) ? "MISSING (check .env / OPENAI_API_KEY)" : "CONFIGURED";
-        Console.WriteLine($"[AiReportService] Initialized -> Model: {_model}, BaseUrl: {_baseUrl}, ApiKey: {keyStatus}");
+        if (config != null)
+        {
+            if (int.TryParse(config["NarrativeGeneration:MaxParallelModuleRequests"], out var p) && p > 0)
+                _options.MaxParallelModuleRequests = p;
+            if (int.TryParse(config["NarrativeGeneration:ActionBatchSize"], out var b) && b > 0)
+                _options.ActionBatchSize = b;
+            if (int.TryParse(config["NarrativeGeneration:RequestTimeoutSeconds"], out var t) && t > 0)
+                _options.RequestTimeoutSeconds = t;
+        }
+
+        _llmClient = llmClient ?? new LlmNarrativeClient(config);
+
+        Console.WriteLine($"[AiReportService] Initialized with Chunked Pipeline. Concurrency: {_options.MaxParallelModuleRequests}, BatchSize: {_options.ActionBatchSize}, Timeout: {_options.RequestTimeoutSeconds}s, Configured: {_llmClient.IsConfigured}");
     }
 
-    public async Task<ReportNarrativesDto> GenerateReportNarrativesAsync(ReportContext context)
+    public async Task<ReportNarrativesDto> GenerateReportNarrativesAsync(ReportContext context, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(_apiKey))
+        // 0. Ensure no mutation of source ReportContext
+        var expectedInitialFingerprint = ReportQualityGate.ComputeContextFingerprint(context);
+
+        if (!_llmClient.IsConfigured)
         {
-            Console.WriteLine("[AiReportService] API key missing -> using deterministic fallback narratives.");
-            return DeterministicFallbackNarratives.GenerateFallbackNarratives(context);
+            Console.WriteLine("[AiReportService] LLM not configured -> Generating full granular deterministic fallback narratives.");
+            var fallback = DeterministicFallbackNarratives.GenerateFallbackNarratives(context);
+            fallback.IsReady = false;
+            fallback.FailedBlocks = new List<string> { "LLM API Key not configured" };
+            return fallback;
         }
 
         try
         {
-            var promptPayload = BuildPromptPayload(context);
-            var rawJson = await CallLlmApiAsync(promptPayload);
+            // 1. Prepare minimal shared project context
+            var sharedContext = ContextSelector.ExtractCompactSharedContext(context);
 
-            if (!string.IsNullOrWhiteSpace(rawJson))
+            // 2. Parallel Module Generation (Bounded Concurrency via SemaphoreSlim)
+            // CRITICAL: Only applicable modules are processed. N/A modules generate 0 LLM calls!
+            var applicableModules = context.FocusModules
+                .Where(m => !context.NotApplicableModules.Any(na => string.Equals(na.SectionId, m.SectionId, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+
+            var moduleNarratives = new ConcurrentDictionary<string, ModuleNarrativeDto>(StringComparer.OrdinalIgnoreCase);
+            var moduleFingerprints = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var semaphore = new SemaphoreSlim(_options.MaxParallelModuleRequests, _options.MaxParallelModuleRequests);
+
+            var moduleTasks = applicableModules.Select(async module =>
             {
-                var cleanedJson = ExtractJsonBlock(rawJson);
-                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                var parsed = JsonSerializer.Deserialize<ReportNarrativesDto>(cleanedJson, options);
-                return ReportQualityGate.ValidateAndSanitize(parsed, context);
+                await semaphore.WaitAsync(ct);
+                try
+                {
+                    var crossModuleSignals = ContextSelector.SelectCrossModuleSignals(context, module.SectionId);
+
+                    var moduleRequest = new ModuleNarrativeRequestDto
+                    {
+                        ProjectContext = sharedContext,
+                        CrossModuleSignals = crossModuleSignals,
+                        Module = new ModuleNarrativeInputDto
+                        {
+                            SectionId = module.SectionId,
+                            Title = module.Title,
+                            Score = module.Score,
+                            Band = module.ScoreBand,
+                            MaxSeverity = module.MaxSeverity.ToString(),
+                            Findings = module.Findings.Select(f => new ModuleFindingInputDto
+                            {
+                                FindingCode = f.FindingCode,
+                                RootCauseCode = !string.IsNullOrWhiteSpace(f.FindingCode) ? f.FindingCode : string.Empty,
+                                Title = f.Title,
+                                Severity = f.Severity.ToString(),
+                                Priority = f.Priority.ToString(),
+                                WhyFound = f.WhyFound,
+                                WhyItMatters = f.WhyItMatters,
+                                Recommendation = f.Recommendation,
+                                Recommendations = f.Recommendations ?? new List<string>()
+                            }).ToList()
+                        }
+                    };
+
+                    var (rawModuleResponse, metrics) = await _llmClient.GenerateModuleNarrativeAsync(moduleRequest, ct);
+                    _metrics.Add(metrics);
+
+                    var (isValid, sanitizedModule, error) = ChunkedNarrativeValidator.ValidateAndSanitizeModule(
+                        rawModuleResponse, module, context);
+
+                    if (!isValid)
+                    {
+                        metrics.FallbackUsed = true;
+                        metrics.ErrorOrValidationFailure = error;
+                        Console.WriteLine($"[AiReportService] Module '{module.SectionId}' validation failed: {error} -> using granular module fallback.");
+                    }
+
+                    moduleNarratives[module.SectionId] = sanitizedModule;
+                    moduleFingerprints[module.SectionId] = ComputeModuleFingerprint(module);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[AiReportService] Exception generating module '{module.SectionId}': {ex.Message} -> using granular module fallback.");
+                    var fallbackModule = DeterministicFallbackNarratives.GenerateModuleFallback(context, module.SectionId);
+                    moduleNarratives[module.SectionId] = fallbackModule;
+                    moduleFingerprints[module.SectionId] = ComputeModuleFingerprint(module);
+                }
+                finally
+                {
+                    semaphore.Release();
+                }
+            });
+
+            await Task.WhenAll(moduleTasks);
+
+            // 3. Batched Action Narrative Generation
+            var actionNarratives = new ConcurrentDictionary<string, ActionNarrativeItemDto>(StringComparer.OrdinalIgnoreCase);
+            var actionBatchFingerprints = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            if (context.ActionPlan.Count > 0)
+            {
+                var actionBatches = context.ActionPlan
+                    .Select((action, index) => new { action, index })
+                    .GroupBy(x => x.index / _options.ActionBatchSize)
+                    .Select(g => g.Select(x => x.action).ToList())
+                    .ToList();
+
+                foreach (var batch in actionBatches)
+                {
+                    var batchKey = string.Join("_", batch.Select(a => a.ActionId));
+                    try
+                    {
+                        var batchRequest = new ActionBatchRequestDto
+                        {
+                            ProjectContext = sharedContext,
+                            Actions = batch.Select(a => new ActionNarrativeInputDto
+                            {
+                                ActionId = a.ActionId,
+                                Title = a.Title,
+                                WhatToDo = a.WhatToDo,
+                                PriorityGroup = a.PriorityGroup,
+                                ResolutionMode = a.ResolutionMode.ToString(),
+                                SourceFindings = a.CoveredFindingCodes.Select(code =>
+                                {
+                                    var f = context.AllFindings.FirstOrDefault(x => x.Code == code);
+                                    return new ActionSourceFindingDto
+                                    {
+                                        FindingCode = code,
+                                        Severity = f?.Severity.ToString() ?? "High",
+                                        WhyFound = f?.Finding ?? string.Empty
+                                    };
+                                }).ToList()
+                            }).ToList()
+                        };
+
+                        var (rawActionResponse, metrics) = await _llmClient.GenerateActionBatchNarrativeAsync(batchRequest, ct);
+                        _metrics.Add(metrics);
+
+                        var (isValid, sanitizedBatch, error) = ChunkedNarrativeValidator.ValidateAndSanitizeActionBatch(
+                            rawActionResponse, batch, context);
+
+                        if (!isValid)
+                        {
+                            metrics.FallbackUsed = true;
+                            metrics.ErrorOrValidationFailure = error;
+                            Console.WriteLine($"[AiReportService] Action batch '{batchKey}' validation failed: {error} -> using granular batch fallback.");
+                        }
+
+                        foreach (var (k, v) in sanitizedBatch)
+                        {
+                            actionNarratives[k] = v;
+                        }
+
+                        actionBatchFingerprints[batchKey] = ComputeBatchFingerprint(batch);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[AiReportService] Exception generating action batch '{batchKey}': {ex.Message} -> using granular batch fallback.");
+                        var fallbackBatch = DeterministicFallbackNarratives.GenerateActionBatchFallback(context, batch.Select(a => a.ActionId));
+                        foreach (var (k, v) in fallbackBatch)
+                        {
+                            actionNarratives[k] = v;
+                        }
+                        actionBatchFingerprints[batchKey] = ComputeBatchFingerprint(batch);
+                    }
+                }
             }
+
+            // 4. Executive Synthesis (STRICTLY AFTER module & action generation)
+            // Synthesize from compact inputs and the newly generated module summaries!
+            ExecutiveSynthesisResponseDto finalExecSynthesis;
+            try
+            {
+                var moduleSummariesForExecutive = applicableModules.Select(m => new ModuleExecutiveSummaryDto
+                {
+                    SectionId = m.SectionId,
+                    Title = m.Title,
+                    Score = m.Score,
+                    MaxSeverity = m.MaxSeverity.ToString(),
+                    Summary = moduleNarratives.TryGetValue(m.SectionId, out var mn) ? mn.Summary : string.Empty
+                }).ToList();
+
+                var execRequest = new ExecutiveSynthesisRequestDto
+                {
+                    ProjectProfile = new CompactProjectProfileExecutiveDto
+                    {
+                        Jurisdiction = sharedContext.Jurisdiction,
+                        EntityStatus = sharedContext.EntityStatus,
+                        Founders = sharedContext.Founders,
+                        Ownership = sharedContext.Ownership,
+                        ProductStage = sharedContext.ProductStage,
+                        ProductCreators = sharedContext.ProductCreators,
+                        Users = sharedContext.Users,
+                        Fundraising = sharedContext.Fundraising
+                    },
+                    OverallScore = context.Overall?.Score ?? 0,
+                    OverallBand = context.Overall?.Band ?? string.Empty,
+                    OverallLevelTitle = context.Overall?.LevelTitle ?? string.Empty,
+                    OverallConfidence = context.Overall?.Confidence ?? 0,
+                    RiskCounts = new Dictionary<string, int>
+                    {
+                        ["blocker"] = context.AllFindings.Count(f => f.Severity == RiskSeverity.Blocker),
+                        ["critical"] = context.AllFindings.Count(f => f.Severity == RiskSeverity.Critical),
+                        ["high"] = context.AllFindings.Count(f => f.Severity == RiskSeverity.High)
+                    },
+                    TopFindings = context.TopFindings.Take(5).Select(t => new TopFindingExecutiveSummaryDto
+                    {
+                        FindingCode = t.FindingCode,
+                        RootCauseCode = t.RootCauseCode,
+                        Title = t.Title,
+                        Severity = t.Severity.ToString(),
+                        Summary = t.ShortSummary
+                    }).ToList(),
+                    ModuleSummaries = moduleSummariesForExecutive,
+                    TopActions = context.ActionPlan.Take(3).Select(a => a.Title).ToList(),
+                    PositiveFactors = context.PositiveFactors.Take(3).Select(p => p.Title).ToList(),
+                    InvestmentReadiness = context.InvestmentReadiness != null ? new CompactInvestmentReadinessDto
+                    {
+                        IsApplicable = context.InvestmentReadiness.IsApplicable,
+                        ReadinessScore = context.InvestmentReadiness.ReadinessScore,
+                        Category = context.InvestmentReadiness.Category,
+                        UnresolvedBlockersCount = context.InvestmentReadiness.UnresolvedBlockersCount,
+                        BlockerTitles = context.InvestmentReadiness.BlockerTitles.Take(3).ToList()
+                    } : null,
+                    RequiresLegalWork = context.FenixLaw?.RequiresLegalWork ?? false,
+                    FenixLawServiceAreas = context.FenixLaw?.ServiceAreas ?? new List<string>()
+                };
+
+                var (rawExecResponse, execMetrics) = await _llmClient.GenerateExecutiveSynthesisAsync(execRequest, ct);
+                _metrics.Add(execMetrics);
+
+                var (isValidExec, sanitizedExec, execError) = ChunkedNarrativeValidator.ValidateAndSanitizeExecutive(
+                    rawExecResponse, context);
+
+                if (!isValidExec)
+                {
+                    execMetrics.FallbackUsed = true;
+                    execMetrics.ErrorOrValidationFailure = execError;
+                    Console.WriteLine($"[AiReportService] Executive synthesis validation failed: {execError} -> using granular executive fallback.");
+                }
+
+                finalExecSynthesis = sanitizedExec;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[AiReportService] Exception generating executive synthesis: {ex.Message} -> using granular executive fallback.");
+                finalExecSynthesis = DeterministicFallbackNarratives.GenerateExecutiveFallback(context, moduleNarratives.ToDictionary(k => k.Key, v => v.Value));
+            }
+
+            // 5. Assemble Final ReportNarrativesDto
+            var failedBlocks = _metrics.Where(m => m.FallbackUsed || !m.Success).Select(m => $"{m.Stage}: {m.ModuleOrBatch} ({m.ErrorOrValidationFailure ?? "failure"})").ToList();
+            var isAllBlocksReady = failedBlocks.Count == 0;
+
+            var assembled = new ReportNarrativesDto
+            {
+                ContextFingerprint = expectedInitialFingerprint,
+                SchemaVersion = "2.0",
+                IsReady = isAllBlocksReady,
+                FailedBlocks = failedBlocks,
+                ProjectProfileNarrative = finalExecSynthesis.ProjectProfileNarrative,
+                ExecutiveConclusion = finalExecSynthesis.ExecutiveConclusion,
+                RootCauseSummaries = finalExecSynthesis.RootCauseSummaries,
+                ModuleNarratives = moduleNarratives.ToDictionary(k => k.Key, v => v.Value),
+                ActionNarratives = actionNarratives.ToDictionary(k => k.Key, v => v.Value),
+                FenixLawRecommendation = finalExecSynthesis.FenixLawRecommendation
+            };
+
+            // 6. Quality Gate & Grounding verification
+            var validated = ReportQualityGate.ValidateAndSanitize(assembled, context);
+            validated.IsReady = isAllBlocksReady;
+            validated.FailedBlocks = failedBlocks;
+
+            // Double check: ensure ReportContext was not mutated
+            var postFingerprint = ReportQualityGate.ComputeContextFingerprint(context);
+            if (expectedInitialFingerprint != postFingerprint)
+            {
+                throw new InvalidOperationException("CRITICAL INVARIANT VIOLATION: ReportContext was mutated during narrative generation!");
+            }
+
+            return validated;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[AiReportService] Exception during LLM execution: {ex.Message} -> using fallback.");
+            Console.WriteLine($"[AiReportService] Pipeline failure: {ex.Message} -> fallback.");
+            var fallback = DeterministicFallbackNarratives.GenerateFallbackNarratives(context);
+            fallback.IsReady = false;
+            fallback.FailedBlocks = new List<string> { $"Pipeline failure: {ex.Message}" };
+            return fallback;
         }
-
-        return DeterministicFallbackNarratives.GenerateFallbackNarratives(context);
     }
 
-    private string BuildPromptPayload(ReportContext ctx)
+    private static string ComputeModuleFingerprint(FocusModuleDetailDto module)
     {
-        // 1. Material findings: all Blocker, all Critical, and material High
-        var materialFindings = ctx.AllFindings
-            .Where(f => f.Severity is RiskSeverity.Blocker or RiskSeverity.Critical or RiskSeverity.High)
-            .OrderByDescending(f => f.Severity switch
-            {
-                RiskSeverity.Blocker => 4,
-                RiskSeverity.Critical => 3,
-                RiskSeverity.High => 2,
-                _ => 1
-            })
-            .ThenByDescending(f => f.Priority == RiskPriority.Now ? 2 : f.Priority == RiskPriority.BeforeRound ? 1 : 0)
-            .Select(f => new
-            {
-                findingCode = f.Code,
-                module = f.SectionId,
-                title = f.Title,
-                severity = f.Severity.ToString(),
-                whyItMatters = f.WhyItMatters,
-                rootCauseCode = !string.IsNullOrWhiteSpace(f.RootCauseGroup) ? f.RootCauseGroup : f.Code
-            })
-            .ToList();
-
-        // 2. Root causes
-        var rootCauses = ctx.TopFindings.Select(t => new
-        {
-            rootCauseCode = t.RootCauseCode,
-            findingCode = t.FindingCode,
-            title = t.Title,
-            severity = t.Severity.ToString(),
-            summary = t.ShortSummary
-        }).ToList();
-
-        // 3. Investment readiness
-        var investmentReadiness = new
-        {
-            isApplicable = ctx.InvestmentReadiness?.IsApplicable ?? false,
-            baseScore = ctx.InvestmentReadiness?.BaseScore ?? 0,
-            baseCategory = ctx.InvestmentReadiness?.BaseCategory ?? "Не применимо",
-            crossModuleBlockers = ctx.InvestmentReadiness?.CrossModuleBlockers.Select(b => new
-            {
-                module = b.ModuleTitle,
-                findingCode = b.FindingCode,
-                title = b.Title,
-                severity = b.Severity.ToString(),
-                whyItBlocksDueDiligence = b.WhyItBlocksDueDiligence
-            }) ?? Enumerable.Empty<object>()
-        };
-
-        // 4. Grounded factual boundaries and allowed business impacts
-        var knownFactsList = ctx.Profile.KeyFacts.Select(f => $"{f.Label}: {f.Value}").ToList();
-        var allowedImpacts = ctx.FocusModules
-            .SelectMany(m => m.Findings)
-            .Select(f => f.WhyItMatters)
-            .Concat(ctx.InvestmentReadiness?.CrossModuleBlockers.Select(b => b.WhyItBlocksDueDiligence) ?? Enumerable.Empty<string>())
-            .Concat(ctx.ActionPlan.Select(a => a.WhyNow))
-            .Where(s => !string.IsNullOrWhiteSpace(s))
-            .Distinct()
-            .ToList();
-
-        var inputData = new
-        {
-            projectProfile = new
-            {
-                projectName = ctx.ProjectName,
-                keyFacts = ctx.Profile.KeyFacts.Select(f => new { f.Label, f.Value }),
-                baselineNarrative = ctx.Profile.ConfigurationNarrative
-            },
-            factualBoundaries = new
-            {
-                groundedKeyFacts = knownFactsList,
-                allowedBusinessImpacts = allowedImpacts
-            },
-            overallAssessment = new
-            {
-                score = ctx.Overall.Score,
-                scoreBand = ctx.Overall.Band,
-                levelTitle = ctx.Overall.LevelTitle,
-                confidence = ctx.Overall.Confidence,
-                topDrivers = ctx.Overall.TopDrivers,
-                strengths = ctx.PositiveFactors.Select(p => p.Title).ToList()
-            },
-            materialFindings = materialFindings,
-            rootCauses = rootCauses,
-            investmentReadiness = investmentReadiness,
-            focusModules = ctx.FocusModules.Select(m => new
-            {
-                sectionId = m.SectionId,
-                title = m.Title,
-                score = m.Score,
-                band = m.ScoreBand,
-                maxSeverity = m.MaxSeverity.ToString(),
-                findings = m.Findings.Select(f => new
-                {
-                    findingCode = f.FindingCode,
-                    title = f.Title,
-                    severity = f.Severity.ToString(),
-                    whyFound = f.WhyFound,
-                    whyItMatters = f.WhyItMatters,
-                    recommendation = f.Recommendation,
-                    priority = f.Priority.ToString()
-                })
-            }),
-            actionPlan = ctx.ActionPlan.Select(a => new
-            {
-                actionId = a.ActionId,
-                title = a.Title,
-                businessReason = a.WhyNow,
-                requiredOutcome = a.ExpectedResult,
-                whatToDo = a.WhatToDo,
-                priorityGroup = a.PriorityGroup,
-                resolutionMode = a.ResolutionMode.ToString(),
-                coveredFindings = a.CoveredFindingCodes
-            }),
-            fenixLaw = new
-            {
-                requiresLegalWork = ctx.FenixLaw.RequiresLegalWork,
-                serviceAreas = ctx.FenixLaw.ServiceAreas.Count > 0
-                    ? ctx.FenixLaw.ServiceAreas
-                    : ctx.FenixLaw.ServiceCards.Select(s => s.Title).ToList()
-            }
-        };
-
-        return JsonSerializer.Serialize(inputData, new JsonSerializerOptions { WriteIndented = true });
+        var raw = $"{module.SectionId}|{module.Score}|{module.MaxSeverity}|{string.Join(",", module.Findings.Select(f => f.FindingCode))}";
+        using var sha = SHA256.Create();
+        var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(raw));
+        return Convert.ToHexString(bytes)[..16];
     }
 
-    private async Task<string?> CallLlmApiAsync(string jsonContext)
+    private static string ComputeBatchFingerprint(List<UnifiedActionItemDto> batch)
     {
-        var systemPrompt = @"Ты — редактор клиентского юридического отчета Fenix SLS.
-
-Тебе передается результат юридического анализа, который УЖЕ полностью
-сформирован детерминированным Legal Engine.
-
-Ты НЕ проводишь юридический анализ.
-
-Ты НЕ определяешь:
-- существует ли риск;
-- применимое законодательство;
-- юридические последствия;
-- severity;
-- priority;
-- Score;
-- необходимые документы;
-- необходимые действия;
-- ResolutionMode;
-- необходимость юридической помощи.
-
-Твоя единственная задача — превратить уже сформированные движком факты,
-выводы и рекомендации в ясный профессиональный русский текст,
-НЕ ИЗМЕНЯЯ И НЕ РАСШИРЯЯ ИХ СМЫСЛ.
-
-==================================================
-ГЛАВНОЕ ПРАВИЛО ФАКТОЛОГИЧЕСКОЙ СВЯЗАННОСТИ (GROUNDING)
-==================================================
-
-Любое содержательное утверждение в твоем ответе должно иметь
-прямое основание во входном JSON.
-
-Если информация отсутствует во входных данных — ее не существует
-для целей данного отчета.
-
-Ты можешь синтезировать переданные факты (A + B -> понятное объяснение),
-но СТРОГО ЗАПРЕЩЕНО выдумывать новые факты C.
-
-==================================================
-ПРАВИЛА ПРЕДОТВРАЩЕНИЯ ГАЛЛЮЦИНАЦИЙ (ANTI-HALLUCINATION RULES)
-==================================================
-
-1. ЗАПРЕТ ВЫДУМЫВАНИЯ СОБЫТИЙ (No Invented Events):
-   - Если указано участие подрядчиков, запрещено писать «разработчик ушел», «программист покинул команду», если факт ухода прямо не передан во входных данных (например, в whyFound).
-
-2. ЗАПРЕТ ВЫДУМЫВАНИЯ СТАТУСА ДОКУМЕНТОВ (No Invented Document States):
-   - Если указано «права не подтверждены» или «договор устный», запрещено утверждать «акты приема-передачи никогда не составлялись» или «документы вовсе отсутствуют».
-
-3. ЗАПРЕТ ВЫДУМЫВАНИЯ ПРИЧИН КОНФЛИКТА (No Invented Causes):
-   - Если указан спор или тупик, запрещено придумывать причину конфликта (например, «конфликт из-за невыплаты денег», «ссора при уходе»).
-
-4. ЗАПРЕТ КАТЕГОРИЧНЫХ КОММЕРЧЕСКИХ УГРОЗ (No Extreme Guarantees):
-   - Запрещено писать «институциональные инвесторы гарантированно откажут», «сделка сорвется», «компания закроется».
-   - Последствия должны строго опираться на allowedBusinessImpacts и whyItMatters («создает существенный риск при проведении Due Diligence», «осложняет привлечение инвестиций»).
-
-5. СОХРАНЕНИЕ НЕОПРЕДЕЛЕННОСТИ (Preserve Uncertainty):
-   - Если факт неизвестен или не подтвержден, описывай его как неопределенность («информация не зафиксирована документально», «требует сверки»), а не как утвердительное отсутствие.
-
-6. ЗАПРЕТ РАСШИРЕНИЯ МАСШТАБА (No Scope Inflation):
-   - Не превращай «подрядчики» в «все ключевые модули продукта», «часть команды» в «вся команда», если это не указано в whyFound.
-
-==================================================
-СТРОГО ЗАПРЕЩЕНО
-==================================================
-
-Запрещено самостоятельно добавлять:
-
-- названия законов и нормативных актов;
-- GDPR и иные правовые режимы;
-- утверждения о нарушении закона;
-- утверждения о незаконности;
-- штрафы, санкции и ответственность;
-- суммы;
-- проценты;
-- сроки;
-- юридические тесты и критерии;
-- обязательные требования;
-- новые договоры или документы;
-- новые юридические механизмы;
-- новые риски;
-- новые последствия;
-- новые рекомендации;
-- новые бизнес-риски;
-- новые инвестиционные блокеры;
-- новые условия сделок;
-- новые параметры vesting / cliff / leaver;
-- новые требования к структуре компании.
-
-Это запрещено даже если такие выводы логично следуют из ситуации.
-
-==================================================
-ДЕТЕРМИНИРОВАННЫЕ ПОЛЯ
-==================================================
-
-Следующие значения являются окончательными:
-
-Score
-ScoreBand
-Severity
-Priority
-Applicability
-Finding
-RootCause
-BusinessImpact
-Recommendation
-Action
-BusinessReason
-RequiredOutcome
-ResolutionMode
-InvestmentBlocker
-RequiresLegalWork
-FenixLawServiceAreas
-
-Их нельзя изменять, усиливать или расширять.
-
-==================================================
-FINDING NARRATIVES
-==================================================
-
-Для каждого Finding движок передает:
-
-title
-facts / whyFound
-whyItMatters
-recommendation
-severity
-priority
-
-Ты можешь только переформулировать:
-
-whyFound → whyFound
-whyItMatters → whyItMatters
-recommendation → recommendation
-
-Смысл должен оставаться эквивалентным исходному.
-
-Нельзя добавлять последствия или рекомендации, которых нет
-в соответствующем Finding.
-
-==================================================
-ACTION NARRATIVES
-==================================================
-
-Для каждого Action движок передает:
-
-actionId
-title
-businessReason
-requiredOutcome
-resolutionMode
-coveredFindings
-
-Сформируй:
-
-whyNow = краткая переформулировка businessReason
-expectedResult = краткая переформулировка requiredOutcome
-
-Нельзя добавлять:
-- новый документ;
-- новый юридический механизм;
-- срок;
-- числовой параметр;
-- юридическое последствие;
-- дополнительное действие.
-
-==================================================
-PROJECT PROFILE
-==================================================
-
-Project Profile описывает только текущее состояние проекта.
-
-Используй исключительно projectProfile.keyFacts.
-
-Не интерпретируй их как риски.
-
-Не давай рекомендаций.
-
-Не используй severity.
-
-Не говори, что что-либо ""необходимо исправить"".
-
-==================================================
-EXECUTIVE CONCLUSION
-==================================================
-
-Executive Conclusion — это синтез уже существующих результатов.
-
-Используй только:
-
-overallAssessment (score, scoreBand, levelTitle, topDrivers, strengths)
-rootCauses (главные детерминированные корни проблем)
-materialFindings (все Blocker, Critical и High находки)
-investmentReadiness (готовность к сделке и сквозные блокеры)
-fenixLaw (сервисные зоны)
-
-Синтезируй эти детерминированные факты:
-- опиши общую конструкцию компании
-- выдели главные уязвимости (Blocker / Critical)
-- объясни бизнес-последствия
-- покажи, что определяет текущий Score.
-
-Если Critical/Blocker отсутствуют, нельзя писать о критических
-проблемах или необходимости устранения критических блокеров.
-
-==================================================
-MODULE NARRATIVES
-==================================================
-
-Не пиши общую юридическую теорию.
-
-Запрещены generic-фразы вроде:
-
-""Интеллектуальная собственность является важным активом компании.""
-
-""Команда играет ключевую роль в успехе бизнеса.""
-
-""Персональные данные требуют строгого соблюдения законодательства.""
-
-Каждый абзац должен описывать именно переданный проект.
-
-==================================================
-FENIX LAW
-==================================================
-
-Не определяй самостоятельно необходимость юридической помощи.
-
-Используй только:
-
-requiresLegalWork
-serviceAreas
-
-Если requiresLegalWork = false:
-не рекомендуй юридическое сопровождение.
-
-Если requiresLegalWork = true:
-опиши только переданные serviceAreas.
-
-Fenix SLS называется:
-
-""юридический скрининг""
-или
-""диагностика юридической готовности"".
-
-Никогда не называй Fenix SLS:
-""аудитом""
-или
-""юридическим аудитом"".
-
-==================================================
-ТЕРМИНОЛОГИЯ
-==================================================
-
-Не выводи внутренние идентификаторы пользователю:
-
-FND_*
-COR_*
-IP_*
-DATA_*
-TEAM_*
-PROD_*
-ActionId
-FactStore
-SectionId
-RootCauseGroup
-
-Они разрешены только как ключи JSON для связи результата
-с объектами движка.
-
-Не используй эмодзи.
-
-Не упоминай механизм генерации отчета.
-
-Используй профессиональный, ясный русский деловой язык.
-
-==================================================
-ФОРМАТ
-==================================================
-
-Верни ТОЛЬКО JSON со следующей структурой:
-{
-  ""projectProfileNarrative"": ""2-4 емких предложения с описанием текущей юридической конструкции компании"",
-  ""executiveConclusion"": ""Синтез ситуации (800-1200 знаков): общая конструкция, главные детерминированные уязвимости, бизнес-последствия, что определяет текущий Score"",
-  ""rootCauseSummaries"": {
-    ""ROOT_CAUSE_CODE_OR_FINDING_CODE"": ""Короткая емкая формулировка корневой проблемы (до 150 знаков)""
-  },
-  ""moduleNarratives"": {
-    ""sectionId"": {
-      ""summary"": ""Характеристика ситуации в данном направлении"",
-      ""practicalMeaning"": ""Что это значит для бизнеса на практике: инвестиции, споры, сделки"",
-      ""findingNarratives"": {
-        ""FINDING_CODE"": {
-          ""whyFound"": ""Почему SLS это выявил"",
-          ""whyItMatters"": ""Почему это важно для бизнеса"",
-          ""recommendation"": ""Что рекомендуется сделать""
-        }
-      }
-    }
-  },
-  ""actionNarratives"": {
-    ""ACTION_ID"": {
-      ""whyNow"": ""Почему это нужно сделать на данном этапе"",
-      ""expectedResult"": ""Ожидаемый практический результат""
-    }
-  },
-  ""fenixLawRecommendation"": ""Заключение о необходимости юридической помощи по итогам скрининга""
-}
-
-Никакого Markdown вокруг JSON (никаких ```json).
-
-Никакого текста до JSON.
-
-Никакого текста после JSON.
-
-Перед отправкой результата проверь каждое содержательное утверждение:
-""Есть ли прямое основание для этого утверждения во входном JSON?""
-Если нет — удали его.";
-
-        var requestBody = new
-        {
-            model = _model,
-            messages = new[]
-            {
-                new { role = "system", content = systemPrompt },
-                new { role = "user", content = $"Входные структурированные данные Fenix SLS:\n\n{jsonContext}\n\nСформируйте JSON с нарративами:" }
-            },
-            temperature = 0.2,
-            response_format = new { type = "json_object" }
-        };
-
-        var json = JsonSerializer.Serialize(requestBody);
-        var request = new HttpRequestMessage(HttpMethod.Post, $"{_baseUrl.TrimEnd('/')}/chat/completions")
-        {
-            Content = new StringContent(json, Encoding.UTF8, "application/json")
-        };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
-
-        var response = await _httpClient.SendAsync(request);
-        if (!response.IsSuccessStatusCode)
-        {
-            var err = await response.Content.ReadAsStringAsync();
-            Console.WriteLine($"[AiReportService] API call failed ({response.StatusCode}): {err}");
-            return null;
-        }
-
-        var responseJson = await response.Content.ReadAsStringAsync();
-        using var doc = JsonDocument.Parse(responseJson);
-        var content = doc.RootElement
-            .GetProperty("choices")[0]
-            .GetProperty("message")
-            .GetProperty("content")
-            .GetString();
-
-        return content;
-    }
-
-    private static string ExtractJsonBlock(string raw)
-    {
-        var trimmed = raw.Trim();
-        if (trimmed.StartsWith("```json"))
-        {
-            trimmed = trimmed[7..];
-        }
-        else if (trimmed.StartsWith("```"))
-        {
-            trimmed = trimmed[3..];
-        }
-        if (trimmed.EndsWith("```"))
-        {
-            trimmed = trimmed[..^3];
-        }
-        return trimmed.Trim();
+        var raw = string.Join(",", batch.Select(a => $"{a.ActionId}_{a.PriorityGroup}_{a.ResolutionMode}"));
+        using var sha = SHA256.Create();
+        var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(raw));
+        return Convert.ToHexString(bytes)[..16];
     }
 }
