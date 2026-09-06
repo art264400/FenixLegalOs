@@ -960,7 +960,7 @@ public class TypstPdfService
   gutter: 12pt,
   [
     #card(fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), inset: 12pt)[
-      #text(font: sans, size: 7.5pt, weight: ""bold"", fill: rgb(""#94A3B8""), tracking: 1pt)[СЛОЙ A · БАЗОВАЯ ГОТОВНОСТЬ ИНВЕСТ-БЛОКА]
+      #text(font: sans, size: 7pt, weight: ""bold"", fill: rgb(""#94A3B8""), tracking: 0.3pt)[СЛОЙ A · БАЗОВАЯ ГОТОВНОСТЬ ИНВЕСТ-БЛОКА]
       #v(6pt)
       #grid(
         columns: (auto, 1fr),
@@ -980,7 +980,7 @@ public class TypstPdfService
   ],
   [
     #card(fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), inset: 12pt)[
-      #text(font: sans, size: 7.5pt, weight: ""bold"", fill: rgb(""#94A3B8""), tracking: 1pt)[СЛОЙ B · ИТОГОВАЯ ГОТОВНОСТЬ К СДЕЛКЕ (DUE DILIGENCE)]
+      #text(font: sans, size: 7pt, weight: ""bold"", fill: rgb(""#94A3B8""), tracking: 0.3pt)[СЛОЙ B · ГОТОВНОСТЬ К СДЕЛКЕ (DUE DILIGENCE)]
       #v(6pt)
       #grid(
         columns: (auto, 1fr),
