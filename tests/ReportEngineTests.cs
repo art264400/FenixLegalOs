@@ -96,9 +96,9 @@ public class ReportEngineTests
     {
         var findings = new List<RiskFinding>
         {
-            new() { Code = "IP_ASSIGNMENT", Title = "Собрать права на продукт", Priority = RiskPriority.Now, Severity = RiskSeverity.Critical, Recommendation = "Подписать акты" },
-            new() { Code = "CONTRACT_TEMPLATES", Title = "Внедрить договоры", Priority = RiskPriority.ThirtyDays, Severity = RiskSeverity.Medium, Recommendation = "Разработать оферту" },
-            new() { Code = "INVEST_DATA_ROOM", Title = "Подготовить Data Room", Priority = RiskPriority.BeforeRound, Severity = RiskSeverity.High, Recommendation = "Собрать документы" }
+            new() { Code = "IP_PRODUCT_RIGHTS_UNCONFIRMED", Title = "Собрать права на продукт", Priority = RiskPriority.Now, Severity = RiskSeverity.Critical, Recommendation = "Подписать акты" },
+            new() { Code = "CONTRACTS_NOT_FORMALIZED", Title = "Внедрить договоры", Priority = RiskPriority.ThirtyDays, Severity = RiskSeverity.Medium, Recommendation = "Разработать оферту" },
+            new() { Code = "INVEST_DATA_ROOM_MISSING", Title = "Подготовить Data Room", Priority = RiskPriority.BeforeRound, Severity = RiskSeverity.High, Recommendation = "Собрать документы" }
         };
 
         var actions = UnifiedActionPlanBuilder.BuildUnifiedActionPlan(findings, new SharedFactStore());
@@ -302,9 +302,9 @@ public class ReportEngineTests
     {
         var findings = new List<RiskFinding>
         {
-            new() { Code = "CTR_01", SectionId = "contracts", Priority = RiskPriority.Now, Severity = RiskSeverity.High, Title = "Договорной риск", Recommendation = "Разработать типовой договор" },
-            new() { Code = "TEAM_01", SectionId = "team", Priority = RiskPriority.Now, Severity = RiskSeverity.High, Title = "Риск команды", Recommendation = "Оформить NDA и передачу прав" },
-            new() { Code = "DATA_01", SectionId = "data", Priority = RiskPriority.Now, Severity = RiskSeverity.High, Title = "Риск данных", Recommendation = "Внедрить политику конфиденциальности" }
+            new() { Code = "CONTRACTS_NOT_FORMALIZED", SectionId = "contracts", Priority = RiskPriority.Now, Severity = RiskSeverity.High, Title = "Договорной риск", Recommendation = "Разработать типовой договор" },
+            new() { Code = "TEAM_NO_WRITTEN_CONTRACTS", SectionId = "team", Priority = RiskPriority.Now, Severity = RiskSeverity.High, Title = "Риск команды", Recommendation = "Оформить NDA и передачу прав" },
+            new() { Code = "DATA_PRIVACY_NOTICE_MISSING", SectionId = "data", Priority = RiskPriority.Now, Severity = RiskSeverity.High, Title = "Риск данных", Recommendation = "Внедрить политику конфиденциальности" }
         };
 
         var plan = UnifiedActionPlanBuilder.BuildUnifiedActionPlan(findings, new SharedFactStore());
@@ -314,8 +314,8 @@ public class ReportEngineTests
         Assert.NotEqual(plan[0].WhyNow, plan[1].WhyNow);
         Assert.NotEqual(plan[1].WhyNow, plan[2].WhyNow);
 
-        var ctrAction = plan.First(a => a.CoveredFindingCodes.Contains("CTR_01") || a.ActionId.Contains("CONTRACT"));
-        var teamAction = plan.First(a => a.CoveredFindingCodes.Contains("TEAM_01") || a.ActionId.Contains("TEAM"));
+        var ctrAction = plan.First(a => a.CoveredFindingCodes.Contains("CONTRACTS_NOT_FORMALIZED") || a.ActionId.Contains("CONTRACT"));
+        var teamAction = plan.First(a => a.CoveredFindingCodes.Contains("TEAM_NO_WRITTEN_CONTRACTS") || a.ActionId.Contains("TEAM"));
         Assert.Contains("контрагент", ctrAction.WhyNow, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("команд", teamAction.WhyNow, StringComparison.OrdinalIgnoreCase);
     }
@@ -1036,19 +1036,20 @@ public class ReportEngineTests
     [Fact(DisplayName = "10. ActionableHighCriticalBlockerFinding_HasActionPlanCoverage")]
     public void ActionableHighCriticalBlockerFinding_HasActionPlanCoverage()
     {
-        var findings = new List<RiskFinding>();
-        for (int i = 1; i <= 10; i++)
-        {
-            findings.Add(new RiskFinding
+        var findings = DataBank.Risks
+            .Where(r => r.Severity >= RiskSeverity.High)
+            .Take(10)
+            .Select(r => new RiskFinding
             {
-                Code = $"RISK_{i}",
-                SectionId = "founders",
-                Title = $"Actionable Risk {i}",
-                Severity = RiskSeverity.High,
-                Priority = RiskPriority.Now,
-                Recommendation = $"Fix {i}"
-            });
-        }
+                Code = r.Code,
+                SectionId = r.SectionId,
+                Title = r.Title,
+                Severity = r.Severity,
+                Priority = r.Priority,
+                Recommendation = r.Recommendation,
+                RecommendedActionId = r.RecommendedActionId
+            })
+            .ToList();
 
         var facts = new SharedFactStore();
         var actionPlan = UnifiedActionPlanBuilder.BuildUnifiedActionPlan(findings, facts);

@@ -32,20 +32,24 @@ public static class ProjectProfileExtractor
             "us" => "США (Делавэр)",
             "uae" => "ОАЭ",
             "uk" => "Великобритания",
-            _ => "Казахстан"
+            _ => "Не указана"
         };
         keyFacts.Add(new FactItemDto { Key = "jurisdiction", Label = "Юрисдикция", Value = jurVal, Icon = "globe" });
 
         // 2. Founders & Equity
         var fCount = GetStringVal(facts, "founders.count");
+        var equityShareCount = GetListVal(facts, "founders.equityShares").Count;
         var fVal = fCount switch
         {
             "1" or "solo" => "1 основатель",
             "2" => "2 сооснователя",
             "3" => "3 сооснователя",
             "4plus" or "4" => "4+ сооснователей",
-            "formal_only" => "Несколько (не все активны)",
-            _ => "1 основатель"
+            "multiple" or "formal_only" when equityShareCount == 2 => "2 сооснователя (не все активны)",
+            "multiple" or "formal_only" when equityShareCount == 3 => "3 сооснователя (не все активны)",
+            "multiple" or "formal_only" when equityShareCount >= 4 => "4+ сооснователей (не все активны)",
+            "multiple" or "formal_only" => "Несколько сооснователей (не все активны)",
+            _ => "Не указано"
         };
         keyFacts.Add(new FactItemDto { Key = "founders", Label = "Основатели", Value = fVal, Icon = "users" });
 
@@ -164,11 +168,14 @@ public static class ProjectProfileExtractor
 
         // Build deterministic configuration narrative (2-4 neutral sentences)
         var name = string.IsNullOrWhiteSpace(projectName) ? "Проект" : projectName;
+        var jurisdictionSuffix = string.IsNullOrEmpty(jur)
+            ? " Юрисдикция проекта не указана."
+            : $" в юрисдикции {jurVal}.";
         var p1 = isUnincorporated
-            ? $"{name} находится на ранней стадии и работает без зарегистрированного юридического лица в юрисдикции {jurVal}."
+            ? $"{name} находится на ранней стадии и работает без зарегистрированного юридического лица.{jurisdictionSuffix}"
             : isInProcess
-            ? $"{name} находится в процессе регистрации юридического лица в юрисдикции {jurVal}."
-            : $"{name} осуществляет деятельность через структуру в юрисдикции {jurVal}.";
+            ? $"{name} находится в процессе регистрации юридического лица.{jurisdictionSuffix}"
+            : $"{name} осуществляет деятельность через зарегистрированную структуру.{jurisdictionSuffix}";
 
         var p2 = fCount is "1" or "solo"
             ? "В проекте один ключевой основатель, осуществляющий единоличное управление."

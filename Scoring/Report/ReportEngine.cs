@@ -346,11 +346,24 @@ public static class ReportEngine
             .ToList();
 
         var allBlockerTitles = crossBlockers.Select(cb => $"{cb.ModuleTitle}: {cb.Title}").ToList();
+        var canonicalBlockerTitles = crossBlockers
+            .Select(cb => cb.Title.Trim())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (result.InvestmentReadiness?.Blockers != null && result.InvestmentReadiness.Blockers.Count > 0)
         {
-            allBlockerTitles.AddRange(result.InvestmentReadiness.Blockers);
+            foreach (var blockerTitle in result.InvestmentReadiness.Blockers)
+            {
+                var canonicalTitle = blockerTitle.Trim();
+                if (canonicalBlockerTitles.Add(canonicalTitle))
+                {
+                    allBlockerTitles.Add(canonicalTitle);
+                }
+            }
         }
-        allBlockerTitles = allBlockerTitles.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var displayedBlockerCount = allBlockerTitles.Count;
+        var displayedBlockerPhrase = displayedBlockerCount == 1
+            ? "1 критическим блокером или существенным риском"
+            : $"{displayedBlockerCount} критическими блокерами и существенными рисками";
 
         ctx.InvestmentReadiness = new InvestmentReadinessReportDto
         {
@@ -364,8 +377,8 @@ public static class ReportEngine
             CrossModuleBlockers = crossBlockers,
             SummaryDescription = !isInvApplicable 
                 ? "Привлечение инвестиций не заявлено как активная цель текущего этапа."
-                : crossBlockers.Count > 0 
-                    ? $"Базовая готовность инвест-блока составляет {baseScore}/100, однако общая готовность к сделке ограничена {crossBlockers.Count} критическими блокерами в смежных направлениях (структура, права, договоренности)."
+                : displayedBlockerCount > 0 
+                    ? $"Базовая готовность инвест-блока составляет {baseScore}/100, однако общая готовность к сделке ограничена {displayedBlockerPhrase} (структура, права, договоренности)."
                     : $"Оценка инвестиционной готовности компании составляет {baseScore} / 100 ({baseCategory}). Критичных сквозных юридических блокеров не выявлено."
         };
 

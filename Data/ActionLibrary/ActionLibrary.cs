@@ -29,7 +29,7 @@ public static class ActionLibrary
             RequiredOutcome = "В корпоративный договор внедрен четкий регламент разрешения тупиковых ситуаций (процедура эскалации, привлечение нейтрального медиатора и правила выкупа доли при недостижении согласия).",
             WhatToDo = "Разработать и подписать положение о порядке преодоления тупиковых ситуаций в соглашении основателей.",
             Dependencies = new(),
-            SupportedFindingCodes = new() { "FND_DEADLOCK_RISK", "FND_DEADLOCK", "FND_GOVERNANCE_GAP" }
+            SupportedFindingCodes = new() { "FND_DEADLOCK_RISK", "FND_DEADLOCK", "FND_GOVERNANCE_GAP", "FND_NO_DEADLOCK_PROTECTION", "FND_GOVERNANCE_AMBIGUITY" }
         },
         new()
         {
@@ -43,7 +43,7 @@ public static class ActionLibrary
             RequiredOutcome = "Подписан юридически обязывающий документ, комплексно фиксирующий доли, порядок голосования, ограничения на продажу долей третьим лицам и ключевые обязательства сторон.",
             WhatToDo = "Подготовить проект соглашения между основателями, согласовать существенные условия и зафиксировать подписями всех участников.",
             Dependencies = new(),
-            SupportedFindingCodes = new() { "FND_DOCUMENTATION_GAP", "FND_EQUITY_NOT_FORMALIZED", "FND_EQUITY_AMBIGUITY", "FND_NO_AGREEMENT" }
+            SupportedFindingCodes = new() { "FND_DOCUMENTATION_GAP", "FND_EQUITY_NOT_FORMALIZED", "FND_EQUITY_AMBIGUITY", "FND_NO_AGREEMENT", "FND_STRATEGIC_MISALIGNMENT" }
         },
         new()
         {
@@ -57,7 +57,7 @@ public static class ActionLibrary
             RequiredOutcome = "В корпоративном договоре закреплен график поэтапного перехода прав на доли в зависимости от срока и вклада основателя, а также правила выкупа долей при добровольном или вынужденном выходе из проекта.",
             WhatToDo = "Включить положения о вестинге и правах выкупа долей при уходе основателя в корпоративный договор.",
             Dependencies = new() { "ACT_FOUNDER_AGREEMENT_SHA" },
-            SupportedFindingCodes = new() { "FND_NO_VESTING", "FND_EXIT_UNREGULATED", "FND_LEAVER_UNPROTECTED", "FND_DEAD_EQUITY" }
+            SupportedFindingCodes = new() { "FND_NO_VESTING", "FND_EXIT_UNREGULATED", "FND_LEAVER_UNPROTECTED", "FND_DEAD_EQUITY", "FND_INCOMPLETE_LEAVER_RULES", "FND_EXIT_RULES_MISSING" }
         },
         new()
         {
@@ -99,7 +99,21 @@ public static class ActionLibrary
             RequiredOutcome = "Все личные займы и вклады основателей подтверждены договорами процентного/беспроцентного займа либо оформлены как вклад в добавочный капитал.",
             WhatToDo = "Собрать выписки и платежные поручения и подписать договоры займа между основателями и компанией.",
             Dependencies = new(),
-            SupportedFindingCodes = new() { "FND_PERSONAL_INVESTMENT_UNRECORDED", "FND_LOAN_NOT_DOCUMENTED" }
+            SupportedFindingCodes = new() { "FND_PERSONAL_INVESTMENT_UNRECORDED", "FND_LOAN_NOT_DOCUMENTED", "FND_CONTRIBUTION_AMBIGUITY" }
+        },
+        new()
+        {
+            ActionId = "ACT_FOUNDER_CONFLICT_OF_INTEREST",
+            Title = "Утвердить правила разрешения конфликта интересов и внешней занятости основателей",
+            ActionType = "LEGAL_DRAFTING",
+            ResolutionMode = ResolutionMode.LegalWork,
+            DefaultPriority = RiskPriority.Now,
+            SectionId = "founders",
+            BusinessReason = "Сторонняя деятельность основателя может пересекаться с бизнесом компании и создавать споры о приоритетах, клиентах, технологиях и правах на продукт.",
+            RequiredOutcome = "В соглашении основателей закреплены четкие правила допустимых и недопустимых внешних проектов, порядок раскрытия конфликта интересов и принадлежность создаваемых разработок.",
+            WhatToDo = "Определить допустимые пересечения, проверить обязательства перед внешними работодателями и зафиксировать правила конфликта интересов.",
+            Dependencies = new() { "ACT_FOUNDER_AGREEMENT_SHA" },
+            SupportedFindingCodes = new() { "FND_CONFLICT_OF_INTEREST" }
         },
 
         // =====================================================================
@@ -145,7 +159,7 @@ public static class ActionLibrary
             RequiredOutcome = "Сформирован полный архив решений общих собраний участников, в уставе закреплены четкие лимиты на совершение крупных сделок и одобрение ключевых договоров.",
             WhatToDo = "Провести инвентаризацию решений участников, оформить недостающие протоколы и утвердить регламент полномочий директора.",
             Dependencies = new(),
-            SupportedFindingCodes = new() { "COR_GOVERNANCE_GAP", "COR_SIGNATORY_UNCLEAR", "COR_DIRECTOR_POWER_UNCLEAR", "COR_DECISIONS_UNSYSTEMATIC" }
+            SupportedFindingCodes = new() { "COR_GOVERNANCE_GAP", "COR_SIGNATORY_UNCLEAR", "COR_DIRECTOR_POWER_UNCLEAR", "COR_DECISIONS_UNSYSTEMATIC", "COR_APPROVAL_GAP", "COR_AUTHORITY_GAP" }
         },
         new()
         {
@@ -160,6 +174,34 @@ public static class ActionLibrary
             WhatToDo = "Разработать модель корпоративного владения с учетом налогового законодательства и целевых юрисдикций инвесторов.",
             Dependencies = new() { "ACT_CORP_INCORPORATION" },
             SupportedFindingCodes = new() { "COR_HOLDING_GAP", "COR_JURISDICTION_MISMATCH" }
+        },
+        new()
+        {
+            ActionId = "ACT_CORP_ASSET_BENEFICIARY_ALIGNMENT",
+            Title = "Консолидировать активы на операционной компании и формализовать скрытый контроль",
+            ActionType = "LEGAL_DRAFTING",
+            ResolutionMode = ResolutionMode.LegalWork,
+            DefaultPriority = RiskPriority.Now,
+            SectionId = "corporate",
+            BusinessReason = "Оформление активов вне операционной компании или наличие неформализованного контроля блокирует институциональные инвестиции и банковский комплаенс.",
+            RequiredOutcome = "Все ключевые права, активы и коммерческие договоры переведены на операционную компанию, а фактический контроль и доли участников юридически оформлены.",
+            WhatToDo = "Провести аудит нахождения прав и ключевых договоров, перевести их на компанию проекта и формализовать реальную структуру владения.",
+            Dependencies = new() { "ACT_CORP_INCORPORATION" },
+            SupportedFindingCodes = new() { "COR_ENTITY_MISMATCH", "COR_HIDDEN_CONTROL" }
+        },
+        new()
+        {
+            ActionId = "ACT_CORP_DOCUMENT_ARCHIVE_SYSTEMATIZE",
+            Title = "Восстановить историю капитала и систематизировать корпоративный архив документов",
+            ActionType = "PROCESS_SETUP",
+            ResolutionMode = ResolutionMode.InternalAction,
+            DefaultPriority = RiskPriority.ThirtyDays,
+            SectionId = "corporate",
+            BusinessReason = "Разрозненность корпоративных документов и неполная история перехода долей затягивают проверку инвесторами и повышают риск юридических дефектов.",
+            RequiredOutcome = "Собраны оригиналы и скан-копии учредительных документов, решений и подтверждений изменений капитала, организован структурированный корпоративный архив.",
+            WhatToDo = "Собрать документы по каждому изменению капитала, восстановить недостающие решения и сформировать структурированный архив компании.",
+            Dependencies = new(),
+            SupportedFindingCodes = new() { "COR_CORPORATE_HISTORY_GAP", "COR_RECORDS_GAP" }
         },
 
         // =====================================================================
@@ -191,7 +233,7 @@ public static class ActionLibrary
             RequiredOutcome = "Со всеми внешними разработчиками заключены договоры авторского заказа с полной передачей исключительных прав и подписаны закрывающие акты по выполненным этапам.",
             WhatToDo = "Собрать список всех привлеченных специалистов, подписать соглашения о передаче прав и акты приема-передачи исходных материалов.",
             Dependencies = new(),
-            SupportedFindingCodes = new() { "IP_CONTRACTOR_RIGHTS_GAP", "IP_CONTRACTOR_RIGHTS_MISSING", "IP_STUDIO_RIGHTS_GAP" }
+            SupportedFindingCodes = new() { "IP_CONTRACTOR_RIGHTS_GAP", "IP_CONTRACTOR_RIGHTS_MISSING", "IP_STUDIO_RIGHTS_GAP", "IP_FORMER_DEVELOPER_GAP" }
         },
         new()
         {
@@ -219,7 +261,63 @@ public static class ActionLibrary
             RequiredOutcome = "Составлен перечень используемых сторонних библиотек (SBoM) с подтверждением их совместимости с закрытой коммерческой моделью монетизации продукта.",
             WhatToDo = "Запустить сканирование зависимостей проекта и проверить юридические условия лицензий сторонних модулей.",
             Dependencies = new(),
-            SupportedFindingCodes = new() { "IP_OPEN_SOURCE_RISK", "IP_THIRD_PARTY_CONTENT_RISK", "IP_LICENSE_COMPLIANCE_GAP" }
+            SupportedFindingCodes = new() { "IP_OPEN_SOURCE_RISK", "IP_THIRD_PARTY_CONTENT_RISK", "IP_LICENSE_COMPLIANCE_GAP", "IP_THIRD_PARTY_COMPONENTS" }
+        },
+        new()
+        {
+            ActionId = "ACT_IP_EMPLOYER_CLEARANCE",
+            Title = "Исключить риски прав работодателя на созданный продукт (Moonlighting / Release letter)",
+            ActionType = "LEGAL_REVIEW",
+            ResolutionMode = ResolutionMode.LegalWork,
+            DefaultPriority = RiskPriority.Now,
+            SectionId = "ip",
+            BusinessReason = "Создание продукта параллельно с работой по найму создает угрозу иска бывшего работодателя о признании разработки служебным произведением.",
+            RequiredOutcome = "Проведен аудит трудовых обязательств основателей, разграничены ресурсы и при необходимости получено письменное подтверждение работодателя об отсутствии претензий (Release letter).",
+            WhatToDo = "Проверить трудовой договор и NDA основателя по основному месту работы и оформить подтверждение отсутствия пересечений и претензий.",
+            Dependencies = new(),
+            SupportedFindingCodes = new() { "IP_EMPLOYER_RISK" }
+        },
+        new()
+        {
+            ActionId = "ACT_IP_EXTERNAL_TECH_DEPENDENCY",
+            Title = "Оценить риски зависимости ключевых функций продукта от внешних технологий и API",
+            ActionType = "PROCESS_SETUP",
+            ResolutionMode = ResolutionMode.LegalReview,
+            DefaultPriority = RiskPriority.Now,
+            SectionId = "ip",
+            BusinessReason = "Зависимость ядра продукта от стороннего сервиса без гарантий доступности и запасного плана создает угрозу внезапной остановки бизнеса.",
+            RequiredOutcome = "Определены критические внешние зависимости, проверены условия соглашений и разработан технический и договорный план резервирования.",
+            WhatToDo = "Проверить условия использования и прекращения доступа к внешним сервисам и подготовить резервные сценарии замещения.",
+            Dependencies = new(),
+            SupportedFindingCodes = new() { "IP_EXTERNAL_DEPENDENCY" }
+        },
+        new()
+        {
+            ActionId = "ACT_IP_DOMAIN_BRAND_TRANSFER",
+            Title = "Перенести домен и права на бренд на операционную компанию",
+            ActionType = "LEGAL_DRAFTING",
+            ResolutionMode = ResolutionMode.LegalWork,
+            DefaultPriority = RiskPriority.ThirtyDays,
+            SectionId = "ip",
+            BusinessReason = "Нахождение домена или бренда на физическом лице создает зависимость от конкретного человека и блокирует оформление интеллектуальной собственности.",
+            RequiredOutcome = "Доменные имена переведены под прямое управление корпоративного аккаунта компании с разграничением административного доступа.",
+            WhatToDo = "Проверить текущих владельцев домена, оформить передачу домена и настроить двухфакторный корпоративный контроль.",
+            Dependencies = new(),
+            SupportedFindingCodes = new() { "IP_DOMAIN_BRAND_CONTROL" }
+        },
+        new()
+        {
+            ActionId = "ACT_IP_CONTENT_LICENSING_AUDIT",
+            Title = "Провести аудит прав на контент, медиаматериалы и внешние базы данных",
+            ActionType = "LEGAL_REVIEW",
+            ResolutionMode = ResolutionMode.LegalReview,
+            DefaultPriority = RiskPriority.Now,
+            SectionId = "ip",
+            BusinessReason = "Использование чужого контента, изображений или датасетов без лицензии может привести к блокировке продукта и судебным искам правообладателей.",
+            RequiredOutcome = "Проверены лицензии на все внешние датасеты и медиаматериалы, исключены сомнительные источники и оформлены лицензионные соглашения.",
+            WhatToDo = "Определить источники ключевых материалов, проверить лицензии и заменить или оформить права на внешние данные.",
+            Dependencies = new(),
+            SupportedFindingCodes = new() { "IP_CONTENT_RIGHTS" }
         },
         new()
         {
@@ -233,7 +331,7 @@ public static class ActionLibrary
             RequiredOutcome = "Поданы заявки на регистрацию словесного и комбинированного товарного знака в патентные ведомства ключевых стран присутствия.",
             WhatToDo = "Провести предварительный поиск на тождество и сходство и направить заявку на регистрацию товарного знака.",
             Dependencies = new(),
-            SupportedFindingCodes = new() { "IP_TRADEMARK_NOT_FILED", "IP_BRAND_UNPROTECTED" }
+            SupportedFindingCodes = new() { "IP_TRADEMARK_NOT_FILED", "IP_BRAND_UNPROTECTED", "IP_BRAND_REGISTRATION_INFO" }
         },
 
         // =====================================================================
@@ -307,7 +405,7 @@ public static class ActionLibrary
             RequiredOutcome = "Сформирован и утвержден актуальный перечень критических систем с минимально необходимыми уровнями доступа и ответственными администраторами.",
             WhatToDo = "Провести ревизию всех используемых систем (Git, Cloud, DB, CRM), составить реестр доступов и ограничить права по принципу минимальной достаточности.",
             Dependencies = new(),
-            SupportedFindingCodes = new() { "TEAM_ACCESS_CONTROL_GAP", "TEAM_ACCESS_TOO_BROAD" }
+            SupportedFindingCodes = new() { "TEAM_ACCESS_CONTROL_GAP", "TEAM_ACCESS_TOO_BROAD", "DATA_ACCESS_TOO_BROAD" }
         },
         new()
         {
@@ -381,7 +479,7 @@ public static class ActionLibrary
             RequiredOutcome = "Утверждены актуальные условия сервиса с ограничением ответственности, и в интерфейсе продукта реализован обязательный явный акцепт (клик-согласие).",
             WhatToDo = "Составить Пользовательское соглашение и интегрировать обязательный чекбокс согласия при регистрации и оформлении заказов.",
             Dependencies = new(),
-            SupportedFindingCodes = new() { "PROD_RULES_MISSING", "PROD_RULES_DISCREPANCY", "PROD_NO_TERMS_OF_SERVICE", "PROD_TERMS_MISMATCH", "PROD_LIABILITY_UNLIMITED", "PROD_OFFER_UNCLEAR", "PROD_ROLE_UNCLEAR", "PROD_ACCEPTANCE_WEAK" }
+            SupportedFindingCodes = new() { "PROD_RULES_MISSING", "PROD_RULES_DISCREPANCY", "PROD_NO_TERMS_OF_SERVICE", "PROD_TERMS_MISMATCH", "PROD_LIABILITY_UNLIMITED", "PROD_OFFER_UNCLEAR", "PROD_ROLE_UNCLEAR", "PROD_ACCEPTANCE_WEAK", "PROD_RULES_MISMATCH" }
         },
         new()
         {
@@ -469,7 +567,7 @@ public static class ActionLibrary
             RequiredOutcome = "Разработана точная Политика конфиденциальности, описывающая реальные потоки данных, цели обработки, сроки хранения и перечень третьих лиц, получающих данные.",
             WhatToDo = "Составить индивидуальную Политику конфиденциальности с юристом на основе карты движения данных и опубликовать документ на сайте и в приложении.",
             Dependencies = new() { "ACT_DATA_MAPPING_INTERNAL" },
-            SupportedFindingCodes = new() { "DATA_PRIVACY_NOTICE_MISSING", "DATA_PRIVACY_NOTICE_OUTDATED", "DATA_NO_PRIVACY_POLICY", "DATA_PRIVACY_POLICY_INADEQUATE" }
+            SupportedFindingCodes = new() { "DATA_PRIVACY_NOTICE_MISSING", "DATA_PRIVACY_NOTICE_OUTDATED", "DATA_NO_PRIVACY_POLICY", "DATA_PRIVACY_POLICY_INADEQUATE", "DATA_PRIVACY_MISSING" }
         },
         new()
         {
@@ -501,6 +599,20 @@ public static class ActionLibrary
         },
         new()
         {
+            ActionId = "ACT_AI_AUTOMATED_DECISION_OVERSIGHT",
+            Title = "Внедрить контроль и участие человека в автоматизированных решениях ИИ (Human-in-the-loop)",
+            ActionType = "PROCESS_SETUP",
+            ResolutionMode = ResolutionMode.LegalAndProduct,
+            DefaultPriority = RiskPriority.Now,
+            SectionId = "data",
+            BusinessReason = "Принятие ИИ существенных решений о пользователях без участия человека или возможности пересмотра нарушает нормы законодательства и создает риски прямых убытков от ошибок модели.",
+            RequiredOutcome = "Зафиксирован регламент участия человека (Human Review) в критических решениях модели, определена процедура эскалации и правила раскрытия информации пользователям.",
+            WhatToDo = "Определить сферы влияния решений ИИ на людей, зафиксировать категории обязательной ручной проверки и синхронизировать правила с офертой.",
+            Dependencies = new(),
+            SupportedFindingCodes = new() { "AI_AUTOMATED_DECISION", "AI_HUMAN_REVIEW_GAP" }
+        },
+        new()
+        {
             ActionId = "ACT_DATA_RETENTION_DELETION",
             Title = "Внедрить регламент и функционал удаления персональных данных по запросу пользователей",
             ActionType = "PRODUCT_INTEGRATION",
@@ -516,14 +628,14 @@ public static class ActionLibrary
         new()
         {
             ActionId = "ACT_DATA_LOCALIZATION_SECURITY",
-            Title = "Подтвердить соблюдение требований к локализации баз данных и защите информации",
+            Title = "Проверить требования к локализации и трансграничной передаче данных",
             ActionType = "LEGAL_REVIEW",
             ResolutionMode = ResolutionMode.LegalReview,
             DefaultPriority = RiskPriority.BeforeRound,
             SectionId = "data",
-            BusinessReason = "Нарушение законодательства о локализации персональных данных создает риски предписаний регулятора и ограничения доступа к инфраструктуре сервиса.",
-            RequiredOutcome = "Серверная инфраструктура и базы данных размещены в соответствии с нормами локализации целевых стран с применением шифрования данных при передаче и хранении.",
-            WhatToDo = "Проверить физическое расположение серверов хранения персональных данных и внедрить политику безопасности информации.",
+            BusinessReason = "Требования к локализации и трансграничной передаче зависят от стран, типов данных, ролей сторон и фактической архитектуры обработки; без такой проверки нельзя обоснованно утверждать соответствие продукта применимым нормам.",
+            RequiredOutcome = "Составлена матрица стран, мест хранения и трансграничных передач данных; определены применимые требования, зафиксированы выявленные расхождения и подготовлен план их устранения.",
+            WhatToDo = "Зафиксировать страны пользователей и места хранения данных, сопоставить основные трансграничные потоки с применимыми требованиями и документировать выводы проверки.",
             Dependencies = new(),
             SupportedFindingCodes = new() { "DATA_CROSS_BORDER_REVIEW", "DATA_LOCALIZATION_RISK", "DATA_CROSS_BORDER_TRANSFER_GAP", "DATA_SECURITY_MEASURES_WEAK" }
         },
@@ -603,7 +715,35 @@ public static class ActionLibrary
             RequiredOutcome = "Создана структурированная виртуальная комната данных (Data Room), содержащая закрывающие документы по корпоративной структуре, IP, команде и договорам.",
             WhatToDo = "Собрать и структурировать полный юридический архив компании по стандартному инвестиционному чек-листу.",
             Dependencies = new() { "ACT_FOUNDER_AGREEMENT_SHA", "ACT_IP_FOUNDER_ASSIGNMENT", "ACT_TEAM_CONTRACTS_FORMALIZATION" },
-            SupportedFindingCodes = new() { "INVEST_ROUND_BLOCKER", "INVEST_DATA_ROOM_MISSING", "INVEST_TIMING_IMMEDIATE_UNPREPARED", "INVEST_ROUND_NOT_DEFINED", "INVEST_RUNWAY_WARNING", "INVEST_FIN_MODEL_WEAK" }
+            SupportedFindingCodes = new() { "INVEST_ROUND_BLOCKER", "INVEST_DATA_ROOM_MISSING", "INVEST_TIMING_IMMEDIATE_UNPREPARED", "INVEST_ROUND_NOT_DEFINED", "INVEST_RUNWAY_WARNING", "INVEST_FIN_MODEL_WEAK", "INVEST_DD_DOCS_NOT_READY" }
+        },
+        new()
+        {
+            ActionId = "ACT_INVEST_METRICS_EVIDENCE_PACK",
+            Title = "Подтвердить расчет ключевых бизнес-показателей и метрик для инвестора",
+            ActionType = "PROCESS_SETUP",
+            ResolutionMode = ResolutionMode.InternalAction,
+            DefaultPriority = RiskPriority.ThirtyDays,
+            SectionId = "investment",
+            BusinessReason = "Существенные расхождения между цифрами в презентации и первичными данными снижают доверие инвестора и ставят сделку под угрозу.",
+            RequiredOutcome = "Для всех ключевых метрик презентации (выручка, пользователи, Churn, LTV, расходы) определены подтвержденные источники данных и воспроизводимые формулы расчета.",
+            WhatToDo = "Определить ключевые показатели презентации, проверить их источники данных и формулы расчета и устранить неподтвержденные цифры.",
+            Dependencies = new(),
+            SupportedFindingCodes = new() { "INVEST_METRICS_UNVERIFIABLE" }
+        },
+        new()
+        {
+            ActionId = "ACT_INVEST_DEAL_TERMS_LEGAL_REVIEW",
+            Title = "Провести правовую экспертизу условий инвестиционной сделки (Term Sheet и договоры)",
+            ActionType = "LEGAL_REVIEW",
+            ResolutionMode = ResolutionMode.LegalWork,
+            DefaultPriority = RiskPriority.Now,
+            SectionId = "investment",
+            BusinessReason = "Непонимание юридических последствий условий инвестора (ликвидационные привилегии, вето, drag-along) может привести к потере контроля над компанией основателями.",
+            RequiredOutcome = "Проведена юридическая экспертиза Term Sheet и сделочных документов, просчитаны сценарии контроля и распределения выплат, защищены интересы основателей.",
+            WhatToDo = "Разобрать все существенные условия сделки до подписания с юристом и сопроводить согласование окончательных документов.",
+            Dependencies = new(),
+            SupportedFindingCodes = new() { "INVEST_TERMS_NOT_UNDERSTOOD", "INVEST_DEAL_UNREVIEWED" }
         },
         new()
         {
@@ -617,7 +757,7 @@ public static class ActionLibrary
             RequiredOutcome = "Команда имеет объективную карту уязвимостей и пошаговый план их устранения до начала активного фандрайзинга.",
             WhatToDo = "Использовать диагностику SLS для первоочередного устранения блокеров в структуре компании и правах на продукт.",
             Dependencies = new(),
-            SupportedFindingCodes = new() { "INV_SELF_AWARENESS_GAP", "INVEST_AWARENESS_GAP" }
+            SupportedFindingCodes = new() { "INV_SELF_AWARENESS_GAP", "INVEST_AWARENESS_GAP", "INVEST_SELF_AWARENESS_GAP" }
         }
     };
 
@@ -666,67 +806,7 @@ public static class ActionLibrary
         var byCode = GetByFindingCode(finding.Code);
         if (byCode != null) return byCode;
 
-        // 3. Deterministic root-cause / section fallback with strictly specific outcomes
-        return ResolveFallbackAction(finding);
-    }
-
-    private static ActionDefinition ResolveFallbackAction(RiskFinding f)
-    {
-        var code = f.Code?.ToUpperInvariant() ?? "";
-        var sec = f.SectionId?.ToLowerInvariant() ?? "";
-
-        if (code.Contains("DEADLOCK")) return GetById("ACT_FOUNDER_DEADLOCK_RESOLVE")!;
-        if (code.Contains("VESTING") || code.Contains("LEAVER")) return GetById("ACT_FOUNDER_VESTING_LEAVER")!;
-        if (code.Contains("DISPUTE")) return GetById("ACT_FOUNDER_DISPUTE_SETTLE")!;
-        if (code.Contains("ROLE") || code.Contains("COMMITMENT")) return GetById("ACT_FOUNDER_ROLES_COMMITMENT")!;
-        if (code.Contains("PERSONAL_INVESTMENT") || code.Contains("LOAN")) return GetById("ACT_FOUNDER_PERSONAL_INVESTMENTS")!;
-        if (sec == "founders" || code.StartsWith("FND")) return GetById("ACT_FOUNDER_AGREEMENT_SHA")!;
-
-        if (code.Contains("ENTITY")) return GetById("ACT_CORP_INCORPORATION")!;
-        if (code.Contains("CAP_TABLE") || code.Contains("OWNERSHIP")) return GetById("ACT_CORP_CAP_TABLE_CLEANUP")!;
-        if (code.Contains("HOLDING")) return GetById("ACT_CORP_HOLDING_STRUCTURING")!;
-        if (sec == "corporate" || code.StartsWith("COR")) return GetById("ACT_CORP_GOVERNANCE_SYSTEMATIZE")!;
-
-        if (code.Contains("FOUNDER")) return GetById("ACT_IP_FOUNDER_ASSIGNMENT")!;
-        if (code.Contains("CONTRACTOR") || code.Contains("STUDIO")) return GetById("ACT_IP_CONTRACTOR_ASSIGNMENT")!;
-        if (code.Contains("OPEN_SOURCE") || code.Contains("THIRD_PARTY")) return GetById("ACT_IP_OPEN_SOURCE_COMPLIANCE")!;
-        if (code.Contains("CONTENT") || code.Contains("MEDIA")) return GetById("ACT_IP_CONTENT_LICENSING_AUDIT") ?? GetById("ACT_IP_CONSOLIDATION_AUDIT")!;
-        if (code.Contains("DOMAIN") || code.Contains("BRAND_CONTROL")) return GetById("ACT_IP_DOMAIN_BRAND_TRANSFER") ?? GetById("ACT_IP_TRADEMARK_PROTECTION")!;
-        if (code.Contains("TRADEMARK") || code.Contains("BRAND")) return GetById("ACT_IP_TRADEMARK_PROTECTION")!;
-        if (sec == "ip" || code.StartsWith("IP")) return GetById("ACT_IP_CONSOLIDATION_AUDIT")!;
-
-        if (code.Contains("ACCESS") || code.Contains("SYS_LIST")) return GetById("ACT_TEAM_ACCESS_LIST_AUDIT") ?? GetById("ACT_TEAM_NDA_ACCESS_CONTROL")!;
-        if (code.Contains("OFFBOARDING")) return GetById("ACT_TEAM_OFFBOARDING_CHECKLIST") ?? GetById("ACT_TEAM_NDA_ACCESS_CONTROL")!;
-        if (code.Contains("PERSONAL_ACCOUNT")) return GetById("ACT_TEAM_PERSONAL_ACCOUNT_MIGRATION") ?? GetById("ACT_TEAM_NDA_ACCESS_CONTROL")!;
-        if (code.Contains("NDA") || code.Contains("CONFIDENTIALITY")) return GetById("ACT_TEAM_NDA_ACCESS_CONTROL")!;
-        if (code.Contains("OPTION") || code.Contains("ESOP") || code.Contains("EQUITY_PROMISE")) return GetById("ACT_TEAM_OPTION_POOL_FORMALIZATION")!;
-        if (code.Contains("RECLASSIFICATION") || code.Contains("LABOR") || code.Contains("WORK_FORMAT")) return GetById("ACT_TEAM_RECLASSIFICATION_RISK")!;
-        if (code.Contains("RIGHTS") || code.Contains("WORK_GAP")) return GetById("ACT_TEAM_IP_TRANSFER_ACTS")!;
-        if (code.Contains("FOREIGN")) return GetById("ACT_TEAM_FOREIGN_ARRANGEMENT_REVIEW") ?? GetById("ACT_TEAM_CONTRACTS_FORMALIZATION")!;
-        if (sec == "team" || code.StartsWith("TEAM")) return GetById("ACT_TEAM_CONTRACTS_FORMALIZATION")!;
-
-        if (code.Contains("UGC") || code.Contains("USER_CONTENT")) return GetById("ACT_PROD_UGC_RULES") ?? GetById("ACT_PROD_TERMS_OF_SERVICE")!;
-        if (code.Contains("MINOR") || code.Contains("AGE")) return GetById("ACT_PROD_MINORS_COMPLIANCE") ?? GetById("ACT_PROD_TERMS_OF_SERVICE")!;
-        if (code.Contains("SUBSCRIPTION") || code.Contains("REFUND") || code.Contains("PAYMENT")) return GetById("ACT_PROD_PAYMENT_REFUND_FLOW")!;
-        if (code.Contains("REGULATORY") || code.Contains("MULTI_COUNTRY")) return GetById("ACT_PROD_REGULATORY_COMPLIANCE")!;
-        if (sec == "product" || code.StartsWith("PROD")) return GetById("ACT_PROD_TERMS_OF_SERVICE")!;
-
-        if (code.Contains("DATA_MAP") || code.Contains("INVENTORY") || code.Contains("THIRD_PARTY") || code.Contains("SECONDARY")) return GetById("ACT_DATA_MAPPING_INTERNAL") ?? GetById("ACT_DATA_PRIVACY_POLICY_CREATE")!;
-        if (code.Contains("AI")) return GetById("ACT_DATA_AI_PROVIDER_REVIEW")!;
-        if (code.Contains("CONSENT")) return GetById("ACT_DATA_CONSENT_FLOW_SETUP")!;
-        if (code.Contains("DELETION") || code.Contains("RETENTION")) return GetById("ACT_DATA_RETENTION_DELETION")!;
-        if (code.Contains("LOCALIZATION") || code.Contains("CROSS_BORDER")) return GetById("ACT_DATA_LOCALIZATION_SECURITY")!;
-        if (sec == "data" || code.StartsWith("DATA")) return GetById("ACT_DATA_PRIVACY_POLICY_CREATE")!;
-
-        if (code.Contains("RISK_ALLOCATION") || code.Contains("LIABILITY") || code.Contains("LARGE_DEAL")) return GetById("ACT_CONTRACT_RISK_ALLOCATION_REVIEW")!;
-        if (code.Contains("DEPENDENCY") || code.Contains("VENDOR")) return GetById("ACT_CONTRACT_DEPENDENCY_HEDGING")!;
-        if (sec == "contracts" || code.StartsWith("CONTRACT") || code.StartsWith("CTR")) return GetById("ACT_CONTRACT_TEMPLATES_DEVELOPMENT")!;
-
-        if (code.Contains("CAP_TABLE") || code.Contains("DILUTION")) return GetById("ACT_INVEST_CAP_TABLE_PREPARATION")!;
-        if (code.Contains("AWARENESS_GAP")) return GetById("ACT_INVEST_SELF_AWARENESS_GAP")!;
-        if (sec == "investment" || code.StartsWith("INVEST") || code.StartsWith("INV")) return GetById("ACT_INVEST_DATA_ROOM_DD_PACK")!;
-
-        // Fallback default
-        return GetById("ACT_CORP_INCORPORATION")!;
+        // 3. Strict explicit mapping: no word heuristic search or universal fallback
+        throw new InvalidOperationException($"[ActionLibrary Gap] Risk finding '{finding.Code}' does not have an explicit ActionDefinition mapping in ActionLibrary.");
     }
 }

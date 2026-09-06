@@ -37,6 +37,18 @@ public class ActionEngineTests
         }
     }
 
+    [Fact(DisplayName = "1.1 Data localization action stays within deterministic grounding")]
+    public void DataLocalizationAction_ProducesReviewArtifact_NotUnsupportedComplianceClaim()
+    {
+        var action = ActionLibrary.GetById("ACT_DATA_LOCALIZATION_SECURITY");
+
+        Assert.NotNull(action);
+        Assert.Contains("матрица стран", action.RequiredOutcome, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("выявленные расхождения", action.RequiredOutcome, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("размещены в соответствии", action.RequiredOutcome, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("подтвердить соблюдение", action.Title, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact(DisplayName = "2. ActionDependencies: Все зависимости ссылаются на реально существующие ActionId")]
     public void ActionDependencies_Reference_Existing_Actions()
     {
@@ -137,5 +149,28 @@ public class ActionEngineTests
         Assert.NotNull(deadlockAction);
         Assert.Contains("FND_DEADLOCK_RISK", deadlockAction.CoveredFindingCodes);
         Assert.Contains("FND_GOVERNANCE_GAP", deadlockAction.CoveredFindingCodes);
+    }
+
+    [Fact(DisplayName = "7. Strict Explicit Mapping: Все риски из RiskLibrary имеют явную привязку без fallback")]
+    public void All_Risks_In_RiskLibrary_Must_Have_Explicit_Action_Mapping_Without_Fallback()
+    {
+        var unmappedRisks = new List<string>();
+
+        foreach (var risk in DataBank.Risks)
+        {
+            var byFindingCode = ActionLibrary.GetByFindingCode(risk.Code);
+            var byRecommendedActionId = !string.IsNullOrWhiteSpace(risk.RecommendedActionId)
+                ? ActionLibrary.GetById(risk.RecommendedActionId)
+                : null;
+
+            if (byFindingCode == null && byRecommendedActionId == null)
+            {
+                unmappedRisks.Add($"[{risk.SectionId}] {risk.Code}: {risk.Title}");
+            }
+        }
+
+        Assert.True(unmappedRisks.Count == 0,
+            $"Следующие {unmappedRisks.Count} рисков из RiskLibrary не имеют явного маппинга в ActionLibrary:\n" +
+            string.Join("\n", unmappedRisks));
     }
 }

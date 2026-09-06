@@ -1164,14 +1164,14 @@
       '<section class="pay-card-container" id="pay-section">' +
         '<div class="pay-badge-top">🔥 Разблокировать полный отчёт & Action Plan</div>' +
         '<h2 style="font-size:26px;color:#FFF;margin-bottom:8px">Выберите формат получения результатов</h2>' +
-        '<p style="color:var(--ink-soft);max-width:580px;margin:0 auto 20px;font-size:14.5px">Получите полную диагностическую матрицу 8 направлений, детальный разбор рисков и официальный 15-страничный PDF-отчет для основателей и инвесторов.</p>' +
+              '<p style="color:var(--ink-soft);max-width:580px;margin:0 auto 20px;font-size:14.5px">Получите полную диагностическую матрицу 8 направлений, детальный разбор рисков и официальный PDF-отчет для основателей и инвесторов.</p>' +
         
         '<div class="tariff-grid">' +
           '<div class="tariff-card ' + (selectedTier === 'report' ? 'selected' : '') + '" id="tier-card-report" data-tier="report">' +
             '<div class="t-title">FENIX SLS — Отчёт</div>' +
             '<div class="t-price">' + p + ' ₸</div>' +
             '<ul class="tariff-checklist">' +
-              '<li><span class="chk">✓</span> Официальный 15-страничный PDF-отчёт Fenix SLS</li>' +
+              '<li><span class="chk">✓</span> Официальный подробный PDF-отчёт Fenix SLS</li>' +
               '<li><span class="chk">✓</span> Разблокировка всех выявленных рисков и рекомендаций</li>' +
               '<li><span class="chk">✓</span> Пошаговый 30–60 дневный Action Plan для фаундеров</li>' +
             '</ul>' +
@@ -1431,7 +1431,7 @@
       '<section class="ai-memo-card" style="text-align:center;padding:32px 24px;margin:28px 0">' +
         '<div class="ai-memo-badge" style="background:rgba(229,192,123,0.15);color:var(--gold);border-color:rgba(229,192,123,0.3)">📄 FENIX SLS · ЮРИДИЧЕСКИЙ ОТЧЕТ</div>' +
         '<h2 style="font-size:24px;margin:12px 0 8px;color:#FFF">Официальный PDF-отчёт Fenix SLS</h2>' +
-        '<p class="ai-memo-sub" style="max-width:540px;margin:0 auto 24px">Полный 15-страничный юридический отчет с оценкой всех 8 направлений, детальным анализом ключевых рисков, фокус-разбором и пошаговой дорожной картой действий.</p>' +
+        '<p class="ai-memo-sub" style="max-width:540px;margin:0 auto 24px">Полный юридический отчет с оценкой всех 8 направлений, детальным анализом ключевых рисков, фокус-разбором и пошаговой дорожной картой действий.</p>' +
         '<button class="btn" id="download-pdf-btn" style="padding:16px 36px;font-size:16px;font-weight:600;box-shadow:0 4px 20px rgba(56,189,248,0.25)">📥 Скачать официальный PDF-отчёт</button>' +
       '</section>' +
       strengths +
