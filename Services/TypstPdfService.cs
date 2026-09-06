@@ -691,7 +691,7 @@ public class TypstPdfService
                 bool hasBlockers = inv.UnresolvedBlockersCount > 0 || dealScore < baseScore;
 
                 string invStatusLabel = hasBlockers
-                    ? "Риски при аудите инвестора"
+                    ? "Сквозные блокеры"
                     : inv.BaseCategory;
                 string invStatusColor = hasBlockers ? dealColor : baseColor;
 
@@ -701,23 +701,30 @@ public class TypstPdfService
     fill: rgb(""#0D1628""),
     stroke: 0.75pt + rgb(""#1E2D4A""),
     radius: 6pt,
-    inset: (x: 9pt, y: 11pt)
+    inset: (x: 8pt, y: 10pt)
   )[
     #text(font: serif, size: 9pt, weight: ""bold"", fill: rgb(""#E5C07B""))[0{cardNum++}]
+    #v(2pt)
+    #block(height: 22pt)[
+      #text(font: sans, size: 7pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[{EscapeTypst(card.Title.ToUpperInvariant())}]
+    ]
     #v(3pt)
-    #block(height: 24pt)[
-      #text(font: sans, size: 7.5pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[{EscapeTypst(card.Title.ToUpperInvariant())}]
+    #block(height: 28pt)[
+      #grid(
+        columns: (1fr, auto),
+        row-gutter: 3pt,
+        align: (left + horizon, right + horizon),
+        [#text(font: sans, size: 6.5pt, fill: rgb(""#94A3B8""))[Инвест-пакет:]],
+        [#text(font: serif, size: 8.5pt, weight: ""bold"", fill: rgb(""{baseColor}""))[{baseScore}] #text(font: sans, size: 6pt, fill: rgb(""#64748B""))[\/ 100]],
+        [#text(font: sans, size: 6.5pt, fill: rgb(""#94A3B8""))[К сделке (аудит):]],
+        [#text(font: serif, size: 8.5pt, weight: ""bold"", fill: rgb(""{dealColor}""))[{dealScore}] #text(font: sans, size: 6pt, fill: rgb(""#64748B""))[\/ 100]]
+      )
     ]
-    #v(6pt)
-    #block(height: 26pt)[
-      #text(font: serif, size: 22pt, weight: ""bold"", fill: rgb(""{baseColor}""))[{baseScore}]
-      #text(font: sans, size: 8pt, fill: rgb(""#64748B""))[\/ 100]
-    ]
-    #v(4pt)
+    #v(3pt)
     #block(height: 14pt)[
       #text(font: sans, size: 7pt, weight: ""medium"", fill: rgb(""{invStatusColor}""))[{EscapeTypst(invStatusLabel)}]
     ]
-    #v(6pt)
+    #v(5pt)
     #block(height: 14pt)[
       {navLinkText}
     ]
