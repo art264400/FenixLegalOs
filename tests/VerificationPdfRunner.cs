@@ -122,6 +122,9 @@ public class VerificationPdfRunner
             Level = LegalScoreLevel.MaterialGaps,
             Risks = allRisks,
             Strengths = new List<string> { "Регистрация юридического лица", "Отсутствие корпоративных споров" },
+            UnknownMaterialFacts = new() { "TEAM-02", "DATA-04" },
+            UnknownMaterialSections = new() { "Команда", "Данные и ИИ" },
+            ConfidenceExplanation = "По нескольким применимым вопросам получены неопределенные ответы. Это снижает точность оценки блоков «Команда» и «Данные и ИИ».",
             Sections = new List<SectionScore>
             {
                 new()

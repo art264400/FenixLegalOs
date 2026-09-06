@@ -64,6 +64,8 @@ public class OverallScoreDto
     public string LevelText { get; set; } = string.Empty;
     public int Confidence { get; set; }
     public string ConfidenceText { get; set; } = string.Empty;
+    public string? ConfidenceExplanation { get; set; }
+    public List<string> UnknownMaterialFacts { get; set; } = new();
     public List<string> TopDrivers { get; set; } = new();
     public string BottomExplanation { get; set; } = string.Empty;
 }

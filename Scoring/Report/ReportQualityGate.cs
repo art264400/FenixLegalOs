@@ -122,9 +122,11 @@ public static class ReportQualityGate
                 {
                     if (modDto.FindingNarratives.TryGetValue(finding.FindingCode, out var fNarrative) && fNarrative != null)
                     {
-                        var recList = (fNarrative.Recommendations != null && fNarrative.Recommendations.Count > 0)
+                        var rawRecs = (fNarrative.Recommendations != null && fNarrative.Recommendations.Count > 0)
                             ? fNarrative.Recommendations.Where(r => !string.IsNullOrWhiteSpace(r) && !ContainsProhibitedContent(r) && IsFactuallyGrounded(r, ctx)).Select(SanitizeText).ToList()
-                            : finding.Recommendations;
+                            : (finding.Recommendations ?? new List<string>());
+
+                        var recList = ChunkedNarrativeValidator.NormalizeRecommendations(rawRecs, finding.Recommendations, finding.Recommendation);
 
                         findingNarratives[finding.FindingCode] = new FindingNarrativeDto
                         {
@@ -132,9 +134,9 @@ public static class ReportQualityGate
                                 ? SanitizeText(fNarrative.WhyFound) : finding.WhyFound,
                             WhyItMatters = !string.IsNullOrWhiteSpace(fNarrative.WhyItMatters) && !ContainsProhibitedContent(fNarrative.WhyItMatters) && IsFactuallyGrounded(fNarrative.WhyItMatters, ctx)
                                 ? SanitizeText(fNarrative.WhyItMatters) : finding.WhyItMatters,
-                            Recommendation = !string.IsNullOrWhiteSpace(fNarrative.Recommendation) && !ContainsProhibitedContent(fNarrative.Recommendation) && IsFactuallyGrounded(fNarrative.Recommendation, ctx)
-                                ? SanitizeText(fNarrative.Recommendation) : finding.Recommendation,
-                            Recommendations = recList.Count > 0 ? recList : finding.Recommendations
+                            Recommendation = recList.FirstOrDefault() ?? (!string.IsNullOrWhiteSpace(fNarrative.Recommendation) && !ContainsProhibitedContent(fNarrative.Recommendation) && IsFactuallyGrounded(fNarrative.Recommendation, ctx)
+                                ? SanitizeText(fNarrative.Recommendation) : finding.Recommendation),
+                            Recommendations = recList
                         };
                     }
                     else

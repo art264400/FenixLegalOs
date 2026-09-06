@@ -119,8 +119,8 @@ public static class ChunkedNarrativeValidator
         return (true, result, null);
     }
 
-    private static List<string> NormalizeRecommendations(
-        IEnumerable<string> generated,
+    public static List<string> NormalizeRecommendations(
+        IEnumerable<string>? generated,
         IEnumerable<string>? canonical,
         string? legacyPrimary)
     {
@@ -131,19 +131,36 @@ public static class ChunkedNarrativeValidator
             if (items == null) return;
             foreach (var item in items)
             {
+                if (result.Count >= 3) return;
                 var clean = SanitizeText(item ?? string.Empty).Trim();
                 if (string.IsNullOrWhiteSpace(clean)) continue;
-                if (result.Any(existing => string.Equals(existing, clean, StringComparison.OrdinalIgnoreCase))) continue;
+                if (result.Any(existing => string.Equals(existing, clean, StringComparison.OrdinalIgnoreCase) || IsSubstantialDuplicate(existing, clean))) continue;
                 result.Add(clean);
-                if (result.Count == 3) return;
+                if (result.Count >= 3) return;
             }
         }
 
         AddDistinct(generated);
         AddDistinct(canonical);
-        AddDistinct(string.IsNullOrWhiteSpace(legacyPrimary) ? null : new[] { legacyPrimary });
-        return result;
+        if (result.Count < 3 && !string.IsNullOrWhiteSpace(legacyPrimary))
+        {
+            AddDistinct(new[] { legacyPrimary });
+        }
+        return result.Take(3).ToList();
     }
+
+    private static bool IsSubstantialDuplicate(string a, string b)
+    {
+        var cleanA = a.Trim().TrimEnd('.', ' ', ',');
+        var cleanB = b.Trim().TrimEnd('.', ' ', ',');
+        if (cleanA.StartsWith(cleanB, StringComparison.OrdinalIgnoreCase) ||
+            cleanB.StartsWith(cleanA, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+        return false;
+    }
+
 
     public static (bool IsValid, Dictionary<string, ActionNarrativeItemDto> Result, string? Error) ValidateAndSanitizeActionBatch(
         ActionBatchResponseDto? raw,

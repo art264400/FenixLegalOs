@@ -101,8 +101,10 @@ public class AiReportService
                                 Priority = f.Priority.ToString(),
                                 WhyFound = f.WhyFound,
                                 WhyItMatters = f.WhyItMatters,
-                                Recommendation = f.Recommendation,
-                                Recommendations = f.Recommendations ?? new List<string>()
+                                Recommendation = (f.Recommendations != null && f.Recommendations.Count > 0) ? f.Recommendations.First() : f.Recommendation,
+                                Recommendations = (f.Recommendations != null && f.Recommendations.Count > 0)
+                                    ? f.Recommendations.Take(3).ToList()
+                                    : (!string.IsNullOrWhiteSpace(f.Recommendation) ? new List<string> { f.Recommendation } : new List<string>())
                             }).ToList()
                         }
                     };

@@ -82,7 +82,7 @@ public class TypstPdfService
                             if (!string.IsNullOrWhiteSpace(fNarrative.WhyItMatters)) f.WhyItMatters = fNarrative.WhyItMatters;
                             if (!string.IsNullOrWhiteSpace(fNarrative.Recommendation)) f.Recommendation = fNarrative.Recommendation;
                             if (fNarrative.Recommendations != null && fNarrative.Recommendations.Count > 0)
-                                f.Recommendations = fNarrative.Recommendations;
+                                f.Recommendations = FenixLegalOs.Scoring.Report.ChunkedNarrativeValidator.NormalizeRecommendations(fNarrative.Recommendations, f.Recommendations, f.Recommendation);
                         }
                     }
                 }
@@ -398,9 +398,13 @@ public class TypstPdfService
       #text(font: sans, size: 8pt, fill: rgb(""#CBD5E1""))[" + EscapeTypst(ctx.Overall.BottomExplanation) + @"]
     ],
     align(right + horizon)[
-      #text(font: sans, size: 8pt, fill: rgb(""#64748B""))[Полнота данных: *" + ctx.Overall.Confidence + @"%*]
+      #text(font: sans, size: 8pt, fill: rgb(""#64748B""))[Полнота исходных данных: *" + ctx.Overall.Confidence + @"%*]
     ]
-  )
+  )" + (!string.IsNullOrWhiteSpace(ctx.Overall.ConfidenceExplanation) ? @"
+  #v(6pt)
+  #line(length: 100%, stroke: 0.5pt + rgb(""#1E2D4A""))
+  #v(4pt)
+  #text(font: sans, size: 7.5pt, fill: rgb(""#94A3B8""))[" + EscapeTypst(ctx.Overall.ConfidenceExplanation) + @"]" : "") + @"
 ]
 #pagebreak()
 ");
@@ -764,7 +768,7 @@ public class TypstPdfService
   #text(font: sans, size: 7.5pt, weight: ""bold"", fill: rgb(""#E5C07B""))[ЧТО РЕКОМЕНДУЕТСЯ СДЕЛАТЬ]
   #v(2pt)
   {(finding.Recommendations != null && finding.Recommendations.Count > 0
-      ? string.Join("\n#v(3pt)\n", finding.Recommendations.Select((step, index) =>
+      ? string.Join("\n#v(3pt)\n", finding.Recommendations.Take(3).Select((step, index) =>
           $"  #grid(columns: (auto, 1fr), gutter: 5pt, align: top, [#text(font: sans, size: 7.5pt, weight: \"bold\", fill: rgb(\"#E5C07B\"))[{index + 1}.]], [#text(font: sans, size: 8pt, fill: rgb(\"#E2E8F0\"))[{EscapeTypst(step)}]])"))
       : $"#text(font: sans, size: 8pt, fill: rgb(\"#E2E8F0\"))[{EscapeTypst(finding.Recommendation)}]")}
   #v(6pt)

@@ -982,4 +982,25 @@ public class ChunkedNarrativePipelineTests
         Assert.Equal(normalized.Recommendations.Count,
             normalized.Recommendations.Distinct(StringComparer.OrdinalIgnoreCase).Count());
     }
+
+    [Fact(DisplayName = "Module recommendations never exceed 3 items and deduplicate substantial duplicates")]
+    public void ModuleRecommendations_NeverExceed3Items_AndDeduplicateSubstantialDuplicates()
+    {
+        var canonical = new List<string>
+        {
+            "Зафиксировать предмет разногласий и позиции сторон.",
+            "Проверить действующие корпоративные и договорные документы.",
+            "Определить юридический сценарий урегулирования до новых существенных решений."
+        };
+        var legacyPrimary = "Зафиксировать предмет разногласий и позиции сторон до принятия новых существенных решений.";
+
+        var normalized = ChunkedNarrativeValidator.NormalizeRecommendations(
+            canonical,
+            canonical,
+            legacyPrimary);
+
+        Assert.Equal(3, normalized.Count);
+        Assert.DoesNotContain(legacyPrimary, normalized);
+        Assert.Equal("Зафиксировать предмет разногласий и позиции сторон.", normalized[0]);
+    }
 }

@@ -172,6 +172,9 @@ public class ScoreResult
     public int Overall { get; set; }
     public int Confidence { get; set; } = 85;
     public string ConfidenceText { get; set; } = "Высокая определенность ответов.";
+    public string? ConfidenceExplanation { get; set; }
+    public List<string> UnknownMaterialFacts { get; set; } = new();
+    public List<string> UnknownMaterialSections { get; set; } = new();
     public LegalScoreLevel Level { get; set; } = LegalScoreLevel.Strong;
     public string LevelTitle { get; set; } = "";
     public string LevelText { get; set; } = "";

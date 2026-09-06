@@ -76,7 +76,7 @@ public class ScoringEngine
                 continue;
             }
 
-            var dimResult = DimensionScorer.ComputeDimensions(sectionQs, effectiveAnswers, confidenceTracker);
+            var dimResult = DimensionScorer.ComputeDimensions(sectionQs, effectiveAnswers, confidenceTracker, sec.Title);
             allDimensionScores.AddRange(dimResult.Dimensions);
 
             var sectionScore = ModuleScorer.ComputeSectionScore(
@@ -137,6 +137,9 @@ public class ScoringEngine
             Overall = overallScore,
             Confidence = overallConfidence,
             ConfidenceText = ConfidenceCalculator.GetConfidenceText(overallConfidence),
+            ConfidenceExplanation = ConfidenceCalculator.GetConfidenceExplanation(overallConfidence, confidenceTracker.UnknownMaterialSections),
+            UnknownMaterialFacts = confidenceTracker.UnknownMaterialFacts,
+            UnknownMaterialSections = confidenceTracker.UnknownMaterialSections.ToList(),
             Level = level,
             LevelTitle = OverallScorer.GetLevelTitle(level),
             LevelText = OverallScorer.GetLevelText(level),

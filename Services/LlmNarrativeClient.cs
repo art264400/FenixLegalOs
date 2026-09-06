@@ -105,6 +105,7 @@ Return ONLY a JSON object with this exact structure:
 CRITICAL: Every key in findingNarratives MUST strictly match a FindingCode provided in the request. Never inject new FindingCodes.
 For every finding return one ordered recommendations array containing exactly 3 concise, actionable and non-overlapping items.
 The first item is the primary recommendation. The second and third items are subsequent steps and MUST NOT repeat or paraphrase the first item or each other.
+Never return more than 3 items in recommendations array for any finding.
 No Markdown markdown backticks around JSON. Return pure JSON.";
 
         var userJson = JsonSerializer.Serialize(request, JsonOptions);

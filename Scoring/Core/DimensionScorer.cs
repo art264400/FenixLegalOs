@@ -15,7 +15,8 @@ public class DimensionScorer
     public static DimensionScorerResult ComputeDimensions(
         List<DiagnosticQuestion> sectionQuestions,
         Dictionary<string, object> answers,
-        ConfidenceTracker? confidenceTracker = null)
+        ConfidenceTracker? confidenceTracker = null,
+        string? sectionTitle = null)
     {
         var diagnosticQs = sectionQuestions.Where(q => q.ScoreMode == ScoreMode.Diagnostic).ToList();
         var dimensionGroups = diagnosticQs.GroupBy(q => !string.IsNullOrEmpty(q.DimensionId) ? q.DimensionId : q.Id).ToList();
@@ -45,7 +46,7 @@ public class DimensionScorer
                 weightedQuestionScoreSum += opt.Score.Value * withinWeight;
 
                 // Track question-level confidence
-                confidenceTracker?.TrackQuestion(opt.ConfidenceClass, firstDimWeight, withinWeight);
+                confidenceTracker?.TrackQuestion(opt.ConfidenceClass, firstDimWeight, withinWeight, q.SectionId, sectionTitle, q.Id);
             }
 
             if (applicableWithinDimWeightSum > 0)

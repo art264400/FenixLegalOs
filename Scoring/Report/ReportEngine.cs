@@ -78,6 +78,14 @@ public static class ReportEngine
         // Data completeness: proportion of reachable diagnostic questions answered
         int completeness = result.Confidence > 0 ? result.Confidence : result.AnsweredCount > 0 ? 100 : 0;
 
+        string? confExplanation = null;
+        if (completeness < 100 && result.UnknownMaterialFacts.Count > 0)
+        {
+            confExplanation = !string.IsNullOrWhiteSpace(result.ConfidenceExplanation)
+                ? result.ConfidenceExplanation
+                : ConfidenceCalculator.GetConfidenceExplanation(completeness, result.UnknownMaterialSections);
+        }
+
         ctx.Overall = new OverallScoreDto
         {
             Score = result.Overall,
@@ -86,6 +94,8 @@ public static class ReportEngine
             LevelText = bandText,
             Confidence = completeness,
             ConfidenceText = result.ConfidenceText,
+            ConfidenceExplanation = confExplanation,
+            UnknownMaterialFacts = result.UnknownMaterialFacts,
             TopDrivers = lowestSections,
             BottomExplanation = driversExplanation
         };

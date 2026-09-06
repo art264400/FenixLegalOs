@@ -742,6 +742,10 @@ public class ScoringEngineTests
         };
         var resUnknown = _engine.ComputeResult(unknownAnswers);
         Assert.True(resUnknown.Confidence < 70, $"Ожидался низкий Confidence при ответах 'unknown', получено: {resUnknown.Confidence}");
+        Assert.NotEmpty(resUnknown.UnknownMaterialFacts);
+        Assert.NotNull(resUnknown.ConfidenceExplanation);
+        Assert.Contains("По нескольким применимым вопросам получены неопределенные ответы", resUnknown.ConfidenceExplanation);
+        Assert.Null(resKnown.ConfidenceExplanation);
     }
 
     [Fact(DisplayName = "4.6 Точный скоринг: Интеллектуальная собственность — точный расчет весов IP по §23.3 и §24")]
