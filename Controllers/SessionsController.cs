@@ -268,27 +268,38 @@ public class SessionsController : ControllerBase
             return File(existingPdf, "application/pdf", $"Fenix_SLS_Report_{id}.pdf");
         }
 
-        // 3. Resolve result and context: prioritize stored immutable diagnostic result!
+        // 3. Resolve result and context: require stored immutable diagnostic result!
+        if (string.IsNullOrEmpty(session.ResultJson))
+        {
+            return NotFound(new { error = "result_not_found", message = "Результат диагностики не найден для данной анкеты." });
+        }
+
+        ScoreResult? result;
+        try
+        {
+            result = JsonSerializer.Deserialize<ScoreResult>(session.ResultJson);
+        }
+        catch
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError, new
+            {
+                error = "unreadable_saved_result",
+                message = "Сохранённый результат диагностики повреждён или не может быть прочитан."
+            });
+        }
+
+        if (result == null)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError, new
+            {
+                error = "unreadable_saved_result",
+                message = "Сохранённый результат диагностики не может быть прочитан."
+            });
+        }
+
         var answersDict = !string.IsNullOrEmpty(session.AnswersJson)
             ? JsonSerializer.Deserialize<Dictionary<string, object>>(session.AnswersJson) ?? new()
             : new();
-
-        ScoreResult? result = null;
-        if (!string.IsNullOrEmpty(session.ResultJson))
-        {
-            try
-            {
-                result = JsonSerializer.Deserialize<ScoreResult>(session.ResultJson);
-            }
-            catch { /* fallback */ }
-        }
-
-        if (result == null && answersDict.Count > 0)
-        {
-            result = _scoringEngine.ComputeResult(answersDict);
-        }
-
-        if (result == null) return NotFound(new { error = "invalid_result" });
 
         var facts = FenixLegalOs.Scoring.Core.FactNormalizer.NormalizeFacts(answersDict);
         var lead = _leads.FindLeadsBySession(id).FirstOrDefault();
@@ -320,9 +331,21 @@ public class SessionsController : ControllerBase
                     var generated = await _pdfService.GeneratePdfAsync(result, facts, id, companyName);
                     if (generated != null && generated.Length > 0)
                     {
-                        _sessions.SavePdf(id, generated);
+                        bool saved = _sessions.SavePdf(id, generated);
+                        if (!saved)
+                        {
+                            // Already saved by another concurrent request in DB: issue that canonical version!
+                            var alreadySaved = _sessions.GetPdf(id);
+                            if (alreadySaved != null && alreadySaved.Length > 0)
+                            {
+                                return alreadySaved;
+                            }
+                        }
                     }
-                    return generated;
+
+                    // Check and issue the version stored in DB
+                    var canonicalDb = _sessions.GetPdf(id);
+                    return (canonicalDb != null && canonicalDb.Length > 0) ? canonicalDb : generated;
                 });
                 _pdfGenerationTasks[id] = generationTask;
             }
@@ -344,7 +367,8 @@ public class SessionsController : ControllerBase
             }
         }
 
-        if (pdfBytes == null || pdfBytes.Length == 0)
+        var finalPdf = _sessions.GetPdf(id) ?? pdfBytes;
+        if (finalPdf == null || finalPdf.Length == 0)
         {
             return StatusCode(StatusCodes.Status500InternalServerError, new
             {
@@ -353,8 +377,8 @@ public class SessionsController : ControllerBase
             });
         }
 
-        cache?.Set(cacheKey, pdfBytes, TimeSpan.FromHours(2));
-        return File(pdfBytes, "application/pdf", $"Fenix_SLS_Report_{id}.pdf");
+        cache?.Set(cacheKey, finalPdf, TimeSpan.FromHours(2));
+        return File(finalPdf, "application/pdf", $"Fenix_SLS_Report_{id}.pdf");
     }
 
     [HttpPost("{id}/pay")]

@@ -15,6 +15,8 @@ namespace FenixLegalOs.Tests;
 public class SessionsControllerTests
 {
     private readonly SessionsController _controller;
+    private readonly SessionRepository _sRepo;
+    private readonly DbInitializer _dbInit;
 
     public SessionsControllerTests()
     {
@@ -23,19 +25,19 @@ public class SessionsControllerTests
         {
             ["FENIX_DB_PATH"] = tempDb
         }).Build();
-        var dbInit = new DbInitializer(config);
-        dbInit.Initialize();
-        var qRepo = new QuestionRepository(dbInit);
-        var sRepo = new SessionRepository(dbInit);
-        var lRepo = new LeadRepository(dbInit);
-        var setRepo = new SettingsRepository(dbInit);
+        _dbInit = new DbInitializer(config);
+        _dbInit.Initialize();
+        var qRepo = new QuestionRepository(_dbInit);
+        _sRepo = new SessionRepository(_dbInit);
+        var lRepo = new LeadRepository(_dbInit);
+        var setRepo = new SettingsRepository(_dbInit);
         var scoringEngine = new ScoringEngine(qRepo);
         
         var testEnv = new TestWebHostEnvironment();
         var aiReportService = new AiReportService(config);
         var pdfService = new TypstPdfService(testEnv, aiReportService);
 
-        _controller = new SessionsController(sRepo, lRepo, scoringEngine, pdfService, aiReportService, setRepo, qRepo);
+        _controller = new SessionsController(_sRepo, lRepo, scoringEngine, pdfService, aiReportService, setRepo, qRepo);
     }
 
     private class TestWebHostEnvironment : Microsoft.AspNetCore.Hosting.IWebHostEnvironment
@@ -203,6 +205,59 @@ public class SessionsControllerTests
         var badResult = await adminCtrl.GenerateTestBenchPdf(unreadyBody) as ObjectResult;
         Assert.NotNull(badResult);
         Assert.Equal(400, badResult.StatusCode);
+    }
+
+    [Fact(DisplayName = "7. DownloadPdf when ResultJson is missing returns NotFound and does not recalculate")]
+    public async Task DownloadPdf_WhenResultJsonMissing_ReturnsNotFound()
+    {
+        var sessionId = _sRepo.CreateSession();
+        _sRepo.MarkSessionPaid(sessionId, 19999, "kaspi_pay");
+
+        // Answers exist but ResultJson is null/missing
+        _sRepo.SaveAnswers(sessionId, "{\"FND-C01\":\"2\"}", "founders");
+
+        var actionResult = await _controller.DownloadPdf(sessionId);
+        var notFound = Assert.IsType<NotFoundObjectResult>(actionResult);
+        Assert.NotNull(notFound.Value);
+    }
+
+    [Fact(DisplayName = "8. DownloadPdf when ResultJson is corrupted returns 500 and does not recalculate")]
+    public async Task DownloadPdf_WhenResultJsonCorrupted_Returns500()
+    {
+        var sessionId = _sRepo.CreateSession();
+        _sRepo.MarkSessionPaid(sessionId, 19999, "kaspi_pay");
+
+        _sRepo.CompleteSession(sessionId, "{\"FND-C01\":\"2\"}", new ScoreResult { Overall = 80 });
+        
+        // Corrupt ResultJson in DB
+        using (var conn = new Microsoft.Data.Sqlite.SqliteConnection(_dbInit.ConnectionString))
+        {
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "UPDATE sessions SET result = 'INVALID_JSON_CORRUPTED' WHERE id = @id";
+            cmd.Parameters.AddWithValue("@id", sessionId);
+            cmd.ExecuteNonQuery();
+        }
+
+        var actionResult = await _controller.DownloadPdf(sessionId);
+        var objResult = Assert.IsType<ObjectResult>(actionResult);
+        Assert.Equal(Microsoft.AspNetCore.Http.StatusCodes.Status500InternalServerError, objResult.StatusCode);
+    }
+
+    [Fact(DisplayName = "9. DownloadPdf when already saved in DB issues canonical existing version")]
+    public async Task DownloadPdf_WhenAlreadySavedInDB_IssuesCanonicalVersion()
+    {
+        var sessionId = _sRepo.CreateSession();
+        _sRepo.MarkSessionPaid(sessionId, 19999, "kaspi_pay");
+        _sRepo.CompleteSession(sessionId, "{\"FND-C01\":\"2\"}", new ScoreResult { Overall = 80 });
+
+        var canonicalPdf = System.Text.Encoding.UTF8.GetBytes("%PDF-1.7 canonical stored PDF");
+        _sRepo.SavePdf(sessionId, canonicalPdf);
+
+        var actionResult = await _controller.DownloadPdf(sessionId);
+        var fileResult = Assert.IsType<FileContentResult>(actionResult);
+        Assert.Equal("application/pdf", fileResult.ContentType);
+        Assert.Equal(canonicalPdf, fileResult.FileContents);
     }
 }
 

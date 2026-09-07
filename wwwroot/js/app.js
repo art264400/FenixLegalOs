@@ -35,6 +35,17 @@
   let cachedPdfBlob = null;
   let cachedPdfSessionId = null;
   let pdfFetchPromise = null;
+  let pdfAbortController = null;
+
+  function cancelInFlightPdfFetch() {
+    if (pdfAbortController) {
+      try {
+        pdfAbortController.abort();
+      } catch (e) { /* ignore */ }
+      pdfAbortController = null;
+    }
+    pdfFetchPromise = null;
+  }
 
   function loadState() {
     try {
@@ -56,6 +67,7 @@
   }
 
   function clearDiagnosticAndPdfState() {
+    cancelInFlightPdfFetch();
     state.answers = {};
     state.currentQuestionId = null;
     serverNav = null;
@@ -64,7 +76,6 @@
     isPaid = false;
     cachedPdfBlob = null;
     cachedPdfSessionId = null;
-    pdfFetchPromise = null;
     saveState();
   }
 
@@ -1788,26 +1799,43 @@
       updatePdfButtonState('ready');
       return;
     }
+    // If there is an in-flight fetch for a different session, abort it
+    if (cachedPdfSessionId && cachedPdfSessionId !== sessionId) {
+      cancelInFlightPdfFetch();
+    }
     if (pdfFetchPromise) return;
 
     updatePdfButtonState('generating');
 
+    pdfAbortController = new AbortController();
+    const currentController = pdfAbortController;
+    const requestedSessionId = sessionId;
+
     pdfFetchPromise = fetch('/api/sessions/' + sessionId + '/pdf', {
-      credentials: 'same-origin'
+      credentials: 'same-origin',
+      signal: currentController.signal
     })
       .then(async function (res) {
+        // Ignore result if session has changed or fetch was aborted
+        if (state.sessionId !== requestedSessionId) return;
+
         if (res.ok) {
           cachedPdfBlob = await res.blob();
-          cachedPdfSessionId = sessionId;
+          cachedPdfSessionId = requestedSessionId;
           updatePdfButtonState('ready');
         } else {
           updatePdfButtonState('initial');
         }
       })
-      .catch(function () {
+      .catch(function (err) {
+        if (err && err.name === 'AbortError') return;
+        if (state.sessionId !== requestedSessionId) return;
         updatePdfButtonState('initial');
       })
       .finally(function () {
+        if (pdfAbortController === currentController) {
+          pdfAbortController = null;
+        }
         pdfFetchPromise = null;
       });
   }
@@ -1822,6 +1850,11 @@
     if (cachedPdfBlob && cachedPdfSessionId === state.sessionId) {
       downloadBlob(cachedPdfBlob, 'Fenix_SLS_Report_' + state.sessionId + '.pdf');
       return;
+    }
+
+    // If an in-flight background fetch was targeting an older/different session, abort it
+    if (cachedPdfSessionId && cachedPdfSessionId !== state.sessionId) {
+      cancelInFlightPdfFetch();
     }
 
     const btn = document.getElementById('download-pdf-btn');
