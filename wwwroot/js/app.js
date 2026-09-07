@@ -1811,7 +1811,7 @@
     const currentController = pdfAbortController;
     const requestedSessionId = sessionId;
 
-    pdfFetchPromise = fetch('/api/sessions/' + sessionId + '/pdf', {
+    const thisFetchPromise = fetch('/api/sessions/' + sessionId + '/pdf', {
       credentials: 'same-origin',
       signal: currentController.signal
     })
@@ -1820,7 +1820,10 @@
         if (state.sessionId !== requestedSessionId) return;
 
         if (res.ok) {
-          cachedPdfBlob = await res.blob();
+          const blob = await res.blob();
+          // Re-verify session validity after asynchronous blob read before writing to cache
+          if (state.sessionId !== requestedSessionId) return;
+          cachedPdfBlob = blob;
           cachedPdfSessionId = requestedSessionId;
           updatePdfButtonState('ready');
         } else {
@@ -1836,8 +1839,13 @@
         if (pdfAbortController === currentController) {
           pdfAbortController = null;
         }
-        pdfFetchPromise = null;
+        // Clean only if this exact fetch request is the one completing
+        if (pdfFetchPromise === thisFetchPromise) {
+          pdfFetchPromise = null;
+        }
       });
+
+    pdfFetchPromise = thisFetchPromise;
   }
 
   async function downloadPDFReport() {
@@ -1846,14 +1854,16 @@
       return;
     }
 
+    const currentDownloadSessionId = state.sessionId;
+
     // 1. If already formed in background, download immediately!
-    if (cachedPdfBlob && cachedPdfSessionId === state.sessionId) {
-      downloadBlob(cachedPdfBlob, 'Fenix_SLS_Report_' + state.sessionId + '.pdf');
+    if (cachedPdfBlob && cachedPdfSessionId === currentDownloadSessionId) {
+      downloadBlob(cachedPdfBlob, 'Fenix_SLS_Report_' + currentDownloadSessionId + '.pdf');
       return;
     }
 
     // If an in-flight background fetch was targeting an older/different session, abort it
-    if (cachedPdfSessionId && cachedPdfSessionId !== state.sessionId) {
+    if (cachedPdfSessionId && cachedPdfSessionId !== currentDownloadSessionId) {
       cancelInFlightPdfFetch();
     }
 
@@ -1920,9 +1930,10 @@
       }
 
       const blob = await res.blob();
+      if (state.sessionId !== currentDownloadSessionId) return;
       cachedPdfBlob = blob;
-      cachedPdfSessionId = state.sessionId;
-      downloadBlob(blob, 'Fenix_SLS_Report_' + state.sessionId + '.pdf');
+      cachedPdfSessionId = currentDownloadSessionId;
+      downloadBlob(blob, 'Fenix_SLS_Report_' + currentDownloadSessionId + '.pdf');
     } catch (err) {
       if (err && err.message !== 'auth_cancelled' && err.message !== 'account_switched') {
         alert('Не удалось скачать PDF-отчёт. Пожалуйста, повторите попытку.');

@@ -343,9 +343,9 @@ public class SessionsController : ControllerBase
                         }
                     }
 
-                    // Check and issue the version stored in DB
+                    // Check and issue strictly the version stored in DB (no unpersisted fallback)
                     var canonicalDb = _sessions.GetPdf(id);
-                    return (canonicalDb != null && canonicalDb.Length > 0) ? canonicalDb : generated;
+                    return canonicalDb;
                 });
                 _pdfGenerationTasks[id] = generationTask;
             }
@@ -372,8 +372,8 @@ public class SessionsController : ControllerBase
         {
             return StatusCode(StatusCodes.Status500InternalServerError, new
             {
-                error = "generation_failed",
-                message = "Не удалось сформировать PDF-документ. Пожалуйста, повторите попытку позже."
+                error = "pdf_persistence_failed",
+                message = "Не удалось подтвердить сохранение PDF-отчёта в базе данных. Выдача файла без постоянного хранения запрещена."
             });
         }
 
