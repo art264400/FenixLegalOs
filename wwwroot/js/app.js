@@ -1760,7 +1760,6 @@
     }
   }
 
-  let isPaid = false;
 
   async function loadResultFromServer(sessionId, backHash) {
     if (!sessionId) { location.hash = '#/'; return; }
