@@ -102,7 +102,9 @@ public class DbInitializer
                 paid INTEGER NOT NULL DEFAULT 0,
                 paid_at TEXT,
                 payment_amount INTEGER,
-                payment_method TEXT
+                payment_method TEXT,
+                pdf_bytes BLOB,
+                pdf_generated_at TEXT
             );
 
             CREATE TABLE IF NOT EXISTS leads (
@@ -233,15 +235,48 @@ public class DbInitializer
         ");
 
         // Safe migrations
+        conn.Execute(@"
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                salt TEXT NOT NULL,
+                name TEXT NOT NULL,
+                company TEXT NOT NULL,
+                position TEXT NOT NULL,
+                messenger TEXT,
+                terms_accepted INTEGER NOT NULL DEFAULT 1,
+                terms_accepted_at TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS user_tokens (
+                token TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL
+            );
+        ");
+
         TryAddColumn(conn, "sessions", "paid", "INTEGER NOT NULL DEFAULT 0");
         TryAddColumn(conn, "sessions", "paid_at", "TEXT");
         TryAddColumn(conn, "sessions", "payment_amount", "INTEGER");
         TryAddColumn(conn, "sessions", "payment_method", "TEXT");
+        TryAddColumn(conn, "sessions", "user_id", "TEXT");
+        TryAddColumn(conn, "sessions", "terms_accepted", "INTEGER NOT NULL DEFAULT 0");
+        TryAddColumn(conn, "sessions", "terms_accepted_at", "TEXT");
+        TryAddColumn(conn, "sessions", "pdf_bytes", "BLOB");
+        TryAddColumn(conn, "sessions", "pdf_generated_at", "TEXT");
 
         TryAddColumn(conn, "leads", "paid", "INTEGER NOT NULL DEFAULT 0");
         TryAddColumn(conn, "leads", "paid_at", "TEXT");
         TryAddColumn(conn, "leads", "payment_amount", "INTEGER");
         TryAddColumn(conn, "leads", "payment_method", "TEXT");
+        TryAddColumn(conn, "leads", "user_id", "TEXT");
+        TryAddColumn(conn, "leads", "position", "TEXT");
+        TryAddColumn(conn, "leads", "terms_accepted", "INTEGER NOT NULL DEFAULT 1");
+        TryAddColumn(conn, "leads", "terms_accepted_at", "TEXT");
 
         // Seed or update Question Bank in DB
         SeedQuestionBank(conn);

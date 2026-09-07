@@ -28,15 +28,19 @@ public class LeadRepository
         var now = DateTime.UtcNow.ToString("o");
 
         conn.Execute(@"
-            INSERT INTO leads (id, session_id, type, name, company, website, email, messenger,
-                interest, source_risk_code, heat_score, heat_label, status, paid, paid_at, payment_amount, payment_method, created_at)
-            VALUES (@id, @SessionId, @Type, @Name, @Company, @Website, @Email, @Messenger,
-                @Interest, @SourceRiskCode, @HeatScore, @HeatLabel, 'new', @Paid, @PaidAt, @PaymentAmount, @PaymentMethod, @now)
+            INSERT INTO leads (id, session_id, type, name, company, position, website, email, messenger,
+                interest, source_risk_code, heat_score, heat_label, status, paid, paid_at, payment_amount, payment_method,
+                user_id, terms_accepted, terms_accepted_at, created_at)
+            VALUES (@id, @SessionId, @Type, @Name, @Company, @Position, @Website, @Email, @Messenger,
+                @Interest, @SourceRiskCode, @HeatScore, @HeatLabel, 'new', @Paid, @PaidAt, @PaymentAmount, @PaymentMethod,
+                @UserId, @termsAccepted, @termsAcceptedAt, @now)
         ", new
         {
-            id, lead.SessionId, lead.Type, lead.Name, lead.Company, lead.Website, lead.Email,
+            id, lead.SessionId, lead.Type, lead.Name, lead.Company, lead.Position, lead.Website, lead.Email,
             lead.Messenger, lead.Interest, lead.SourceRiskCode, lead.HeatScore, lead.HeatLabel,
-            lead.Paid, lead.PaidAt, lead.PaymentAmount, lead.PaymentMethod, now
+            lead.Paid, lead.PaidAt, lead.PaymentAmount, lead.PaymentMethod,
+            lead.UserId, termsAccepted = lead.TermsAccepted ? 1 : 0,
+            termsAcceptedAt = lead.TermsAcceptedAt ?? now, now
         });
 
         conn.Execute("INSERT INTO lead_status_history (id, lead_id, status, created_at) VALUES (@histId, @id, 'new', @now)", new { histId = Guid.NewGuid().ToString(), id, now });
@@ -51,6 +55,7 @@ public class LeadRepository
                 l.id AS Id, 
                 l.name AS Name, 
                 l.company AS Company, 
+                l.position AS Position,
                 l.email AS Email,
                 l.messenger AS Messenger, 
                 l.type AS Type, 
@@ -62,6 +67,8 @@ public class LeadRepository
                 l.paid_at AS PaidAt, 
                 l.payment_amount AS PaymentAmount, 
                 l.payment_method AS PaymentMethod,
+                l.terms_accepted AS TermsAccepted,
+                l.terms_accepted_at AS TermsAcceptedAt,
                 l.created_at AS CreatedAt, 
                 s.result AS SessionResult,
                 s.answers AS SessionAnswers
@@ -74,6 +81,7 @@ public class LeadRepository
                 'session_' || s.id AS Id,
                 'Сессия ' || SUBSTR(s.id, 1, 8) AS Name,
                 '' AS Company,
+                '' AS Position,
                 '— (контакт не оставлен)' AS Email,
                 '' AS Messenger,
                 CASE WHEN s.completed_at IS NOT NULL THEN 'completed_audit' ELSE 'in_progress' END AS Type,
@@ -85,6 +93,8 @@ public class LeadRepository
                 s.paid_at AS PaidAt,
                 s.payment_amount AS PaymentAmount,
                 s.payment_method AS PaymentMethod,
+                s.terms_accepted AS TermsAccepted,
+                s.terms_accepted_at AS TermsAcceptedAt,
                 s.created_at AS CreatedAt,
                 s.result AS SessionResult,
                 s.answers AS SessionAnswers
@@ -109,6 +119,7 @@ public class LeadRepository
                     'completed_audit' AS Type, 
                     'Сессия ' || SUBSTR(s.id, 1, 8) AS Name, 
                     '' AS Company,
+                    '' AS Position,
                     '' AS Website, 
                     '— (контакт не оставлен)' AS Email, 
                     '' AS Messenger, 
@@ -121,6 +132,8 @@ public class LeadRepository
                     s.paid_at AS PaidAt, 
                     s.payment_amount AS PaymentAmount,
                     s.payment_method AS PaymentMethod, 
+                    s.terms_accepted AS TermsAccepted,
+                    s.terms_accepted_at AS TermsAcceptedAt,
                     s.created_at AS CreatedAt,
                     s.answers AS SessionAnswers, 
                     s.result AS SessionResult, 
@@ -131,12 +144,31 @@ public class LeadRepository
         }
 
         return conn.QuerySingleOrDefault(@"
-            SELECT l.id AS Id, l.session_id AS SessionId, l.type AS Type, l.name AS Name, l.company AS Company,
-                   l.website AS Website, l.email AS Email, l.messenger AS Messenger, l.interest AS Interest,
-                   l.source_risk_code AS SourceRiskCode, l.heat_score AS HeatScore, l.heat_label AS HeatLabel,
-                   l.status AS Status, l.paid AS Paid, l.paid_at AS PaidAt, l.payment_amount AS PaymentAmount,
-                   l.payment_method AS PaymentMethod, l.created_at AS CreatedAt,
-                   s.answers AS SessionAnswers, s.result AS SessionResult, s.created_at AS SessionCreatedAt
+            SELECT 
+                l.id AS Id, 
+                l.session_id AS SessionId, 
+                l.type AS Type, 
+                l.name AS Name, 
+                l.company AS Company, 
+                l.position AS Position,
+                l.website AS Website, 
+                l.email AS Email, 
+                l.messenger AS Messenger, 
+                l.interest AS Interest,
+                l.source_risk_code AS SourceRiskCode, 
+                l.heat_score AS HeatScore, 
+                l.heat_label AS HeatLabel, 
+                l.status AS Status, 
+                l.paid AS Paid, 
+                l.paid_at AS PaidAt, 
+                l.payment_amount AS PaymentAmount, 
+                l.payment_method AS PaymentMethod, 
+                l.terms_accepted AS TermsAccepted,
+                l.terms_accepted_at AS TermsAcceptedAt,
+                l.created_at AS CreatedAt,
+                s.answers AS SessionAnswers, 
+                s.result AS SessionResult, 
+                s.created_at AS SessionCreatedAt
             FROM leads l LEFT JOIN sessions s ON s.id = l.session_id
             WHERE l.id = @id
         ", new { id });

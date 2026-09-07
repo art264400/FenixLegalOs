@@ -645,7 +645,7 @@
         : '<span style="color:var(--ink-faint)">—</span>';
 
       return '<tr class="clickable" data-id="' + esc(l.id) + '">' +
-        '<td><strong>' + esc(l.name) + '</strong><br><span style="color:var(--ink-faint);font-size:12.5px">' + esc(l.company || '—') + '</span></td>' +
+        '<td><strong>' + esc(l.name) + '</strong>' + (l.position ? ' <span style="font-size:12px;color:var(--gold, #E5C07B)">(' + esc(l.position) + ')</span>' : '') + '<br><span style="color:var(--ink-faint);font-size:12.5px">' + esc(l.company || '—') + '</span></td>' +
         '<td>' + esc(l.email) + (l.messenger ? '<br><span style="color:var(--ink-faint);font-size:12.5px">' + esc(l.messenger) + '</span>' : '') + '</td>' +
         '<td>' + (l.overall != null ? l.overall : '—') + '</td>' +
         '<td>' + (l.criticalCount != null ? l.criticalCount : '—') + '</td>' +
@@ -700,9 +700,11 @@
           '<p style="color:var(--ink-soft);margin-top:4px">' + esc(l.company || 'Компания не указана') +
             (l.website ? ' · <a href="' + esc(l.website) + '" target="_blank" rel="noopener">' + esc(l.website) + '</a>' : '') + '</p>' +
           '<div style="margin-top:16px;font-size:14.5px;line-height:2">' +
+            'Должность: <strong>' + esc(l.position || '—') + '</strong><br>' +
             'Email: <strong>' + esc(l.email) + '</strong><br>' +
             'Мессенджер: ' + esc(l.messenger || '—') + '<br>' +
-            'Тип: ' + (l.type === 'consultation' ? 'Заявка на разбор' : 'Запрос отчёта') + '<br>' +
+            'Согласие с офертой и политикой: <strong style="color:var(--positive, #34D399)">' + (l.termsAccepted ? '✓ Подтверждено' : '—') + '</strong><br>' +
+            'Тип: ' + (l.type === 'consultation' ? 'Заявка на разбор' : (l.type === 'registration' ? 'Регистрация перед скринингом' : 'Запрос отчёта')) + '<br>' +
             'Запрос: ' + esc(l.interest || '—') + '<br>' +
             (l.sourceRiskCode ? 'Источник CTA: <code>' + esc(l.sourceRiskCode) + '</code><br>' : '') +
             'Lead heat: <span class="heat heat-' + esc(l.heatLabel) + '">' + l.heatScore + ' · ' + HEAT_LABEL[l.heatLabel] + '</span><br>' +

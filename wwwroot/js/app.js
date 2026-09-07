@@ -30,6 +30,11 @@
   let state = loadState(); // { sessionId, answers, currentQuestionId }
   let lastResult = null;
   let unlocked = false;
+  let isPaid = false;
+  var serverNav = null;
+  let cachedPdfBlob = null;
+  let cachedPdfSessionId = null;
+  let pdfFetchPromise = null;
 
   function loadState() {
     try {
@@ -50,17 +55,389 @@
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
   }
 
+  function clearDiagnosticAndPdfState() {
+    state.answers = {};
+    state.currentQuestionId = null;
+    serverNav = null;
+    lastResult = null;
+    unlocked = false;
+    isPaid = false;
+    cachedPdfBlob = null;
+    cachedPdfSessionId = null;
+    pdfFetchPromise = null;
+    saveState();
+  }
+
+  const USER_STORAGE_KEY = 'fenix_sls_user_v1';
+  try {
+    localStorage.removeItem('fenix_user_token');
+    localStorage.removeItem('token');
+  } catch (e) { /* ignore */ }
+
+  let currentUser = loadUser();
+
+  function loadUser() {
+    try {
+      const raw = localStorage.getItem(USER_STORAGE_KEY);
+      if (raw) {
+        const u = JSON.parse(raw);
+        if (u && typeof u === 'object') {
+          if ('token' in u) {
+            delete u.token;
+            try {
+              localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(u));
+            } catch (err) { /* ignore */ }
+          }
+          return u;
+        }
+      }
+    } catch (e) { /* ignore */ }
+    return null;
+  }
+
+  function saveUser(u) {
+    if (u && typeof u === 'object' && 'token' in u) delete u.token;
+    currentUser = u;
+    try {
+      if (u) localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(u));
+      else localStorage.removeItem(USER_STORAGE_KEY);
+    } catch (e) { /* ignore */ }
+  }
+
+  function openAuthModal(onSuccess, force, onCancel) {
+    if (!force && currentUser && currentUser.termsAccepted) {
+      if (typeof onSuccess === 'function') onSuccess();
+      return;
+    }
+
+    let currentTab = 'register'; // 'register' | 'login'
+
+    function renderModal() {
+      const isReg = currentTab === 'register';
+
+      modalRoot.innerHTML =
+        '<div class="auth-modal-overlay" id="auth-overlay">' +
+          '<div class="auth-modal fade-in" role="dialog" aria-modal="true">' +
+            '<button class="auth-modal-close" id="auth-close" aria-label="Закрыть">×</button>' +
+            '<div class="auth-badge">FENIX SLS · Входной контроль</div>' +
+            '<h2 class="auth-modal-title">' + (isReg ? 'Регистрация перед скринингом' : 'Вход в аккаунт') + '</h2>' +
+            '<p class="auth-modal-sub">' +
+              (isReg
+                ? 'Для формирования юридического профиля компании, сохранения результатов и допуска к скринингу укажите контакты и подтвердите согласие с документами.'
+                : 'Введите email и пароль для доступа к вашему скринингу и отчётам.') +
+            '</p>' +
+            '<div class="auth-tabs">' +
+              '<button type="button" class="auth-tab-btn ' + (isReg ? 'active' : '') + '" id="tab-btn-reg">Регистрация</button>' +
+              '<button type="button" class="auth-tab-btn ' + (!isReg ? 'active' : '') + '" id="tab-btn-login">Вход по паролю</button>' +
+            '</div>' +
+            '<div class="auth-error-msg" id="auth-error" hidden style="margin-bottom:14px"></div>' +
+            (isReg ? renderRegForm() : renderLoginForm()) +
+          '</div>' +
+        '</div>';
+
+      attachModalEvents();
+    }
+
+    function renderRegForm() {
+      return (
+        '<form class="auth-form" id="auth-reg-form">' +
+          '<div class="auth-grid-2">' +
+            '<div class="auth-field">' +
+              '<label for="auth-name">ФИО <span class="req">*</span></label>' +
+              '<input id="auth-name" required maxlength="120" placeholder="Нариман Исанов" autocomplete="name">' +
+            '</div>' +
+            '<div class="auth-field">' +
+              '<label for="auth-position">Должность <span class="req">*</span></label>' +
+              '<input id="auth-position" required maxlength="100" placeholder="Фаундер / CEO / CTO / Юрист" list="positions-list">' +
+              '<datalist id="positions-list">' +
+                '<option value="Основатель / CEO">' +
+                '<option value="Сооснователь / Co-Founder">' +
+                '<option value="CTO / Технический директор">' +
+                '<option value="Юрист / Legal Counsel">' +
+                '<option value="C-Level / Руководитель">' +
+                '<option value="Инвестор / Бизнес-ангел">' +
+              '</datalist>' +
+            '</div>' +
+          '</div>' +
+          '<div class="auth-grid-2">' +
+            '<div class="auth-field">' +
+              '<label for="auth-company">Компания / Проект <span class="req">*</span></label>' +
+              '<input id="auth-company" required maxlength="150" placeholder="Например: Fenix Tech">' +
+            '</div>' +
+            '<div class="auth-field">' +
+              '<label for="auth-msg">WhatsApp / Telegram</label>' +
+              '<input id="auth-msg" maxlength="120" placeholder="+7... или @username">' +
+            '</div>' +
+          '</div>' +
+          '<div class="auth-grid-2">' +
+            '<div class="auth-field">' +
+              '<label for="auth-email">Email <span class="req">*</span></label>' +
+              '<input id="auth-email" type="email" required maxlength="200" placeholder="name@company.com" autocomplete="email">' +
+            '</div>' +
+            '<div class="auth-field">' +
+              '<label for="auth-password">Пароль <span class="req">*</span></label>' +
+              '<input id="auth-password" type="password" required minlength="6" maxlength="100" placeholder="Минимум 6 символов" autocomplete="new-password">' +
+            '</div>' +
+          '</div>' +
+          '<div class="auth-consent-box">' +
+            '<label class="auth-consent-label">' +
+              '<input type="checkbox" id="auth-consent-cb" required>' +
+              '<span>Я подтверждаю, что ознакомлен(-а) и принимаю условия <a href="/docs/user-agreement-offer.pdf" target="_blank" rel="noopener">Пользовательского соглашения (публичной оферты)</a> и даю согласие на обработку персональных данных в соответствии с <a href="/docs/privacy-policy.pdf" target="_blank" rel="noopener">Политикой конфиденциальности</a>.</span>' +
+            '</label>' +
+          '</div>' +
+          '<button type="submit" class="btn auth-submit-btn" id="auth-submit-btn">Зарегистрироваться и начать диагностику</button>' +
+          '<div class="auth-switch-prompt">Уже зарегистрированы? <button type="button" id="switch-to-login">Войти по паролю</button></div>' +
+        '</form>'
+      );
+    }
+
+    function renderLoginForm() {
+      return (
+        '<form class="auth-form" id="auth-login-form">' +
+          '<div class="auth-field">' +
+            '<label for="login-email">Email <span class="req">*</span></label>' +
+            '<input id="login-email" type="email" required maxlength="200" placeholder="name@company.com" autocomplete="email">' +
+            '</div>' +
+          '<div class="auth-field">' +
+            '<label for="login-password">Пароль <span class="req">*</span></label>' +
+            '<input id="login-password" type="password" required maxlength="100" placeholder="Ваш пароль" autocomplete="current-password">' +
+          '</div>' +
+          '<button type="submit" class="btn auth-submit-btn" id="auth-login-submit">Войти и продолжить</button>' +
+          '<div class="auth-switch-prompt">Новый пользователь? <button type="button" id="switch-to-reg">Зарегистрироваться</button></div>' +
+        '</form>'
+      );
+    }
+
+    function close(wasCancelled) {
+      modalRoot.innerHTML = '';
+      if (wasCancelled && typeof onCancel === 'function') {
+        onCancel();
+      }
+    }
+
+    function attachModalEvents() {
+      const closeBtn = document.getElementById('auth-close');
+      if (closeBtn) closeBtn.addEventListener('click', function () { close(true); });
+
+      const overlay = document.getElementById('auth-overlay');
+      if (overlay) {
+        overlay.addEventListener('click', function (e) {
+          if (e.target === e.currentTarget) close(true);
+        });
+      }
+
+      const tabReg = document.getElementById('tab-btn-reg');
+      const tabLogin = document.getElementById('tab-btn-login');
+      if (tabReg) tabReg.addEventListener('click', function () { currentTab = 'register'; renderModal(); });
+      if (tabLogin) tabLogin.addEventListener('click', function () { currentTab = 'login'; renderModal(); });
+
+      const swLogin = document.getElementById('switch-to-login');
+      if (swLogin) swLogin.addEventListener('click', function () { currentTab = 'login'; renderModal(); });
+
+      const swReg = document.getElementById('switch-to-reg');
+      if (swReg) swReg.addEventListener('click', function () { currentTab = 'register'; renderModal(); });
+
+      const regForm = document.getElementById('auth-reg-form');
+      if (regForm) {
+        regForm.addEventListener('submit', async function (e) {
+          e.preventDefault();
+          const errEl = document.getElementById('auth-error');
+          errEl.hidden = true;
+
+          const consentCb = document.getElementById('auth-consent-cb');
+          if (!consentCb || !consentCb.checked) {
+            errEl.textContent = 'Для продолжения необходимо подтвердить согласие с Пользовательским соглашением и Политикой конфиденциальности.';
+            errEl.hidden = false;
+            return;
+          }
+
+          const btn = document.getElementById('auth-submit-btn');
+          btn.disabled = true;
+          btn.textContent = 'Регистрация…';
+
+          try {
+            const payload = {
+              name: document.getElementById('auth-name').value.trim(),
+              position: document.getElementById('auth-position').value.trim(),
+              company: document.getElementById('auth-company').value.trim(),
+              messenger: document.getElementById('auth-msg').value.trim(),
+              email: document.getElementById('auth-email').value.trim(),
+              password: document.getElementById('auth-password').value,
+              termsAccepted: true,
+              sessionId: state.sessionId
+            };
+
+            const res = await api('POST', '/api/auth/register', payload);
+            const userObj = res.user || {};
+            saveUser(userObj);
+            if (res.sessionId && res.sessionId !== state.sessionId) {
+              state.sessionId = res.sessionId;
+              clearDiagnosticAndPdfState();
+            } else if (res.sessionId) {
+              state.sessionId = res.sessionId;
+              saveState();
+            }
+            close(false);
+            if (typeof onSuccess === 'function') onSuccess();
+          } catch (err) {
+            btn.disabled = false;
+            btn.textContent = 'Зарегистрироваться и начать диагностику';
+            let msg = 'Не удалось зарегистрироваться. Пожалуйста, проверьте введённые данные.';
+            if (err && err.message && err.message.indexOf('409') !== -1) {
+              msg = 'Пользователь с таким Email уже зарегистрирован. Перейдите во вкладку «Вход по паролю».';
+            }
+            errEl.textContent = msg;
+            errEl.hidden = false;
+          }
+        });
+      }
+
+      const loginForm = document.getElementById('auth-login-form');
+      if (loginForm) {
+        loginForm.addEventListener('submit', async function (e) {
+          e.preventDefault();
+          const errEl = document.getElementById('auth-error');
+          errEl.hidden = true;
+
+          const btn = document.getElementById('auth-login-submit');
+          btn.disabled = true;
+          btn.textContent = 'Вход…';
+
+          try {
+            const payload = {
+              email: document.getElementById('login-email').value.trim(),
+              password: document.getElementById('login-password').value,
+              sessionId: state.sessionId
+            };
+
+            const res = await api('POST', '/api/auth/login', payload);
+            const userObj = res.user || {};
+            saveUser(userObj);
+            if (res.sessionId && res.sessionId !== state.sessionId) {
+              state.sessionId = res.sessionId;
+              clearDiagnosticAndPdfState();
+            } else if (res.sessionId) {
+              state.sessionId = res.sessionId;
+              saveState();
+            }
+            close(false);
+            if (typeof onSuccess === 'function') onSuccess();
+          } catch (err) {
+            btn.disabled = false;
+            btn.textContent = 'Войти и продолжить';
+            errEl.textContent = 'Неверный email или пароль. Проверьте данные и попробуйте снова.';
+            errEl.hidden = false;
+          }
+        });
+      }
+    }
+
+    renderModal();
+  }
+
+  // ---------------------------------------------------------------------
+  // Re-authentication on session expiry
+  // ---------------------------------------------------------------------
+
+  let reAuthPromise = null;
+
+  function requestReAuth() {
+    if (reAuthPromise) return reAuthPromise;
+
+    reAuthPromise = new Promise(function (resolve, reject) {
+      saveUser(null);
+      openAuthModal(
+        function () {
+          reAuthPromise = null;
+          resolve();
+        },
+        true, // force
+        function () {
+          reAuthPromise = null;
+          reject(new Error('auth_cancelled'));
+        }
+      );
+    });
+
+    return reAuthPromise;
+  }
+
+  // ---------------------------------------------------------------------
+  // Payment navigation helper
+  // ---------------------------------------------------------------------
+
+  function showPaymentPrompt(sessionId) {
+    if (location.hash !== '#/results') {
+      location.hash = '#/results';
+      screenResults();
+    }
+    setTimeout(function () {
+      const paySection = document.getElementById('pay-section');
+      if (paySection) {
+        paySection.scrollIntoView({ behavior: 'smooth' });
+      }
+    }, 120);
+  }
+
   // ---------------------------------------------------------------------
   // API helpers
   // ---------------------------------------------------------------------
 
-  async function api(method, url, body) {
+  async function api(method, url, body, isRetry) {
+    const headers = { 'Content-Type': 'application/json' };
     const res = await fetch(url, {
       method,
-      headers: { 'Content-Type': 'application/json' },
+      headers,
+      credentials: 'same-origin',
       body: body ? JSON.stringify(body) : undefined,
     });
-    if (!res.ok) throw new Error('api_error_' + res.status);
+    if (!res.ok) {
+      if (!isRetry && !url.includes('/api/auth/')) {
+        let errData = null;
+        try {
+          errData = await res.clone().json();
+        } catch (e) { /* ignore */ }
+
+        // [P2 Fix]: Distinguish payment requirement from auth expiration!
+        if (errData && errData.error === 'payment_required') {
+          showPaymentPrompt(state.sessionId);
+          throw new Error('payment_required');
+        }
+
+        // Handle completed session immutability
+        if (errData && errData.error === 'session_already_completed') {
+          alert('Диагностика по этой анкете уже завершена. Ответы и результат зафиксированы. Для нового прохождения создана новая анкета.');
+          const created = await api('POST', '/api/sessions');
+          state.sessionId = created.id;
+          clearDiagnosticAndPdfState();
+          location.hash = '#/diagnostic';
+          route();
+          throw new Error('session_already_completed');
+        }
+
+        // [P1 Fix]: Only auth expiration/rejection triggers re-auth.
+        if (res.status === 401 || (errData && (errData.error === 'forbidden_session_owner' || errData.error === 'terms_required' || errData.error === 'unauthorized'))) {
+          const prevUserId = currentUser ? currentUser.id : null;
+          const prevSessionId = state.sessionId;
+
+          await requestReAuth();
+
+          const sameUser = (!prevUserId && currentUser) || (currentUser && currentUser.id === prevUserId);
+          const sameSession = state.sessionId === prevSessionId;
+
+          if (sameUser && sameSession) {
+            // User and session match: safe to retry the interrupted action
+            return api(method, url, body, true);
+          } else {
+            // Account switched or session mismatch: stop retry and reset local diagnostic & PDF cache!
+            clearDiagnosticAndPdfState();
+            route();
+            throw new Error(sameUser ? 'session_switched' : 'account_switched');
+          }
+        }
+      }
+      throw new Error('api_error_' + res.status);
+    }
     return res.json();
   }
 
@@ -99,7 +476,6 @@
    * Authoritative navigation state from backend (NavigationState DTO).
    * null = server state unknown. Frontend MUST NOT make navigation decisions while null.
    */
-  var serverNav = null;
 
   /**
    * Fetches full NavigationState from the server.
@@ -402,6 +778,13 @@
       '</section>'
     );
     async function startDiagnosticSession() {
+      if (!currentUser || !currentUser.termsAccepted) {
+        openAuthModal(function () {
+          startDiagnosticSession();
+        });
+        return;
+      }
+
       render(
         '<section class="q-screen wrap-narrow">' +
           '<div class="spinner" style="margin:50px auto"></div>' +
@@ -410,13 +793,7 @@
       try {
         const created = await api('POST', '/api/sessions');
         state.sessionId = created.id;
-        state.answers = {};
-        state.currentQuestionId = null;
-        serverNav = null;
-        lastResult = null;
-        unlocked = false;
-        isPaid = false;
-        saveState();
+        clearDiagnosticAndPdfState();
         location.hash = '#/diagnostic';
       } catch (e) {
         render(
@@ -501,6 +878,18 @@
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ answers: state.answers, lastSectionId: sectionId }),
+    }).then(async function (res) {
+      if (res.status === 409) {
+        let errData = null;
+        try { errData = await res.json(); } catch (e) {}
+        if (errData && errData.error === 'session_already_completed') {
+          const created = await api('POST', '/api/sessions');
+          state.sessionId = created.id;
+          clearDiagnosticAndPdfState();
+          location.hash = '#/diagnostic';
+          route();
+        }
+      }
     }).catch(function () {});
   }
 
@@ -1191,13 +1580,16 @@
         '</div>' +
 
         '<div style="max-width:480px;margin:0 auto 16px;text-align:left">' +
-          '<div class="field"><label for="g-name" style="font-size:12.5px">Ваше имя (необязательно)</label><input id="g-name" placeholder="Фаундер / СЕО" maxlength="120"></div>' +
-          '<div class="field" style="margin-top:10px"><label for="g-email" style="font-size:12.5px">Email (для отправки копии PDF)</label><input id="g-email" type="email" placeholder="founder@company.com" maxlength="200"></div>' +
-          '<div class="field" style="margin-top:10px"><label for="g-msg" style="font-size:12.5px">WhatsApp / Telegram (необязательно)</label><input id="g-msg" placeholder="@username / +7..." maxlength="120"></div>' +
+          '<div class="field"><label for="g-name" style="font-size:12.5px">Ваше имя</label><input id="g-name" value="' + esc((currentUser && currentUser.name) || '') + '" placeholder="Фаундер / СЕО" maxlength="120"></div>' +
+          '<div class="field" style="margin-top:10px"><label for="g-email" style="font-size:12.5px">Email (для отправки копии PDF)</label><input id="g-email" type="email" value="' + esc((currentUser && currentUser.email) || '') + '" placeholder="founder@company.com" maxlength="200"></div>' +
+          '<div class="field" style="margin-top:10px"><label for="g-msg" style="font-size:12.5px">WhatsApp / Telegram (необязательно)</label><input id="g-msg" value="' + esc((currentUser && currentUser.messenger) || '') + '" placeholder="@username / +7..." maxlength="120"></div>' +
         '</div>' +
         '<div class="pay-btn-group">' +
           '<button class="btn-kaspi" id="btn-pay-kaspi">🔴 Оплатить ' + currentSelectedPrice + ' ₸ через Kaspi Pay</button>' +
           '<button class="btn-demo" id="btn-pay-demo">⚡ Демо-оплата в 1 клик (Бесплатно)</button>' +
+        '</div>' +
+        '<div style="margin-top:14px;font-size:12px;color:var(--ink-faint);text-align:center;line-height:1.4">' +
+          'Оплачивая услугу, вы подтверждаете согласие с <a href="/docs/user-agreement-offer.pdf" target="_blank" rel="noopener" style="color:var(--gold, #E5C07B);text-decoration:underline;">Пользовательским соглашением (офертой)</a> и <a href="/docs/privacy-policy.pdf" target="_blank" rel="noopener" style="color:var(--gold, #E5C07B);text-decoration:underline;">Политикой конфиденциальности</a>.' +
         '</div>' +
         '<div class="form-error" id="pay-err" hidden style="margin-top:14px"></div>' +
       '</section>'
@@ -1205,6 +1597,13 @@
   }
 
   function openKaspiPayModal(sessionId) {
+    if (!currentUser || !currentUser.termsAccepted) {
+      openAuthModal(function () {
+        openKaspiPayModal(sessionId);
+      });
+      return;
+    }
+
     const p = getSelectedPriceKzt().toLocaleString('ru');
     const tierTitle = selectedTier === 'consultation' ? 'Тариф «FENIX SLS + разбор с юристом»' : 'Тариф «FENIX SLS — Отчёт»';
 
@@ -1237,6 +1636,13 @@
   }
 
   async function executeDemoPayment(sessionId) {
+    if (!currentUser || !currentUser.termsAccepted) {
+      openAuthModal(function () {
+        executeDemoPayment(sessionId);
+      });
+      return;
+    }
+
     const errEl = document.getElementById('pay-err');
     if (errEl) errEl.hidden = true;
 
@@ -1359,12 +1765,149 @@
     }
   }
 
-  function downloadPDFReport() {
-    if (state.sessionId) {
-      window.open('/api/sessions/' + state.sessionId + '/pdf', '_blank');
+
+  function updatePdfButtonState(status) {
+    const btn = document.getElementById('download-pdf-btn');
+    if (!btn) return;
+    if (status === 'generating') {
+      btn.innerHTML = '<span class="spinner" style="display:inline-block;width:14px;height:14px;vertical-align:middle;margin-right:8px;border-width:2px;"></span>Формирование PDF в фоне…';
+      btn.disabled = false;
+    } else if (status === 'ready') {
+      btn.textContent = '📥 Скачать официальный PDF-отчёт (Готов)';
+      btn.disabled = false;
+      btn.style.boxShadow = '0 4px 20px rgba(56,189,248,0.4)';
+    } else {
+      btn.textContent = '📥 Скачать официальный PDF-отчёт';
+      btn.disabled = false;
+    }
+  }
+
+  function preheatPdf(sessionId) {
+    if (!sessionId || !isPaid) return;
+    if (cachedPdfBlob && cachedPdfSessionId === sessionId) {
+      updatePdfButtonState('ready');
       return;
     }
-    window.print();
+    if (pdfFetchPromise) return;
+
+    updatePdfButtonState('generating');
+
+    pdfFetchPromise = fetch('/api/sessions/' + sessionId + '/pdf', {
+      credentials: 'same-origin'
+    })
+      .then(async function (res) {
+        if (res.ok) {
+          cachedPdfBlob = await res.blob();
+          cachedPdfSessionId = sessionId;
+          updatePdfButtonState('ready');
+        } else {
+          updatePdfButtonState('initial');
+        }
+      })
+      .catch(function () {
+        updatePdfButtonState('initial');
+      })
+      .finally(function () {
+        pdfFetchPromise = null;
+      });
+  }
+
+  async function downloadPDFReport() {
+    if (!state.sessionId) {
+      window.print();
+      return;
+    }
+
+    // 1. If already formed in background, download immediately!
+    if (cachedPdfBlob && cachedPdfSessionId === state.sessionId) {
+      downloadBlob(cachedPdfBlob, 'Fenix_SLS_Report_' + state.sessionId + '.pdf');
+      return;
+    }
+
+    const btn = document.getElementById('download-pdf-btn');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner" style="display:inline-block;width:14px;height:14px;vertical-align:middle;margin-right:8px;border-width:2px;"></span>Формирование PDF…';
+    }
+
+    try {
+      if (pdfFetchPromise) {
+        await pdfFetchPromise;
+        if (cachedPdfBlob && cachedPdfSessionId === state.sessionId) {
+          downloadBlob(cachedPdfBlob, 'Fenix_SLS_Report_' + state.sessionId + '.pdf');
+          return;
+        }
+      }
+
+      const fetchPdf = async () => {
+        return fetch('/api/sessions/' + state.sessionId + '/pdf', {
+          credentials: 'same-origin'
+        });
+      };
+
+      let res = await fetchPdf();
+      if (!res.ok) {
+        let errData = null;
+        try { errData = await res.clone().json(); } catch (e) { /* ignore */ }
+
+        // [P2 Fix]: Distinguish payment requirement from auth expiry
+        if (errData && errData.error === 'payment_required') {
+          showPaymentPrompt(state.sessionId);
+          return;
+        }
+
+        if (res.status === 401 || (errData && (errData.error === 'forbidden_session_owner' || errData.error === 'terms_required' || errData.error === 'unauthorized'))) {
+          const prevUserId = currentUser ? currentUser.id : null;
+          const prevSessionId = state.sessionId;
+
+          await requestReAuth();
+
+          const sameUser = (!prevUserId && currentUser) || (currentUser && currentUser.id === prevUserId);
+          const sameSession = state.sessionId === prevSessionId;
+
+          if (sameUser && sameSession) {
+            res = await fetchPdf();
+          } else {
+            // Account switched or session mismatch: stop retry, reset local diagnostic & PDF cache!
+            clearDiagnosticAndPdfState();
+            route();
+            return;
+          }
+        }
+      }
+
+      if (!res.ok) {
+        let errData = null;
+        try { errData = await res.json(); } catch (e) { /* ignore */ }
+        if (errData && errData.error === 'payment_required') {
+          showPaymentPrompt(state.sessionId);
+          return;
+        }
+        throw new Error('pdf_error_' + res.status);
+      }
+
+      const blob = await res.blob();
+      cachedPdfBlob = blob;
+      cachedPdfSessionId = state.sessionId;
+      downloadBlob(blob, 'Fenix_SLS_Report_' + state.sessionId + '.pdf');
+    } catch (err) {
+      if (err && err.message !== 'auth_cancelled' && err.message !== 'account_switched') {
+        alert('Не удалось скачать PDF-отчёт. Пожалуйста, повторите попытку.');
+      }
+    } finally {
+      updatePdfButtonState(cachedPdfBlob ? 'ready' : 'initial');
+    }
+  }
+
+  function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
   }
 
   function buildRoadmap(r) {
@@ -1418,9 +1961,6 @@
       else bySeverity.medium.push(x);
     });
 
-    const primaryCtaText = (r.consulting && r.consulting.primaryCta) ? r.consulting.primaryCta : 'Разобрать мои результаты с Fenix Law';
-    const primaryServiceCode = (r.consulting && r.consulting.primaryServiceCode) ? r.consulting.primaryServiceCode : '';
-
     const strengths = r.strongAreas && r.strongAreas.length
       ? '<section class="risks-block"><h2>Сильные стороны компании</h2><p class="hint">Области с устойчивой правовой структурой.</p><div class="strong-list">' +
         r.strongAreas.map(function (s) { return '<span>✓ ' + esc(s) + '</span>'; }).join('') + '</div></section>'
@@ -1434,14 +1974,7 @@
         '<p class="ai-memo-sub" style="max-width:540px;margin:0 auto 24px">Полный юридический отчет с оценкой всех 8 направлений, детальным анализом ключевых рисков, фокус-разбором и пошаговой дорожной картой действий.</p>' +
         '<button class="btn" id="download-pdf-btn" style="padding:16px 36px;font-size:16px;font-weight:600;box-shadow:0 4px 20px rgba(56,189,248,0.25)">📥 Скачать официальный PDF-отчёт</button>' +
       '</section>' +
-      strengths +
-      '<section class="gate" style="margin-top:56px">' +
-        '<h2>Персональный юридический разбор Fenix Law</h2>' +
-        '<p>Мы уже знаем основные результаты вашей диагностики. Не нужно заново объяснять историю компании: вместе с запросом будут переданы ваши ответы, выявленные риски и Legal Score.</p>' +
-        '<div class="cta-row" style="margin-top:22px;display:flex;justify-content:center;align-items:center">' +
-          '<button class="btn risk-cta" data-code="' + esc(primaryServiceCode) + '" data-cta="' + esc(primaryCtaText) + '">' + esc(primaryCtaText) + '</button>' +
-        '</div>' +
-      '</section>';
+      strengths;
 
     render(mainContent);
     animateGauges();
@@ -1449,6 +1982,9 @@
 
     const pdfBtn = document.getElementById('download-pdf-btn');
     if (pdfBtn) pdfBtn.addEventListener('click', downloadPDFReport);
+
+    // Background PDF formation on the final page
+    preheatPdf(sessionId);
   }
 
   // ---------------------------------------------------------------------
@@ -1551,6 +2087,12 @@
     }
     if (hash === '#/intro') { screenIntro(); return; }
     if (hash === '#/diagnostic') {
+      if (!currentUser || !currentUser.termsAccepted) {
+        openAuthModal(function () {
+          route();
+        });
+        return;
+      }
       render(
         '<section class="q-screen wrap-narrow">' +
           '<div class="spinner" style="margin:50px auto"></div>' +

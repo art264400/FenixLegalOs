@@ -16,6 +16,7 @@ builder.Services.AddSingleton<DbInitializer>();
 builder.Services.AddSingleton<QuestionRepository>();
 builder.Services.AddSingleton<RiskRepository>();
 builder.Services.AddSingleton<SessionRepository>();
+builder.Services.AddSingleton<UserRepository>();
 builder.Services.AddSingleton<LeadRepository>();
 builder.Services.AddSingleton<SettingsRepository>();
 builder.Services.AddSingleton<ScoringEngine>();

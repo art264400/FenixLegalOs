@@ -37,7 +37,15 @@ public class SessionRepository
     public DiagnosticSession? GetSession(string id)
     {
         using var conn = GetConn();
-        var session = conn.QuerySingleOrDefault<DiagnosticSession>("SELECT id AS Id, created_at AS CreatedAt, updated_at AS UpdatedAt, answers AS AnswersJson, last_section_id AS LastSectionId, completed_at AS CompletedAt, result AS ResultJson, paid AS Paid, paid_at AS PaidAt, payment_amount AS PaymentAmount, payment_method AS PaymentMethod FROM sessions WHERE id = @id", new { id });
+        var session = conn.QuerySingleOrDefault<DiagnosticSession>(@"
+            SELECT id AS Id, created_at AS CreatedAt, updated_at AS UpdatedAt,
+                   answers AS AnswersJson, last_section_id AS LastSectionId,
+                   completed_at AS CompletedAt, result AS ResultJson,
+                    paid AS Paid, paid_at AS PaidAt, payment_amount AS PaymentAmount,
+                    payment_method AS PaymentMethod, user_id AS UserId,
+                    terms_accepted AS TermsAccepted, terms_accepted_at AS TermsAcceptedAt,
+                    pdf_bytes AS PdfBytes, pdf_generated_at AS PdfGeneratedAt
+             FROM sessions WHERE id = @id", new { id });
         return session;
     }
 
@@ -51,17 +59,18 @@ public class SessionRepository
             ON CONFLICT(id) DO UPDATE SET
                 answers = excluded.answers,
                 last_section_id = excluded.last_section_id,
-                updated_at = excluded.updated_at;
+                updated_at = excluded.updated_at
+            WHERE sessions.completed_at IS NULL;
         ", new { answersJson, lastSectionId, now, id });
         return rows > 0;
     }
 
-    public void CompleteSession(string id, string answersJson, ScoreResult result)
+    public bool CompleteSession(string id, string answersJson, ScoreResult result)
     {
         using var conn = GetConn();
         var now = DateTime.UtcNow.ToString("o");
         var resultJson = JsonSerializer.Serialize(result);
-        conn.Execute(@"
+        int rows = conn.Execute(@"
             INSERT INTO sessions (id, created_at, updated_at, answers, result, completed_at, qb_version, engine_version, risk_version)
             VALUES (@id, @now, @now, @answersJson, @resultJson, @now, @qb, @eng, @risk)
             ON CONFLICT(id) DO UPDATE SET
@@ -71,7 +80,8 @@ public class SessionRepository
                 updated_at = excluded.updated_at,
                 qb_version = excluded.qb_version,
                 engine_version = excluded.engine_version,
-                risk_version = excluded.risk_version;
+                risk_version = excluded.risk_version
+            WHERE sessions.completed_at IS NULL;
         ", new
         {
             answersJson, resultJson, now, id,
@@ -80,8 +90,12 @@ public class SessionRepository
             risk = result.Versions.RiskLibrary
         });
 
-        // Invalidate cached benchmark stats on session completion
-        _cache?.Remove(BenchmarkCacheKey);
+        if (rows > 0)
+        {
+            // Invalidate cached benchmark stats on session completion
+            _cache?.Remove(BenchmarkCacheKey);
+        }
+        return rows > 0;
     }
 
     public bool MarkSessionPaid(string id, int amount, string method)
@@ -91,6 +105,28 @@ public class SessionRepository
         int sRows = conn.Execute("UPDATE sessions SET paid = 1, paid_at = @now, payment_amount = @amount, payment_method = @method WHERE id = @id", new { now, amount, method, id });
         conn.Execute("UPDATE leads SET paid = 1, paid_at = @now, payment_amount = @amount, payment_method = @method WHERE session_id = @id", new { now, amount, method, id });
         return sRows > 0;
+    }
+
+    public bool SavePdf(string id, byte[] pdfBytes, bool overwrite = false)
+    {
+        using var conn = GetConn();
+        var now = DateTime.UtcNow.ToString("o");
+        int rows = conn.Execute(@"
+            UPDATE sessions
+            SET pdf_bytes = @pdfBytes,
+                pdf_generated_at = @now,
+                updated_at = @now
+            WHERE id = @id AND (pdf_bytes IS NULL OR length(pdf_bytes) = 0 OR @overwrite = 1)",
+            new { pdfBytes, now, id, overwrite = overwrite ? 1 : 0 });
+        return rows > 0;
+    }
+
+    public byte[]? GetPdf(string id)
+    {
+        using var conn = GetConn();
+        return conn.QuerySingleOrDefault<byte[]?>(
+            "SELECT pdf_bytes FROM sessions WHERE id = @id AND pdf_bytes IS NOT NULL",
+            new { id });
     }
 
     public BenchmarkStatsDto GetBenchmarkStats()

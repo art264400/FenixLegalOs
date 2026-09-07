@@ -191,6 +191,22 @@ public class ScoreResult
     public string ComputedAt { get; set; } = DateTime.UtcNow.ToString("o");
 }
 
+public class UserAccount
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString();
+    public string Email { get; set; } = "";
+    public string PasswordHash { get; set; } = "";
+    public string Salt { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string Company { get; set; } = "";
+    public string Position { get; set; } = "";
+    public string? Messenger { get; set; }
+    public bool TermsAccepted { get; set; } = true;
+    public string TermsAcceptedAt { get; set; } = DateTime.UtcNow.ToString("o");
+    public string CreatedAt { get; set; } = DateTime.UtcNow.ToString("o");
+    public string UpdatedAt { get; set; } = DateTime.UtcNow.ToString("o");
+}
+
 public class DiagnosticSession
 {
     public string Id { get; set; } = Guid.NewGuid().ToString();
@@ -204,6 +220,11 @@ public class DiagnosticSession
     public string? PaidAt { get; set; }
     public int? PaymentAmount { get; set; }
     public string? PaymentMethod { get; set; }
+    public string? UserId { get; set; }
+    public bool TermsAccepted { get; set; }
+    public string? TermsAcceptedAt { get; set; }
+    public byte[]? PdfBytes { get; set; }
+    public string? PdfGeneratedAt { get; set; }
 }
 
 public class Lead
@@ -213,9 +234,13 @@ public class Lead
     public string Type { get; set; } = "report_gate";
     public string Name { get; set; } = "";
     public string? Company { get; set; }
+    public string? Position { get; set; }
     public string? Website { get; set; }
     public string Email { get; set; } = "";
     public string? Messenger { get; set; }
+    public string? UserId { get; set; }
+    public bool TermsAccepted { get; set; } = true;
+    public string? TermsAcceptedAt { get; set; }
     public string? Interest { get; set; }
     public string? SourceRiskCode { get; set; }
     public int HeatScore { get; set; }

@@ -42,3 +42,5 @@ Properties/launchSettings.json
 appsettings.Development.json
 deploy.ps1
 publish/
+.env
+.~lock.*
