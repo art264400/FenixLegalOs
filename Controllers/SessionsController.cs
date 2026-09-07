@@ -304,6 +304,19 @@ public class SessionsController : ControllerBase
         var facts = FenixLegalOs.Scoring.Core.FactNormalizer.NormalizeFacts(answersDict);
         var lead = _leads.FindLeadsBySession(id).FirstOrDefault();
         string? leadCompany = lead?.Company as string;
+        if (string.IsNullOrWhiteSpace(leadCompany) && !string.IsNullOrWhiteSpace(session.UserId) && _users != null)
+        {
+            var user = _users.GetUserById(session.UserId);
+            leadCompany = user?.Company;
+        }
+        if (string.IsNullOrWhiteSpace(leadCompany))
+        {
+            var authUser = GetAuthenticatedUser();
+            if (!string.IsNullOrWhiteSpace(authUser?.Company))
+            {
+                leadCompany = authUser.Company;
+            }
+        }
         string companyName = !string.IsNullOrWhiteSpace(leadCompany) ? leadCompany : "Стартап";
 
         // 4. Coordinate concurrent PDF generation per session to avoid duplicate runs and race writes

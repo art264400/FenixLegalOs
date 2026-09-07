@@ -44,6 +44,7 @@ public class RootCauseSummaryDto
 
 public class ProjectProfileDto
 {
+    public List<FactItemDto> ConfigurationBlocks { get; set; } = new();
     public List<FactItemDto> KeyFacts { get; set; } = new();
     public string ConfigurationNarrative { get; set; } = string.Empty;
 }

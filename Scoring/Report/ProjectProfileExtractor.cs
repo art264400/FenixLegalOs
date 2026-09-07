@@ -161,8 +161,8 @@ public static class ProjectProfileExtractor
             "active_search" => "Активный поиск раунда",
             "3_6m" => "Раунд в течение 3–6 месяцев",
             "6_12m" or "within_12m" => "Раунд в течение года",
-            "none" => "Пока не привлекались",
-            _ => "Пока не привлекались"
+            "none" => "Привлечение не планируется",
+            _ => "Не указаны"
         };
         keyFacts.Add(new FactItemDto { Key = "investment", Label = "Инвестиции", Value = invVal, Icon = "coins" });
 
@@ -193,9 +193,25 @@ public static class ProjectProfileExtractor
 
         return new ProjectProfileDto
         {
+            ConfigurationBlocks = new List<FactItemDto>
+            {
+                new() { Label = "Компания и юрисдикция", Value = $"Название: {name}. Юридическое лицо: {(string.IsNullOrEmpty(entityStatus) ? "не указано" : entityVal)}. Юрисдикция: {jurVal}." },
+                new() { Label = "Основатели и управление", Value = $"Состав: {fVal}. Распределение долей: {(string.IsNullOrEmpty(eqDist) && !is5050 && fCount is not ("1" or "solo") ? "не указано" : eqVal)}." },
+                new() { Label = "Продукт и стадия", Value = $"Стадия: {(string.IsNullOrEmpty(stage) ? "не указана" : stageVal)}. Аудитория: {(string.IsNullOrEmpty(users) ? "не указана" : usersVal)}." },
+                new() { Label = "Команда и права на разработки", Value = $"Создатели продукта: {(ipCreatorsList.Count == 0 ? "не указаны" : creatorsVal)}. Права на результаты: {(string.IsNullOrEmpty(ipRights) ? "сведения не указаны" : rightsVal)}." },
+                new() { Label = "Данные и ИИ", Value = $"Персональные данные: {DescribeFlag(facts, "data.personalDataProcessed", "обрабатываются", "не обрабатываются по ответам анкеты")}. ИИ: {DescribeFlag(facts, "ai.used", "используется", "не используется")}." },
+                new() { Label = "Договоры и инвестиции", Value = $"B2B-отношения: {DescribeFlag(facts, "contracts.b2bRelevant", "присутствуют", "не заявлены")}. Инвестиционные планы: {(string.IsNullOrEmpty(invTiming) ? "не указаны" : invVal)}." }
+            },
             KeyFacts = keyFacts,
             ConfigurationNarrative = narrative
         };
+    }
+
+    private static string DescribeFlag(SharedFactStore facts, string key, string yes, string no)
+    {
+        return facts.Facts.TryGetValue(key, out var value) && value is bool flag
+            ? (flag ? yes : no)
+            : "не указано";
     }
 
     private static List<string> GetListVal(SharedFactStore facts, string key)

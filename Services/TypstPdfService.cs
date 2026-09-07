@@ -182,18 +182,22 @@ public class TypstPdfService
   margin: (x: 1.4cm, top: 1.4cm, bottom: 1.4cm),
   header: context [
     #grid(
-      columns: (1fr, auto),
-      align: (left + bottom, right + bottom),
+      columns: (auto, 1fr, auto),
+      align: (left + horizon, center + horizon, right + horizon),
       [
         #grid(
           columns: (auto, auto),
           gutter: 8pt,
+          align: horizon,
           [#text(font: (""Georgia"", ""Times New Roman""), size: 9pt, fill: rgb(""#E5C07B""), weight: ""bold"")[FENIX SLS]],
           [#text(font: (""Segoe UI"", ""Arial""), size: 7.5pt, fill: rgb(""#64748B""), tracking: 1.2pt)[SMART LEGAL SCREENING]]
         )
       ],
       [
-        #text(font: (""Segoe UI"", ""Arial""), size: 7.5pt, fill: rgb(""#94A3B8""))[Отчет: " + EscapeTypst(ctx.ReportNumber) + @"  ·  " + EscapeTypst(ctx.GeneratedDate) + (string.IsNullOrWhiteSpace(ctx.ProjectName) || ctx.ProjectName is "Проект" or "Стартап" ? @"  ·  " + EscapeTypst(ctx.ProjectStage) : @"  ·  " + EscapeTypst(ctx.ProjectName) + @" (" + EscapeTypst(ctx.ProjectStage) + @")") + @"]
+        #text(font: (""Segoe UI"", ""Arial""), size: 7.5pt, fill: rgb(""#94A3B8""))[Компания: ]#text(font: (""Segoe UI"", ""Arial""), size: 8pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[" + EscapeTypst(!string.IsNullOrWhiteSpace(ctx.ProjectName) ? ctx.ProjectName : "Стартап") + @"]
+      ],
+      [
+        #text(font: (""Segoe UI"", ""Arial""), size: 7.5pt, fill: rgb(""#94A3B8""))[Отчет: " + EscapeTypst(ctx.ReportNumber) + @"  ·  " + EscapeTypst(ctx.GeneratedDate) + @"  ·  " + EscapeTypst(ctx.ProjectStage) + @"]
       ]
     )
     #v(3pt)
@@ -295,8 +299,8 @@ public class TypstPdfService
                 : "#text(font: serif, size: 20pt, weight: \"bold\", fill: rgb(\"#E5C07B\"))[FENIX]";
 
         var coverProjectIntro = string.IsNullOrWhiteSpace(ctx.ProjectName) || ctx.ProjectName is "Проект" or "Стартап"
-            ? "Экспресс-оценка правовой готовности, ключевых уязвимостей структуры и дорожная карта действий."
-            : $"Экспресс-оценка правовой готовности, ключевых уязвимостей структуры и дорожная карта действий для проекта «{EscapeTypst(ctx.ProjectName)}».";
+            ? "Первичная оценка правовой готовности, ключевых уязвимостей структуры и дорожная карта действий."
+            : $"Первичная оценка правовой готовности, ключевых уязвимостей структуры и дорожная карта действий для проекта «{EscapeTypst(ctx.ProjectName)}».";
 
         sb.AppendLine($@"
 #v(0.2cm)
@@ -313,49 +317,49 @@ public class TypstPdfService
     #text(font: sans, size: 8.5pt, fill: rgb(""#E5C07B""), tracking: 1.2pt, weight: ""medium"")[SMART LEGAL SCREENING #text(fill: rgb(""#94A3B8""))[· BY FENIX LAW]]
   ]
 )
+#v(0.2cm)
+#text(font: serif, size: 9.5pt, fill: rgb(""#CBD5E1""))[{coverProjectIntro}]
 #v(0.3cm)
-#text(font: serif, size: 10.5pt, fill: rgb(""#CBD5E1""))[{coverProjectIntro}]
-#v(0.5cm)
 
 #section-header(""01"", ""ОЦЕНКА ЮРИДИЧЕСКОЙ ГОТОВНОСТИ"", category: ""Общая оценка"")
 
 #grid(
   columns: (1.2fr, 1fr),
-  gutter: 14pt,
+  gutter: 12pt,
   [
-    #card(fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), inset: 14pt)[
-      #text(font: sans, size: 8pt, fill: rgb(""#94A3B8""), tracking: 1.2pt, weight: ""medium"")[ИНДЕКС ГОТОВНОСТИ]
-      #v(6pt)
+    #card(fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), inset: 11pt)[
+      #text(font: sans, size: 7.5pt, fill: rgb(""#94A3B8""), tracking: 1.2pt, weight: ""medium"")[ИНДЕКС ГОТОВНОСТИ]
+      #v(4pt)
       #grid(
         columns: (auto, 1fr),
-        gutter: 12pt,
+        gutter: 10pt,
         align: horizon,
-        [#text(font: serif, size: 42pt, weight: ""bold"", fill: rgb(""" + GetScoreColor(ctx.Overall.Score) + @"""))[" + ctx.Overall.Score + @"]],
+        [#text(font: serif, size: 36pt, weight: ""bold"", fill: rgb(""" + GetScoreColor(ctx.Overall.Score) + @"""))[" + ctx.Overall.Score + @"]],
         [
-          #text(font: sans, size: 14pt, fill: rgb(""#64748B""))[\/ 100]
+          #text(font: sans, size: 13pt, fill: rgb(""#64748B""))[\/ 100]
           #v(2pt)
-          #text(font: sans, size: 11.5pt, weight: ""bold"", fill: rgb(""" + GetScoreColor(ctx.Overall.Score) + @"""))[" + EscapeTypst(ctx.Overall.LevelTitle) + @"]
+          #text(font: sans, size: 10.5pt, weight: ""bold"", fill: rgb(""" + GetScoreColor(ctx.Overall.Score) + @"""))[" + EscapeTypst(ctx.Overall.LevelTitle) + @"]
         ]
       )
-      #v(10pt)
+      #v(7pt)
       #line(length: 100%, stroke: 0.5pt + rgb(""#1E2D4A""))
-      #v(8pt)
-      #text(font: sans, size: 8.5pt, fill: rgb(""#E2E8F0""))[" + EscapeTypst(ctx.Overall.LevelText) + @"]
+      #v(5pt)
+      #text(font: sans, size: 8pt, fill: rgb(""#E2E8F0""))[" + EscapeTypst(ctx.Overall.LevelText) + @"]
     ]
   ],
   [
-    #card(fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), inset: 14pt)[
-      #text(font: sans, size: 8pt, fill: rgb(""#94A3B8""), tracking: 1.2pt, weight: ""medium"")[КАНОНИЧЕСКАЯ ШКАЛА SLS]
-      #v(8pt)
+    #card(fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), inset: 11pt)[
+      #text(font: sans, size: 7.5pt, fill: rgb(""#94A3B8""), tracking: 1.2pt, weight: ""medium"")[КАНОНИЧЕСКАЯ ШКАЛА SLS]
+      #v(5pt)
       #table(
         columns: (auto, auto, 1fr),
         stroke: none,
-        inset: (x: 4pt, y: 4.5pt),
+        inset: (x: 4pt, y: 3.5pt),
         align: (left + horizon, left + horizon, left + horizon),
-        [#circle(radius: 3pt, fill: rgb(""#34D399""))], [#text(font: sans, size: 8.5pt, weight: ""bold"")[80–100]], [#text(font: sans, size: 8.5pt, fill: rgb(""#CBD5E1""))[Хорошая готовность]],
-        [#circle(radius: 3pt, fill: rgb(""#FBBF24""))], [#text(font: sans, size: 8.5pt, weight: ""bold"")[60–79]], [#text(font: sans, size: 8.5pt, fill: rgb(""#CBD5E1""))[Требует внимания]],
-        [#circle(radius: 3pt, fill: rgb(""#FB923C""))], [#text(font: sans, size: 8.5pt, weight: ""bold"")[40–59]], [#text(font: sans, size: 8.5pt, fill: rgb(""#CBD5E1""))[Существенные пробелы]],
-        [#circle(radius: 3pt, fill: rgb(""#F87171""))], [#text(font: sans, size: 8.5pt, weight: ""bold"")[0–39]], [#text(font: sans, size: 8.5pt, fill: rgb(""#CBD5E1""))[Критические пробелы]]
+        [#circle(radius: 2.8pt, fill: rgb(""#34D399""))], [#text(font: sans, size: 8pt, weight: ""bold"")[80–100]], [#text(font: sans, size: 8pt, fill: rgb(""#CBD5E1""))[Хорошая готовность]],
+        [#circle(radius: 2.8pt, fill: rgb(""#FBBF24""))], [#text(font: sans, size: 8pt, weight: ""bold"")[60–79]], [#text(font: sans, size: 8pt, fill: rgb(""#CBD5E1""))[Требует внимания]],
+        [#circle(radius: 2.8pt, fill: rgb(""#FB923C""))], [#text(font: sans, size: 8pt, weight: ""bold"")[40–59]], [#text(font: sans, size: 8pt, fill: rgb(""#CBD5E1""))[Существенные пробелы]],
+        [#circle(radius: 2.8pt, fill: rgb(""#F87171""))], [#text(font: sans, size: 8pt, weight: ""bold"")[0–39]], [#text(font: sans, size: 8pt, fill: rgb(""#CBD5E1""))[Критическое состояние]]
       )
     ]
   ]
@@ -365,51 +369,158 @@ public class TypstPdfService
         if (topDriverCards.Count > 0)
         {
             sb.AppendLine(@"
-#v(0.4cm)
-#text(font: serif, size: 11pt, weight: ""bold"", fill: rgb(""#E5C07B""))[ЗОНЫ, КОТОРЫЕ СИЛЬНЕЕ ВСЕГО СНИЖАЮТ ОБЩУЮ ОЦЕНКУ]
 #v(0.2cm)
+#text(font: serif, size: 9.5pt, weight: ""bold"", fill: rgb(""#E5C07B""))[ЗОНЫ, КОТОРЫЕ СИЛЬНЕЕ ВСЕГО СНИЖАЮТ ОБЩУЮ ОЦЕНКУ]
+#v(0.12cm)
 #grid(
   columns: (" + string.Join(", ", Enumerable.Repeat("1fr", topDriverCards.Count)) + @"),
-  gutter: 12pt,
+  gutter: 10pt,
 ");
             foreach (var drv in topDriverCards)
             {
                 var drvColor = GetScoreColor(drv.Score ?? 0);
                 sb.AppendLine($@"
-  card(fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), inset: 11pt)[
+  card(fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), inset: 8pt)[
     #grid(
       columns: (1fr, auto),
-      [#text(font: serif, size: 18pt, weight: ""bold"", fill: rgb(""{drvColor}""))[{drv.Score ?? 0} #text(font: sans, size: 8.5pt, fill: rgb(""#64748B""))[\/ 100]]],
-      [#circle(radius: 4pt, stroke: 1.5pt + rgb(""{drvColor}""))]
+      [#text(font: serif, size: 15pt, weight: ""bold"", fill: rgb(""{drvColor}""))[{drv.Score ?? 0} #text(font: sans, size: 7.5pt, fill: rgb(""#64748B""))[\/ 100]]],
+      [#circle(radius: 3pt, stroke: 1.2pt + rgb(""{drvColor}""))]
     )
-    #v(4pt)
-    #text(font: sans, size: 9pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[{EscapeTypst(drv.Title)}]
-    #v(2pt)
-    #text(font: sans, size: 8pt, fill: rgb(""{drvColor}""))[{EscapeTypst(drv.StatusText)}]
+    #v(3pt)
+    #text(font: sans, size: 8pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[{EscapeTypst(drv.Title)}]
+    #v(1.5pt)
+    #text(font: sans, size: 7.2pt, fill: rgb(""{drvColor}""))[{EscapeTypst(drv.StatusText)}]
   ],");
             }
             sb.AppendLine(")\n");
         }
 
         sb.AppendLine(@"
-#v(0.3cm)
-#card(fill: rgb(""#0D1628""), inset: 11pt)[
+#v(0.18cm)
+#card(fill: rgb(""#0D1628""), inset: 8pt)[
   #grid(
     columns: (1fr, auto),
     [
-      #text(font: sans, size: 8pt, fill: rgb(""#94A3B8""), tracking: 1.2pt, weight: ""medium"")[ПРИНЦИП РАСЧЕТА]
+      #text(font: sans, size: 7.5pt, fill: rgb(""#94A3B8""), tracking: 1.2pt, weight: ""medium"")[ПРИНЦИП РАСЧЕТА]
       #v(2pt)
-      #text(font: sans, size: 8pt, fill: rgb(""#CBD5E1""))[" + EscapeTypst(ctx.Overall.BottomExplanation) + @"]
+      #text(font: sans, size: 7.2pt, fill: rgb(""#CBD5E1""))[" + EscapeTypst(ctx.Overall.BottomExplanation) + @"]
     ],
     align(right + horizon)[
-      #text(font: sans, size: 8pt, fill: rgb(""#64748B""))[Полнота исходных данных: *" + ctx.Overall.Confidence + @"%*]
+      #text(font: sans, size: 7.5pt, fill: rgb(""#64748B""))[Полнота исходных данных: *" + ctx.Overall.Confidence + @"%*]
     ]
   )" + (!string.IsNullOrWhiteSpace(ctx.Overall.ConfidenceExplanation) ? @"
-  #v(6pt)
-  #line(length: 100%, stroke: 0.5pt + rgb(""#1E2D4A""))
   #v(4pt)
-  #text(font: sans, size: 7.5pt, fill: rgb(""#94A3B8""))[" + EscapeTypst(ctx.Overall.ConfidenceExplanation) + @"]" : "") + @"
+  #line(length: 100%, stroke: 0.5pt + rgb(""#1E2D4A""))
+  #v(3pt)
+  #text(font: sans, size: 7pt, fill: rgb(""#94A3B8""))[" + EscapeTypst(ctx.Overall.ConfidenceExplanation) + @"]" : "") + @"
 ]
+
+#v(0.22cm)
+#text(font: serif, size: 9.5pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[ШКАЛА ОЦЕНКИ И ДИАПАЗОНЫ ГОТОВНОСТИ]
+#v(0.14cm)
+
+#grid(
+  columns: (1fr, 1fr, 1fr, 1fr),
+  gutter: 7pt,
+  rect(width: 100%, fill: rgb(""#0D1628""), stroke: 0.75pt + rgb(""#1E2D4A""), radius: 5pt, inset: (x: 7pt, y: 7pt))[
+    #line(length: 100%, stroke: 2pt + rgb(""#34D399""))
+    #v(3pt)
+    #block(height: 16pt)[
+      #text(font: serif, size: 13pt, weight: ""bold"", fill: rgb(""#34D399""))[80–100]
+    ]
+    #v(2pt)
+    #block(height: 13pt)[
+      #text(font: sans, size: 7.5pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[Хорошая готовность]
+    ]
+    #v(2pt)
+    #block(height: 38pt)[
+      #align(top)[
+        #text(font: sans, size: 6.5pt, fill: rgb(""#94A3B8""))[Базовая юридическая конструкция в целом выстроена; остаются отдельные вопросы для поддержания готовности.]
+      ]
+    ]
+  ],
+  rect(width: 100%, fill: rgb(""#0D1628""), stroke: 0.75pt + rgb(""#1E2D4A""), radius: 5pt, inset: (x: 7pt, y: 7pt))[
+    #line(length: 100%, stroke: 2pt + rgb(""#FBBF24""))
+    #v(3pt)
+    #block(height: 16pt)[
+      #text(font: serif, size: 13pt, weight: ""bold"", fill: rgb(""#FBBF24""))[60–79]
+    ]
+    #v(2pt)
+    #block(height: 13pt)[
+      #text(font: sans, size: 7.5pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[Требует внимания]
+    ]
+    #v(2pt)
+    #block(height: 38pt)[
+      #align(top)[
+        #text(font: sans, size: 6.5pt, fill: rgb(""#94A3B8""))[Базовые элементы юридической конструкции сформированы, но отдельные направления требуют доработки.]
+      ]
+    ]
+  ],
+  rect(width: 100%, fill: rgb(""#0D1628""), stroke: 0.75pt + rgb(""#1E2D4A""), radius: 5pt, inset: (x: 7pt, y: 7pt))[
+    #line(length: 100%, stroke: 2pt + rgb(""#FB923C""))
+    #v(3pt)
+    #block(height: 16pt)[
+      #text(font: serif, size: 13pt, weight: ""bold"", fill: rgb(""#FB923C""))[40–59]
+    ]
+    #v(2pt)
+    #block(height: 13pt)[
+      #text(font: sans, size: 7.5pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[Существенные пробелы]
+    ]
+    #v(2pt)
+    #block(height: 38pt)[
+      #align(top)[
+        #text(font: sans, size: 6.5pt, fill: rgb(""#94A3B8""))[Обнаружены существенные пробелы, создающие повышенные правовые риски для устойчивости бизнеса.]
+      ]
+    ]
+  ],
+  rect(width: 100%, fill: rgb(""#0D1628""), stroke: 0.75pt + rgb(""#1E2D4A""), radius: 5pt, inset: (x: 7pt, y: 7pt))[
+    #line(length: 100%, stroke: 2pt + rgb(""#F87171""))
+    #v(3pt)
+    #block(height: 16pt)[
+      #text(font: serif, size: 13pt, weight: ""bold"", fill: rgb(""#F87171""))[0–39]
+    ]
+    #v(2pt)
+    #block(height: 13pt)[
+      #text(font: sans, size: 7.5pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[Критическое состояние]
+    ]
+    #v(2pt)
+    #block(height: 38pt)[
+      #align(top)[
+        #text(font: sans, size: 6.5pt, fill: rgb(""#94A3B8""))[Правовой контур бизнеса находится в критическом состоянии; требуется комплексная переработка ключевых областей.]
+      ]
+    ]
+  ]
+)
+
+#v(0.22cm)
+#text(font: serif, size: 9.5pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[ПРИНЦИПЫ РАСЧЕТА И ПРОЗРАЧНОСТИ]
+#v(0.14cm)
+
+#grid(
+  columns: (1fr, 1fr, 1fr),
+  gutter: 10pt,
+  [
+    #text(font: serif, size: 12pt, weight: ""bold"", fill: rgb(""#E5C07B""))[01]
+    #v(1.5pt)
+    #text(font: sans, size: 7.5pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[ДЕТЕРМИНИРОВАННОСТЬ]
+    #v(2pt)
+    #text(font: sans, size: 6.8pt, fill: rgb(""#CBD5E1""))[Каждый ответ имеет фиксированный вес. Оценка не зависит от случайных факторов.]
+  ],
+  [
+    #text(font: serif, size: 12pt, weight: ""bold"", fill: rgb(""#E5C07B""))[02]
+    #v(1.5pt)
+    #text(font: sans, size: 7.5pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[СРЕДНЕВЗВЕШЕННЫЙ БАЛЛ]
+    #v(2pt)
+    #text(font: sans, size: 6.8pt, fill: rgb(""#CBD5E1""))[Финальный балл формируется с учетом приоритетов и значимости каждой юридической области.]
+  ],
+  [
+    #text(font: serif, size: 12pt, weight: ""bold"", fill: rgb(""#E5C07B""))[03]
+    #v(1.5pt)
+    #text(font: sans, size: 7.5pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[ИСКЛЮЧЕНИЕ НЕПРИМЕНИМЫХ ЗОН]
+    #v(2pt)
+    #text(font: sans, size: 6.8pt, fill: rgb(""#CBD5E1""))[Если область не актуальна для вашей модели бизнеса, она не влияет на итоговую оценку.]
+  ]
+)
 #pagebreak()
 ");
 
@@ -417,88 +528,17 @@ public class TypstPdfService
         // SECTION 02: Project Profile (Structured Fact Clusters)
         // =========================================================================
         secNum = 2;
-        var fMap = ctx.Profile.KeyFacts.ToDictionary(f => f.Key, f => f, StringComparer.OrdinalIgnoreCase);
-
-        sb.AppendLine(@"
-#section-header(""" + secNum++.ToString("D2") + @""", ""КАК СЕЙЧАС УСТРОЕН ПРОЕКТ"", category: ""Контекст анализа"")
-#text(font: sans, size: 8.5pt, fill: rgb(""#94A3B8""))[Факты зафиксированы на основе ваших ответов и определяют контекст юридической оценки.]
-#v(0.4cm)
-
-#grid(
-  columns: (1fr, 1fr),
-  gutter: 12pt,
-  [
-    #card(fill: rgb(""#0D1628""), inset: 11pt)[
-      #text(font: serif, size: 10pt, weight: ""bold"", fill: rgb(""#E5C07B""))[КОМПАНИЯ И СТРУКТУРА]
-      #v(6pt)
-      #table(
-        columns: (1fr, 1.2fr),
-        stroke: (x, y) => if y > 0 { (top: 0.5pt + rgb(""#1E2D4A"")) } else { none },
-        inset: (x: 2pt, y: 5pt),
-        align: (left + horizon, left + horizon),
-        [#text(font: sans, size: 8pt, fill: rgb(""#94A3B8""))[Юридическое лицо:]], [#text(font: sans, size: 8pt, weight: ""medium"", fill: rgb(""#FFFFFF""))[" + EscapeTypst(fMap.GetValueOrDefault("entity")?.Value ?? "Не указано") + @"]],
-        [#text(font: sans, size: 8pt, fill: rgb(""#94A3B8""))[Юрисдикция:]], [#text(font: sans, size: 8pt, weight: ""medium"", fill: rgb(""#FFFFFF""))[" + EscapeTypst(fMap.GetValueOrDefault("jurisdiction")?.Value ?? "Не указано") + @"]]
-      )
-    ]
-  ],
-  [
-    #card(fill: rgb(""#0D1628""), inset: 11pt)[
-      #text(font: serif, size: 10pt, weight: ""bold"", fill: rgb(""#E5C07B""))[ОСНОВАТЕЛИ]
-      #v(6pt)
-      #table(
-        columns: (1fr, 1.2fr),
-        stroke: (x, y) => if y > 0 { (top: 0.5pt + rgb(""#1E2D4A"")) } else { none },
-        inset: (x: 2pt, y: 5pt),
-        align: (left + horizon, left + horizon),
-        [#text(font: sans, size: 8pt, fill: rgb(""#94A3B8""))[Состав:]], [#text(font: sans, size: 8pt, weight: ""medium"", fill: rgb(""#FFFFFF""))[" + EscapeTypst(fMap.GetValueOrDefault("founders")?.Value ?? "Не указано") + @"]],
-        [#text(font: sans, size: 8pt, fill: rgb(""#94A3B8""))[Распределение долей:]], [#text(font: sans, size: 8pt, weight: ""medium"", fill: rgb(""#FFFFFF""))[" + EscapeTypst(fMap.GetValueOrDefault("equity")?.Value ?? "Не указано") + @"]]
-      )
-    ]
-  ]
-)
-#v(0.3cm)
-#grid(
-  columns: (1fr, 1fr),
-  gutter: 12pt,
-  [
-    #card(fill: rgb(""#0D1628""), inset: 11pt)[
-      #text(font: serif, size: 10pt, weight: ""bold"", fill: rgb(""#E5C07B""))[ПРОДУКТ И ПОЛЬЗОВАТЕЛИ]
-      #v(6pt)
-      #table(
-        columns: (1fr, 1.2fr),
-        stroke: (x, y) => if y > 0 { (top: 0.5pt + rgb(""#1E2D4A"")) } else { none },
-        inset: (x: 2pt, y: 5pt),
-        align: (left + horizon, left + horizon),
-        [#text(font: sans, size: 8pt, fill: rgb(""#94A3B8""))[Стадия продукта:]], [#text(font: sans, size: 8pt, weight: ""medium"", fill: rgb(""#FFFFFF""))[" + EscapeTypst(fMap.GetValueOrDefault("stage")?.Value ?? "Не указано") + @"]],
-        [#text(font: sans, size: 8pt, fill: rgb(""#94A3B8""))[Пользователи:]], [#text(font: sans, size: 8pt, weight: ""medium"", fill: rgb(""#FFFFFF""))[" + EscapeTypst(fMap.GetValueOrDefault("users")?.Value ?? "Не указано") + @"]]
-      )
-    ]
-  ],
-  [
-    #card(fill: rgb(""#0D1628""), inset: 11pt)[
-      #text(font: serif, size: 10pt, weight: ""bold"", fill: rgb(""#E5C07B""))[РАЗРАБОТКА И IP]
-      #v(6pt)
-      #table(
-        columns: (1fr, 1.2fr),
-        stroke: (x, y) => if y > 0 { (top: 0.5pt + rgb(""#1E2D4A"")) } else { none },
-        inset: (x: 2pt, y: 5pt),
-        align: (left + horizon, left + horizon),
-        [#text(font: sans, size: 8pt, fill: rgb(""#94A3B8""))[Кто создает продукт:]], [#text(font: sans, size: 8pt, weight: ""medium"", fill: rgb(""#FFFFFF""))[" + EscapeTypst(fMap.GetValueOrDefault("creators")?.Value ?? "Не указано") + @"]],
-        [#text(font: sans, size: 8pt, fill: rgb(""#94A3B8""))[Права на результаты:]], [#text(font: sans, size: 8pt, weight: ""medium"", fill: rgb(""#FFFFFF""))[" + EscapeTypst(fMap.GetValueOrDefault("ip_rights")?.Value ?? "Не указано") + @"]]
-      )
-    ]
-  ]
-)
-
-#v(0.4cm)
-#card(fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), inset: 13pt)[
-  #text(font: sans, size: 8pt, fill: rgb(""#94A3B8""), tracking: 1.2pt, weight: ""medium"")[ТЕКУЩАЯ КОНФИГУРАЦИЯ ПРОЕКТА]
-  #v(4pt)
-  #text(font: serif, size: 9.5pt, fill: rgb(""#E2E8F0""), style: ""italic"")[" + EscapeTypst(ctx.Profile.ConfigurationNarrative) + @"]
-]
-#pagebreak()
-");
-
+        sb.AppendLine("#section-header(\"" + secNum++.ToString("D2") + "\", \"КАК СЕЙЧАС УСТРОЕН ПРОЕКТ\", category: \"Контекст анализа\")");
+        sb.AppendLine("#text(font: sans, size: 8.5pt, fill: rgb(\"#94A3B8\"))[Текущая конфигурация проекта по ответам анкеты. Отсутствующие сведения отмечены отдельно.] #v(12pt)");
+        sb.AppendLine("#grid(columns: (1fr, 1fr), gutter: 12pt,");
+        foreach (var block in ctx.Profile.ConfigurationBlocks)
+        {
+            sb.AppendLine("[#card(fill: rgb(\"#0D1628\"), inset: 12pt)[");
+            sb.AppendLine("#text(font: serif, size: 10pt, weight: \"bold\", fill: rgb(\"#E5C07B\"))[" + EscapeTypst(block.Label) + "] #v(7pt)");
+            sb.AppendLine("#text(font: sans, size: 9pt, fill: rgb(\"#E2E8F0\"))[" + EscapeTypst(block.Value) + "] ]],");
+        }
+        sb.AppendLine(") #v(12pt)");
+        sb.AppendLine("#card(fill: rgb(\"#0D1628\"), inset: 12pt)[#text(font: sans, size: 8pt, fill: rgb(\"#94A3B8\"))[ТЕКУЩАЯ КОНФИГУРАЦИЯ ПРОЕКТА] #v(5pt) #text(font: serif, size: 9.5pt, fill: rgb(\"#E2E8F0\"))[" + EscapeTypst(ctx.Profile.ConfigurationNarrative) + "]] #pagebreak()");
         // =========================================================================
         // SECTION 03: Executive Conclusion (Итоговый вывод)
         // =========================================================================
@@ -507,7 +547,7 @@ public class TypstPdfService
 #v(0.3cm)
 
 #card(fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), inset: 14pt)[
-  #text(font: serif, size: 11pt, weight: ""bold"", fill: rgb(""#E5C07B""))[СИСТЕМНЫЙ СИНТЕЗ ЮРИДИЧЕСКОЙ СИТУАЦИИ]
+  #text(font: serif, size: 11pt, weight: ""bold"", fill: rgb(""#E5C07B""))[ОБЩАЯ ЮРИДИЧЕСКАЯ КАРТИНА]
   #v(8pt)
   #text(font: sans, size: 9.5pt, fill: rgb(""#FFFFFF""), style: ""normal"")[" + EscapeTypst(ctx.ExecutiveConclusion) + @"]
 ]
@@ -1254,126 +1294,6 @@ public class TypstPdfService
 ]
 ");
         sb.AppendLine("#pagebreak()\n");
-
-        // =========================================================================
-        // SECTION N+5: Methodology & How to Read Score (Editorial Decomposition)
-        // =========================================================================
-        sb.AppendLine(@"
-#section-header(""" + secNum++.ToString("D2") + @""", ""КАК ЧИТАТЬ ОЦЕНКУ"", category: ""Справочный блок"")
-#v(0.3cm)
-
-#text(font: serif, size: 11pt, weight: ""bold"", fill: rgb(""#E5C07B""))[КАК ФОРМИРУЕТСЯ РЕЗУЛЬТАТ]
-#v(4pt)
-#text(font: sans, size: 9pt, fill: rgb(""#CBD5E1""))[Оценка первичного юридического скрининга Fenix SLS формируется детерминированным экспертным движком на основании предоставленных вами ответов о конфигурации компании.]
-
-#v(0.55cm)
-#text(font: serif, size: 11pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[ШКАЛА ОЦЕНКИ И ДИАПАЗОНЫ ГОТОВНОСТИ]
-#v(0.25cm)
-
-#grid(
-  columns: (1fr, 1fr, 1fr, 1fr),
-  gutter: 10pt,
-  rect(width: 100%, fill: rgb(""#0D1628""), stroke: 0.75pt + rgb(""#1E2D4A""), radius: 6pt, inset: (x: 10pt, y: 11pt))[
-    #line(length: 100%, stroke: 2pt + rgb(""#34D399""))
-    #v(5pt)
-    #block(height: 22pt)[
-      #text(font: serif, size: 15pt, weight: ""bold"", fill: rgb(""#34D399""))[80–100]
-    ]
-    #v(3pt)
-    #block(height: 18pt)[
-      #text(font: sans, size: 8.5pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[Хорошая готовность]
-    ]
-    #v(4pt)
-    #block(height: 48pt)[
-      #align(top)[
-        #text(font: sans, size: 7.5pt, fill: rgb(""#94A3B8""))[Базовая юридическая конструкция в целом выстроена; остаются отдельные вопросы для поддержания готовности.]
-      ]
-    ]
-  ],
-  rect(width: 100%, fill: rgb(""#0D1628""), stroke: 0.75pt + rgb(""#1E2D4A""), radius: 6pt, inset: (x: 10pt, y: 11pt))[
-    #line(length: 100%, stroke: 2pt + rgb(""#FBBF24""))
-    #v(5pt)
-    #block(height: 22pt)[
-      #text(font: serif, size: 15pt, weight: ""bold"", fill: rgb(""#FBBF24""))[60–79]
-    ]
-    #v(3pt)
-    #block(height: 18pt)[
-      #text(font: sans, size: 8.5pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[Требует внимания]
-    ]
-    #v(4pt)
-    #block(height: 48pt)[
-      #align(top)[
-        #text(font: sans, size: 7.5pt, fill: rgb(""#94A3B8""))[Базовые элементы юридической конструкции сформированы, но отдельные направления требуют доработки.]
-      ]
-    ]
-  ],
-  rect(width: 100%, fill: rgb(""#0D1628""), stroke: 0.75pt + rgb(""#1E2D4A""), radius: 6pt, inset: (x: 10pt, y: 11pt))[
-    #line(length: 100%, stroke: 2pt + rgb(""#FB923C""))
-    #v(5pt)
-    #block(height: 22pt)[
-      #text(font: serif, size: 15pt, weight: ""bold"", fill: rgb(""#FB923C""))[40–59]
-    ]
-    #v(3pt)
-    #block(height: 18pt)[
-      #text(font: sans, size: 8.5pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[Существенные пробелы]
-    ]
-    #v(4pt)
-    #block(height: 48pt)[
-      #align(top)[
-        #text(font: sans, size: 7.5pt, fill: rgb(""#94A3B8""))[Обнаружены существенные пробелы в юридической конструкции, требующие последовательного устранения.]
-      ]
-    ]
-  ],
-  rect(width: 100%, fill: rgb(""#0D1628""), stroke: 0.75pt + rgb(""#1E2D4A""), radius: 6pt, inset: (x: 10pt, y: 11pt))[
-    #line(length: 100%, stroke: 2pt + rgb(""#F87171""))
-    #v(5pt)
-    #block(height: 22pt)[
-      #text(font: serif, size: 15pt, weight: ""bold"", fill: rgb(""#F87171""))[0–39]
-    ]
-    #v(3pt)
-    #block(height: 18pt)[
-      #text(font: sans, size: 8.5pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[Критические пробелы]
-    ]
-    #v(4pt)
-    #block(height: 48pt)[
-      #align(top)[
-        #text(font: sans, size: 7.5pt, fill: rgb(""#94A3B8""))[Системные пробелы в юридической готовности, требующие первоочередной проработки.]
-      ]
-    ]
-  ]
-)
-
-#v(0.65cm)
-#text(font: serif, size: 11pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[ПРИНЦИПЫ РАСЧЕТА И ПРОЗРАЧНОСТИ]
-#v(0.35cm)
-
-#grid(
-  columns: (1fr, 1fr, 1fr),
-  gutter: 14pt,
-  [
-    #text(font: serif, size: 15pt, weight: ""bold"", fill: rgb(""#E5C07B""))[01]
-    #v(2pt)
-    #text(font: sans, size: 8.5pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[ДЕТЕРМИНИРОВАННОСТЬ]
-    #v(4pt)
-    #text(font: sans, size: 8pt, fill: rgb(""#CBD5E1""))[Все оценки, уровни риска и приоритеты рассчитываются по строгим правилам без субъективных оценок.]
-  ],
-  [
-    #text(font: serif, size: 15pt, weight: ""bold"", fill: rgb(""#E5C07B""))[02]
-    #v(2pt)
-    #text(font: sans, size: 8.5pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[СРЕДНЕВЗВЕШЕННЫЙ БАЛЛ]
-    #v(4pt)
-    #text(font: sans, size: 8pt, fill: rgb(""#CBD5E1""))[Общий балл формируется как сумма оценок применимых направлений с учетом их веса в бизнес-модели.]
-  ],
-  [
-    #text(font: serif, size: 15pt, weight: ""bold"", fill: rgb(""#E5C07B""))[03]
-    #v(2pt)
-    #text(font: sans, size: 8.5pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[ИСКЛЮЧЕНИЕ НЕПРИМЕНИМЫХ ЗОН]
-    #v(4pt)
-    #text(font: sans, size: 8pt, fill: rgb(""#CBD5E1""))[Если направление неприменимо к текущей стадии проекта, оно полностью исключается из расчета и не снижает итоговую оценку.]
-  ]
-)
-#pagebreak()
-");
 
         // =========================================================================
         // SECTION N+6: Legal Terms & Disclaimer + Fenix Law Expertise Block
