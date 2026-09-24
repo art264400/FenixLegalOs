@@ -43,6 +43,39 @@ public class ProductModuleStage1Tests
     }
 
     // ─── 2. PROD-01 First, Regular, Large ─────────────────────────────────
+    [Theory]
+    [InlineData("prelaunch", "PROD-04")]
+    [InlineData("first", "PROD-02")]
+    [InlineData("regular", "PROD-02")]
+    [InlineData("large", "PROD-02")]
+    public void ProductStage_RoutesToApplicableFollowUp(string stage, string nextQuestionId)
+    {
+        var navigation = _engine.GetNavigationState(
+            new() { ["PROD-01"] = stage }, answeredQuestionId: "PROD-01");
+
+        Assert.Equal(nextQuestionId, navigation.CurrentQuestionId);
+        Assert.Equal(stage != "prelaunch", navigation.VisibleQuestionIds.Contains("PROD-02"));
+        Assert.Equal(stage != "prelaunch", navigation.VisibleQuestionIds.Contains("PROD-03"));
+    }
+
+    [Fact]
+    public void SwitchingToPrelaunch_ExcludesStaleAudienceAndAccessAnswers()
+    {
+        var answers = new Dictionary<string, object>
+        {
+            ["PROD-01"] = "prelaunch",
+            ["PROD-02"] = new List<string> { "minors" },
+            ["PROD-03"] = new List<string> { "paid_access" }
+        };
+        var state = ScoringEngine.ResolveEffectiveState(DataBank.Questions.ToList(), answers);
+
+        Assert.False(state.EffectiveAnswers.ContainsKey("PROD-02"));
+        Assert.False(state.EffectiveAnswers.ContainsKey("PROD-03"));
+        Assert.False(state.FactStore.Facts.ContainsKey("product.userTypes"));
+        Assert.False(state.FactStore.Facts.ContainsKey("product.minorsPossible"));
+        Assert.False(state.FactStore.Facts.ContainsKey("product.accessModes"));
+    }
+
     [Fact(DisplayName = "2. PROD-01 first/regular/large: liveUsers=true, correct userScale")]
     public void Prod01_LiveUsers_Produces_Scale()
     {

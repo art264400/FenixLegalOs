@@ -1111,6 +1111,120 @@ code { color: var(--accent); }
   to { transform: rotate(360deg); }
 }
 
+/* PDF preparation status -------------------------------------------------- */
+
+.pdf-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  max-width: 580px;
+  margin: 0 auto 24px;
+  padding: 20px;
+  background: var(--bg-elev);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  border-radius: var(--radius);
+  text-align: left;
+  color: var(--ink);
+}
+
+.pdf-status[hidden] { display: none; }
+
+.pdf-status-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius);
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: 27px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.pdf-spinner {
+  display: block;
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(248, 250, 252, 0.25);
+  border-top-color: var(--ink);
+  border-radius: 50%;
+  animation: spin 0.9s infinite linear;
+}
+
+.pdf-status-copy { min-width: 0; }
+
+.pdf-status-title {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.pdf-status-description,
+.pdf-status-note {
+  margin: 6px 0 0;
+  color: var(--ink-2);
+  font-size: 14px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.pdf-status-note { margin-top: 10px; }
+
+.pdf-status[data-state="ready"] { border-color: rgba(52, 211, 153, 0.45); }
+.pdf-status[data-state="ready"] .pdf-status-icon {
+  background: var(--positive-bg);
+  color: var(--positive);
+}
+
+.pdf-status[data-state="error"] { border-color: rgba(248, 113, 113, 0.55); }
+.pdf-status[data-state="error"] .pdf-status-icon {
+  background: var(--critical-bg);
+  color: var(--critical);
+}
+
+.btn.pdf-download-btn {
+  max-width: 100%;
+  padding: 16px 36px;
+  border: 1px solid transparent;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.45;
+  box-shadow: 0 4px 20px rgba(56, 189, 248, 0.25);
+}
+
+.btn.pdf-download-btn[disabled] {
+  opacity: 1;
+  background: var(--bg-surface);
+  color: var(--ink);
+  border-color: rgba(56, 189, 248, 0.45);
+  cursor: wait;
+  box-shadow: none;
+  filter: none;
+  transform: none;
+}
+
+.btn.pdf-download-btn:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 4px;
+}
+
+@media (max-width: 520px) {
+  .pdf-status { gap: 12px; padding: 16px 12px; }
+  .pdf-status-icon { flex-basis: 36px; width: 36px; height: 40px; }
+  .pdf-status-title { font-size: 15px; }
+  .btn.pdf-download-btn { width: 100%; padding: 14px 20px; font-size: 15px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pdf-spinner { animation: none; }
+}
+
 /* Admin CRM Dashboard ----------------------------------------------------- */
 
 .admin-nav { display: flex; gap: 8px; margin: 24px 0; flex-wrap: wrap; }
@@ -1289,7 +1403,7 @@ table.data tr.clickable:hover td { background: rgba(89, 194, 255, 0.05); }
 .pdf-header-branded .pdf-meta { text-align: right; font-size: 12px; color: var(--ink-soft); line-height: 1.4; }
 
 @media print {
-  .topbar, .footer, .btn, .paywall-banner, .admin-nav, .top-right-actions, .blurred-overlay-card, #download-pdf-btn, .modal-overlay, .mobile-sticky-bar { display: none !important; }
+  .topbar, .footer, .btn, .paywall-banner, .admin-nav, .top-right-actions, .blurred-overlay-card, #download-pdf-btn, .pdf-status, .modal-overlay, .mobile-sticky-bar { display: none !important; }
   body { background: #0B0F16 !important; color: #E6EDF8 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; padding-bottom: 0 !important; }
   .wrap { max-width: 100% !important; padding: 10px !important; }
   .risk-card, .sec-card { border: 1px solid var(--line) !important; background: var(--bg-elev) !important; color: var(--ink) !important; }

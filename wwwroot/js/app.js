@@ -36,6 +36,10 @@
   let cachedPdfSessionId = null;
   let pdfFetchPromise = null;
   let pdfAbortController = null;
+  let pdfFetchSessionId = null;
+  let pdfWaitTimer = null;
+  let pdfPreparation = { sessionId: null, status: 'initial', startedAt: null };
+  const PDF_EXPECTED_WAIT_MS = 2 * 60 * 1000;
 
   function cancelInFlightPdfFetch() {
     if (pdfAbortController) {
@@ -45,6 +49,10 @@
       pdfAbortController = null;
     }
     pdfFetchPromise = null;
+    pdfFetchSessionId = null;
+    clearTimeout(pdfWaitTimer);
+    pdfWaitTimer = null;
+    pdfPreparation = { sessionId: null, status: 'initial', startedAt: null };
   }
 
   function loadState() {
@@ -1776,170 +1784,148 @@
   }
 
 
-  function updatePdfButtonState(status) {
-    const btn = document.getElementById('download-pdf-btn');
-    if (!btn) return;
+  function updatePdfButtonState(status, sessionId = state.sessionId) {
+    if (sessionId !== state.sessionId) return;
+    const continuing = pdfPreparation.sessionId === sessionId && pdfPreparation.status === 'generating';
+    const startedAt = status === 'generating'
+      ? (continuing ? pdfPreparation.startedAt : Date.now()) : null;
+    pdfPreparation = { sessionId: sessionId, status: status, startedAt: startedAt };
+    clearTimeout(pdfWaitTimer);
+    pdfWaitTimer = null;
     if (status === 'generating') {
-      btn.innerHTML = '<span class="spinner" style="display:inline-block;width:14px;height:14px;vertical-align:middle;margin-right:8px;border-width:2px;"></span>Формирование PDF в фоне…';
-      btn.disabled = false;
-    } else if (status === 'ready') {
-      btn.textContent = '📥 Скачать официальный PDF-отчёт (Готов)';
-      btn.disabled = false;
-      btn.style.boxShadow = '0 4px 20px rgba(56,189,248,0.4)';
-    } else {
-      btn.textContent = '📥 Скачать официальный PDF-отчёт';
-      btn.disabled = false;
+      const remaining = PDF_EXPECTED_WAIT_MS - (Date.now() - startedAt);
+      if (remaining > 0) {
+        pdfWaitTimer = setTimeout(function () {
+          pdfWaitTimer = null;
+          if (pdfPreparation.sessionId === sessionId && pdfPreparation.status === 'generating') renderPdfStatus();
+        }, remaining);
+      }
     }
+    renderPdfStatus();
+  }
+
+  function renderPdfStatus() {
+    const panel = document.getElementById('pdf-status');
+    const btn = document.getElementById('download-pdf-btn');
+    if (!panel || !btn || panel.dataset.sessionId !== pdfPreparation.sessionId || state.sessionId !== pdfPreparation.sessionId) return;
+    const status = pdfPreparation.status;
+    const generating = status === 'generating';
+    const slow = generating && Date.now() - pdfPreparation.startedAt >= PDF_EXPECTED_WAIT_MS;
+    const copy = {
+      initial: ['Подготовим ваш PDF-отчёт', 'Полный отчёт по вашей диагностике будет доступен для скачивания здесь.', '', 'Подготовить PDF'],
+      generating: ['Готовим ваш PDF-отчёт', 'Обычно это занимает около 2 минут. Собираем подробный отчёт по вашей диагностике.',
+        slow ? 'Подготовка занимает больше времени, чем обычно. Пожалуйста, подождите.' : 'Обновлять страницу не нужно.', 'Отчёт готовится…'],
+      ready: ['Ваш отчёт готов', 'PDF можно скачать и сохранить на устройстве.', '', 'Скачать PDF'],
+      error: ['Не удалось подготовить отчёт', 'Попробуйте ещё раз. Повторно проходить диагностику не нужно.', '', 'Повторить подготовку']
+    }[status];
+
+    panel.dataset.state = status;
+    document.getElementById('pdf-status-icon').innerHTML = generating
+      ? '<span class="pdf-spinner"></span>' : (status === 'ready' ? '✓' : (status === 'error' ? '!' : '↓'));
+    document.getElementById('pdf-status-title').textContent = copy[0];
+    document.getElementById('pdf-status-description').textContent = copy[1];
+    const note = document.getElementById('pdf-status-note');
+    note.textContent = copy[2];
+    note.hidden = !copy[2];
+    btn.textContent = copy[3];
+    btn.disabled = generating;
+    btn.setAttribute('aria-busy', String(generating));
+  }
+
+  // All preparation requests share one promise, including manual retry and navigation back to the report.
+  function startPdfPreparation(sessionId, interactive = false) {
+    if (!sessionId || sessionId !== state.sessionId || !isPaid) return Promise.resolve(null);
+    if (pdfFetchPromise && pdfFetchSessionId !== sessionId) cancelInFlightPdfFetch();
+    if (cachedPdfBlob && cachedPdfSessionId === sessionId) {
+      updatePdfButtonState('ready', sessionId);
+      return Promise.resolve(cachedPdfBlob);
+    }
+    if (pdfFetchPromise) {
+      renderPdfStatus();
+      return pdfFetchPromise;
+    }
+
+    const currentController = new AbortController();
+    pdfAbortController = currentController;
+    pdfFetchSessionId = sessionId;
+    updatePdfButtonState('generating', sessionId);
+    const isCurrent = function () {
+      return !currentController.signal.aborted && pdfAbortController === currentController && state.sessionId === sessionId;
+    };
+
+    const thisFetchPromise = (async function () {
+      try {
+        const fetchPdf = function () {
+          return fetch('/api/sessions/' + sessionId + '/pdf', {
+            credentials: 'same-origin', signal: currentController.signal
+          });
+        };
+        let res = await fetchPdf();
+        if (!isCurrent()) return null;
+        if (!res.ok) {
+          let errData = null;
+          try { errData = await res.json(); } catch (e) { /* response may not be JSON */ }
+          if (!isCurrent()) return null;
+          if (errData && errData.error === 'payment_required') {
+            if (interactive) showPaymentPrompt(sessionId);
+            throw new Error('payment_required');
+          }
+          const authRequired = res.status === 401 || (errData && ['forbidden_session_owner', 'terms_required', 'unauthorized'].includes(errData.error));
+          if (interactive && authRequired) {
+            const prevUserId = currentUser ? currentUser.id : null;
+            await requestReAuth();
+            const sameUser = (!prevUserId && currentUser) || (currentUser && currentUser.id === prevUserId);
+            if (!sameUser || state.sessionId !== sessionId) {
+              clearDiagnosticAndPdfState();
+              route();
+              return null;
+            }
+            if (!isCurrent()) return null;
+            res = await fetchPdf();
+            if (!isCurrent()) return null;
+            if (!res.ok) {
+              let retryError = null;
+              try { retryError = await res.json(); } catch (e) { /* ignore */ }
+              if (!isCurrent()) return null;
+              if (retryError && retryError.error === 'payment_required') showPaymentPrompt(sessionId);
+            }
+          }
+        }
+        if (!res.ok) throw new Error('pdf_error_' + res.status);
+        const blob = await res.blob();
+        if (!isCurrent()) return null;
+        cachedPdfBlob = blob;
+        cachedPdfSessionId = sessionId;
+        updatePdfButtonState('ready', sessionId);
+        return blob;
+      } catch (err) {
+        if (isCurrent()) updatePdfButtonState('error', sessionId);
+        return null;
+      }
+    })().finally(function () {
+      if (pdfAbortController === currentController) pdfAbortController = null;
+      if (pdfFetchPromise === thisFetchPromise) {
+        pdfFetchPromise = null;
+        pdfFetchSessionId = null;
+      }
+    });
+    pdfFetchPromise = thisFetchPromise;
+    return thisFetchPromise;
   }
 
   function preheatPdf(sessionId) {
-    if (!sessionId || !isPaid) return;
-    if (cachedPdfBlob && cachedPdfSessionId === sessionId) {
-      updatePdfButtonState('ready');
+    if (pdfPreparation.sessionId === sessionId && pdfPreparation.status === 'error') {
+      renderPdfStatus();
       return;
     }
-    // If there is an in-flight fetch for a different session, abort it
-    if (cachedPdfSessionId && cachedPdfSessionId !== sessionId) {
-      cancelInFlightPdfFetch();
-    }
-    if (pdfFetchPromise) return;
-
-    updatePdfButtonState('generating');
-
-    pdfAbortController = new AbortController();
-    const currentController = pdfAbortController;
-    const requestedSessionId = sessionId;
-
-    const thisFetchPromise = fetch('/api/sessions/' + sessionId + '/pdf', {
-      credentials: 'same-origin',
-      signal: currentController.signal
-    })
-      .then(async function (res) {
-        // Ignore result if session has changed or fetch was aborted
-        if (state.sessionId !== requestedSessionId) return;
-
-        if (res.ok) {
-          const blob = await res.blob();
-          // Re-verify session validity after asynchronous blob read before writing to cache
-          if (state.sessionId !== requestedSessionId) return;
-          cachedPdfBlob = blob;
-          cachedPdfSessionId = requestedSessionId;
-          updatePdfButtonState('ready');
-        } else {
-          updatePdfButtonState('initial');
-        }
-      })
-      .catch(function (err) {
-        if (err && err.name === 'AbortError') return;
-        if (state.sessionId !== requestedSessionId) return;
-        updatePdfButtonState('initial');
-      })
-      .finally(function () {
-        if (pdfAbortController === currentController) {
-          pdfAbortController = null;
-        }
-        // Clean only if this exact fetch request is the one completing
-        if (pdfFetchPromise === thisFetchPromise) {
-          pdfFetchPromise = null;
-        }
-      });
-
-    pdfFetchPromise = thisFetchPromise;
+    return startPdfPreparation(sessionId);
   }
 
   async function downloadPDFReport() {
-    if (!state.sessionId) {
-      window.print();
-      return;
-    }
-
-    const currentDownloadSessionId = state.sessionId;
-
-    // 1. If already formed in background, download immediately!
-    if (cachedPdfBlob && cachedPdfSessionId === currentDownloadSessionId) {
-      downloadBlob(cachedPdfBlob, 'Fenix_SLS_Report_' + currentDownloadSessionId + '.pdf');
-      return;
-    }
-
-    // If an in-flight background fetch was targeting an older/different session, abort it
-    if (cachedPdfSessionId && cachedPdfSessionId !== currentDownloadSessionId) {
-      cancelInFlightPdfFetch();
-    }
-
-    const btn = document.getElementById('download-pdf-btn');
-    if (btn) {
-      btn.disabled = true;
-      btn.innerHTML = '<span class="spinner" style="display:inline-block;width:14px;height:14px;vertical-align:middle;margin-right:8px;border-width:2px;"></span>Формирование PDF…';
-    }
-
-    try {
-      if (pdfFetchPromise) {
-        await pdfFetchPromise;
-        if (cachedPdfBlob && cachedPdfSessionId === state.sessionId) {
-          downloadBlob(cachedPdfBlob, 'Fenix_SLS_Report_' + state.sessionId + '.pdf');
-          return;
-        }
-      }
-
-      const fetchPdf = async () => {
-        return fetch('/api/sessions/' + state.sessionId + '/pdf', {
-          credentials: 'same-origin'
-        });
-      };
-
-      let res = await fetchPdf();
-      if (!res.ok) {
-        let errData = null;
-        try { errData = await res.clone().json(); } catch (e) { /* ignore */ }
-
-        // [P2 Fix]: Distinguish payment requirement from auth expiry
-        if (errData && errData.error === 'payment_required') {
-          showPaymentPrompt(state.sessionId);
-          return;
-        }
-
-        if (res.status === 401 || (errData && (errData.error === 'forbidden_session_owner' || errData.error === 'terms_required' || errData.error === 'unauthorized'))) {
-          const prevUserId = currentUser ? currentUser.id : null;
-          const prevSessionId = state.sessionId;
-
-          await requestReAuth();
-
-          const sameUser = (!prevUserId && currentUser) || (currentUser && currentUser.id === prevUserId);
-          const sameSession = state.sessionId === prevSessionId;
-
-          if (sameUser && sameSession) {
-            res = await fetchPdf();
-          } else {
-            // Account switched or session mismatch: stop retry, reset local diagnostic & PDF cache!
-            clearDiagnosticAndPdfState();
-            route();
-            return;
-          }
-        }
-      }
-
-      if (!res.ok) {
-        let errData = null;
-        try { errData = await res.json(); } catch (e) { /* ignore */ }
-        if (errData && errData.error === 'payment_required') {
-          showPaymentPrompt(state.sessionId);
-          return;
-        }
-        throw new Error('pdf_error_' + res.status);
-      }
-
-      const blob = await res.blob();
-      if (state.sessionId !== currentDownloadSessionId) return;
-      cachedPdfBlob = blob;
-      cachedPdfSessionId = currentDownloadSessionId;
-      downloadBlob(blob, 'Fenix_SLS_Report_' + currentDownloadSessionId + '.pdf');
-    } catch (err) {
-      if (err && err.message !== 'auth_cancelled' && err.message !== 'account_switched') {
-        alert('Не удалось скачать PDF-отчёт. Пожалуйста, повторите попытку.');
-      }
-    } finally {
-      updatePdfButtonState(cachedPdfBlob ? 'ready' : 'initial');
-    }
+    if (!state.sessionId) return;
+    const sessionId = state.sessionId;
+    const blob = await startPdfPreparation(sessionId, true);
+    if (blob && state.sessionId === sessionId) downloadBlob(blob, 'Fenix_SLS_Report_' + sessionId + '.pdf');
   }
 
   function downloadBlob(blob, filename) {
@@ -2015,7 +2001,15 @@
         '<div class="ai-memo-badge" style="background:rgba(229,192,123,0.15);color:var(--gold);border-color:rgba(229,192,123,0.3)">📄 FENIX SLS · ЮРИДИЧЕСКИЙ ОТЧЕТ</div>' +
         '<h2 style="font-size:24px;margin:12px 0 8px;color:#FFF">Официальный PDF-отчёт Fenix SLS</h2>' +
         '<p class="ai-memo-sub" style="max-width:540px;margin:0 auto 24px">Полный юридический отчет с оценкой всех 8 направлений, детальным анализом ключевых рисков, фокус-разбором и пошаговой дорожной картой действий.</p>' +
-        '<button class="btn" id="download-pdf-btn" style="padding:16px 36px;font-size:16px;font-weight:600;box-shadow:0 4px 20px rgba(56,189,248,0.25)">📥 Скачать официальный PDF-отчёт</button>' +
+        '<div class="pdf-status" id="pdf-status" data-session-id="' + esc(sessionId) + '" data-state="initial" role="status" aria-live="polite" aria-atomic="true">' +
+          '<span class="pdf-status-icon" id="pdf-status-icon" aria-hidden="true"></span>' +
+          '<div class="pdf-status-copy">' +
+            '<h3 class="pdf-status-title" id="pdf-status-title"></h3>' +
+            '<p class="pdf-status-description" id="pdf-status-description"></p>' +
+            '<p class="pdf-status-note" id="pdf-status-note" hidden></p>' +
+          '</div>' +
+        '</div>' +
+        '<button type="button" class="btn pdf-download-btn" id="download-pdf-btn" aria-describedby="pdf-status-title pdf-status-description">Подготовить PDF</button>' +
       '</section>' +
       strengths;
 

@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Локальный тест страницы после оплаты · Fenix SLS</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; color: #edf4fa; background: #101820; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { max-width: 1500px; margin: auto; padding: 24px; }
+    h1 { margin: 0 0 8px; font-size: 24px; line-height: 1.3; }
+    p { margin: 0; line-height: 1.55; }
+    .intro { color: #b7c7d5; max-width: 1000px; }
+    .controls { margin: 20px 0 16px; padding: 18px; border: 1px solid #354c60; border-radius: 12px; background: #17232e; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .row + .row { margin-top: 14px; }
+    button, select { min-height: 42px; border: 1px solid #6b8296; border-radius: 7px; padding: 9px 13px; font: inherit; color: #edf4fa; background: #213444; }
+    button { cursor: pointer; }
+    button:hover { background: #2a465b; }
+    button:disabled { cursor: wait; opacity: .55; }
+    button:focus-visible, select:focus-visible { outline: 3px solid #a3e9f5; outline-offset: 3px; }
+    .primary { color: #10222b; background: #78d5e8; border-color: #78d5e8; font-weight: 650; }
+    .primary:hover { background: #a4e7f2; }
+    label { font-weight: 600; }
+    .hint { margin-top: 14px; color: #c2d0db; font-size: 14px; }
+    .status { min-height: 24px; font-size: 14px; color: #b2e9d0; }
+    .status[data-error="true"] { color: #ffb5b5; }
+    .viewport-label { margin: 0 0 8px; font-size: 13px; color: #a6bccd; }
+    .preview-frame { display: block; width: 100%; height: min(900px, 85vh); min-height: 600px; margin: 0 auto; border: 1px solid #41586c; border-radius: 8px; background: #0b1016; }
+    .preview-frame.mobile { width: 390px; max-width: 100%; }
+    @media (max-width: 620px) {
+      main { padding: 16px 10px; }
+      h1 { font-size: 21px; }
+      .controls { padding: 14px; }
+      select { width: 100%; }
+      .preview-frame { min-height: 520px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Локальный тест · страница после оплаты</h1>
+    <p class="intro">Ниже открыта настоящая страница приложения с тестовой диагностикой. Оплата, база данных и LLM не вызываются. Скачать можно только пример PDF. Панель управления доступна исключительно в этом локальном просмотре.</p>
+    <section class="controls" aria-label="Управление тестом PDF">
+      <div class="row">
+        <label for="scenario">Сценарий</label>
+        <select id="scenario">
+          <option value="waiting">Ждать до команды</option>
+          <option value="auto">Готовность через 2 минуты</option>
+          <option value="ready">PDF готов сразу</option>
+          <option value="error">Ошибка подготовки</option>
+        </select>
+        <button class="primary" id="start" type="button">Начать заново</button>
+      </div>
+      <div class="row">
+        <button id="complete" type="button" disabled>Завершить подготовку PDF</button>
+        <button id="fail" type="button" disabled>Вернуть ошибку</button>
+        <button id="wait" type="button" disabled>Ждать следующую попытку</button>
+      </div>
+      <div class="row">
+        <button id="focus-pdf" type="button">Показать блок PDF</button>
+        <button id="mobile" type="button" aria-pressed="false">Мобильная ширина · 390 px</button>
+        <span class="status" id="status" role="status" aria-live="polite">Открываем тестовую страницу…</span>
+      </div>
+      <p class="hint" id="hint">В режиме ожидания запрос остаётся открытым. Через 2 минуты приложение покажет сообщение о долгой подготовке. Затем можно завершить запрос или вернуть ошибку кнопками выше.</p>
+    </section>
+    <p class="viewport-label" id="viewport-label">Настоящая страница после оплаты · широкое окно</p>
+    <iframe class="preview-frame" id="preview" title="Тестовая страница Fenix SLS после оплаты"></iframe>
+  </main>
+  <script>
+    (function () {
+      'use strict';
+      const frame = document.getElementById('preview');
+      const status = document.getElementById('status');
+      const scenario = document.getElementById('scenario');
+      const start = document.getElementById('start');
+      const modeButtons = ['complete', 'fail', 'wait'].map(function (id) { return document.getElementById(id); });
+      const hints = {
+        waiting: 'В режиме ожидания запрос остаётся открытым. Через 2 минуты приложение покажет сообщение о долгой подготовке. Затем можно завершить запрос или вернуть ошибку кнопками выше.',
+        auto: 'Подготовка завершится примерно через 2 минуты после запроса PDF. Для проверки сообщения о долгом ожидании выберите «Ждать до команды» и подождите больше 2 минут.',
+        ready: 'Сервер отдаёт пример PDF без задержки. Проверьте состояние готовности и кнопку скачивания. Для новой подготовки начните сценарий заново.',
+        error: 'После ошибки нажмите здесь «Завершить подготовку PDF» для успешного ответа или «Ждать следующую попытку» для ожидания. Затем нажмите «Повторить подготовку» внутри страницы приложения.'
+      };
+      const labels = { waiting: 'API ждёт команды', auto: 'API завершит подготовку через 2 минуты', ready: 'API готов отдать PDF', error: 'API возвращает ошибку' };
+      let sessionId = null;
+      let busy = false;
+
+      function showStatus(text, error) {
+        status.textContent = text;
+        status.dataset.error = String(Boolean(error));
+      }
+
+      function setBusy(value) {
+        busy = value;
+        start.disabled = value;
+        scenario.disabled = value;
+        modeButtons.forEach(function (button) { button.disabled = value || !sessionId; });
+      }
+
+      async function request(path, body) {
+        const options = body === undefined ? {} : {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        };
+        const response = await fetch(path, options);
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.json();
+      }
+
+      async function startScenario() {
+        if (busy) return;
+        setBusy(true);
+        showStatus('Открываем новую тестовую диагностику…');
+        try {
+          const mode = scenario.value;
+          const data = await request('/preview/session', { mode: mode, delay: 120 });
+          if (!/^preview-[a-f0-9]+$/i.test(data.id)) throw new Error('Неверный идентификатор просмотра');
+          sessionId = data.id;
+          document.getElementById('hint').textContent = hints[mode];
+          frame.src = '/app?session=' + encodeURIComponent(sessionId) + '#/report/' + sessionId;
+          showStatus(labels[mode]);
+        } catch (error) {
+          showStatus('Не удалось открыть просмотр: ' + error.message, true);
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      async function setMode(mode) {
+        if (!sessionId || busy) return;
+        setBusy(true);
+        try {
+          await request('/preview/session/' + sessionId, { mode: mode });
+          showStatus(labels[mode]);
+          document.getElementById('hint').textContent = mode === 'error' ? hints.error
+            : 'Если в приложении уже показана ошибка, нажмите в нём «Повторить подготовку». Настройка ответа сервера сама по себе не повторяет запрос. Для проверки заново после успешной загрузки нажмите «Начать заново».';
+        } catch (error) {
+          showStatus('Не удалось переключить ответ: ' + error.message, true);
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      start.addEventListener('click', startScenario);
+      document.getElementById('complete').addEventListener('click', function () { setMode('ready'); });
+      document.getElementById('fail').addEventListener('click', function () { setMode('error'); });
+      document.getElementById('wait').addEventListener('click', function () { setMode('waiting'); });
+      document.getElementById('focus-pdf').addEventListener('click', function () {
+        const target = frame.contentDocument && frame.contentDocument.getElementById('pdf-status');
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        else showStatus('Страница ещё загружается. Повторите через несколько секунд.');
+      });
+      document.getElementById('mobile').addEventListener('click', function (event) {
+        const mobile = frame.classList.toggle('mobile');
+        event.currentTarget.setAttribute('aria-pressed', String(mobile));
+        event.currentTarget.textContent = mobile ? 'Вернуть широкое окно' : 'Мобильная ширина · 390 px';
+        document.getElementById('viewport-label').textContent = 'Настоящая страница после оплаты · ' + (mobile ? 'ширина 390 px' : 'широкое окно');
+      });
+
+      setInterval(async function () {
+        if (!sessionId || busy) return;
+        const requestedSession = sessionId;
+        try {
+          const data = await request('/preview/session/' + requestedSession);
+          if (requestedSession !== sessionId || busy) return;
+          showStatus((labels[data.mode] || 'Тестовый сервер готов') + ' · запросов PDF: ' + data.requests);
+        } catch (error) {
+          if (requestedSession === sessionId) showStatus('Нет связи с локальным тестовым сервером.', true);
+        }
+      }, 1500);
+
+      startScenario();
+    }());
+  </script>
+</body>
+</html>

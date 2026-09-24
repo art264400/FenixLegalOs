@@ -23,6 +23,7 @@ public static class ProductQuestions
         // 2. PROD-02 (Контекст: категории пользователей)
         new() {
             Id = "PROD-02", SectionId = "product", Order = 2, Type = QuestionType.Multiple, ScoreMode = ScoreMode.Context, Weight = 0,
+            ShowIf = new() { new() { QuestionId = "PROD-01", Op = ConditionalOperator.Neq, Value = "prelaunch" } },
             Question = "Кто пользуется продуктом?",
             Explanation = "Категории пользователей определяют применимость потребительского законодательства, требований к B2B-договорам и правил работы с несовершеннолетними.",
             Options = new() {
@@ -39,6 +40,7 @@ public static class ProductQuestions
         // 3. PROD-03 (Контекст: формат доступа)
         new() {
             Id = "PROD-03", SectionId = "product", Order = 3, Type = QuestionType.Multiple, ScoreMode = ScoreMode.Context, Weight = 0,
+            ShowIf = new() { new() { QuestionId = "PROD-01", Op = ConditionalOperator.Neq, Value = "prelaunch" } },
             Question = "Как пользователь получает доступ?",
             Explanation = "Формат доступа влияет на точку заключения пользовательского соглашения и требования к интерфейсу.",
             Options = new() {

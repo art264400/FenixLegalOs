@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Оформление заказа, оплата и возвраты — FENIX SLS</title>
+  <meta name="description" content="Порядок оформления заказа, безопасность онлайн-оплаты банковской картой, регламент предоставления услуги и условия возврата денежных средств сервиса FENIX SLS.">
+  <meta name="theme-color" content="#060A13">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css?v=2.3">
+  <style>
+    .doc-container {
+      max-width: 860px;
+      margin: 0 auto 60px;
+      padding: 0 24px;
+    }
+    .doc-header {
+      margin-bottom: 36px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--line);
+    }
+    .doc-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 999px;
+      background: var(--accent-subtle);
+      border: 1px solid var(--line-strong);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+    .doc-title {
+      font-family: var(--serif);
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--ink);
+      line-height: 1.25;
+      margin-bottom: 12px;
+    }
+    .doc-subtitle {
+      color: var(--ink-soft);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    .doc-body {
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+    .doc-card {
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      padding: 28px 32px;
+      transition: border-color 0.2s ease;
+    }
+    .doc-card:hover {
+      border-color: var(--line-strong);
+    }
+    .doc-card h2 {
+      font-family: var(--serif);
+      font-size: 20px;
+      color: var(--ink);
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .doc-card h3 {
+      font-size: 16px;
+      color: var(--ink-2);
+      margin: 18px 0 8px;
+      font-weight: 600;
+    }
+    .doc-card p {
+      color: var(--ink-2);
+      font-size: 15px;
+      line-height: 1.7;
+      margin-bottom: 12px;
+    }
+    .doc-card p:last-child {
+      margin-bottom: 0;
+    }
+    .doc-card ul {
+      margin: 10px 0 16px 20px;
+      padding: 0;
+      list-style-type: none;
+    }
+    .doc-card ul li {
+      position: relative;
+      padding-left: 18px;
+      margin-bottom: 8px;
+      color: var(--ink-2);
+      font-size: 14.5px;
+      line-height: 1.65;
+    }
+    .doc-card ul li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 9px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+    }
+    .doc-callout {
+      background: rgba(229, 192, 123, 0.07);
+      border: 1px solid rgba(229, 192, 123, 0.25);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin: 16px 0;
+    }
+    .doc-callout-accent {
+      background: rgba(56, 189, 248, 0.06);
+      border: 1px solid rgba(56, 189, 248, 0.22);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin: 16px 0;
+    }
+    .doc-callout p, .doc-callout-accent p {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .contact-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-top: 14px;
+    }
+    .contact-item {
+      background: var(--bg-surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+    }
+    .contact-item-label {
+      font-size: 12px;
+      color: var(--ink-faint);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+    .contact-item-value {
+      font-size: 14.5px;
+      color: var(--ink);
+      font-weight: 500;
+      word-break: break-word;
+    }
+    .contact-item-value a {
+      color: var(--accent);
+      text-decoration: none;
+      display: inline-block;
+      min-height: 28px;
+      line-height: 28px;
+    }
+    .contact-item-value a:hover {
+      text-decoration: underline;
+    }
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 8px;
+      background: var(--bg-surface);
+      border: 1px solid var(--line);
+      color: var(--ink);
+      font-size: 13.5px;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .back-btn:hover {
+      border-color: var(--accent);
+      background: var(--accent-subtle);
+      color: #FFF;
+      text-decoration: none;
+    }
+    .back-btn-mobile { display: none; }
+    .back-btn-desktop { display: inline; }
+
+    /* Floating Scroll to Top button */
+    .scroll-top-btn {
+      position: fixed;
+      bottom: 24px;
+      right: 20px;
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: var(--bg-surface);
+      border: 1px solid var(--line-strong);
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.25s ease;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+      z-index: 100;
+      cursor: pointer;
+    }
+    .scroll-top-btn.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+    .scroll-top-btn:hover {
+      background: var(--accent-subtle);
+      border-color: var(--accent);
+      transform: translateY(-2px);
+    }
+
+    /* Mobile Responsive Optimizations */
+    @media (max-width: 768px) {
+      .wrap, .doc-container {
+        padding-left: 16px;
+        padding-right: 16px;
+      }
+      .topbar {
+        padding: 16px 0;
+        margin-bottom: 24px;
+        gap: 12px;
+      }
+      .brand-logo {
+        height: 38px;
+      }
+      .brand-text strong {
+        font-size: 17px;
+      }
+      .brand-text small {
+        font-size: 11px;
+      }
+      .back-btn {
+        padding: 6px 12px;
+        font-size: 12.5px;
+      }
+      .back-btn-mobile { display: inline; }
+      .back-btn-desktop { display: none; }
+
+      .doc-container {
+        margin-bottom: 40px;
+      }
+      .doc-header {
+        margin-bottom: 22px;
+        padding-bottom: 18px;
+      }
+      .doc-title {
+        font-size: 24px;
+        line-height: 1.25;
+        margin-bottom: 10px;
+        word-break: break-word;
+      }
+      .doc-subtitle {
+        font-size: 13.5px;
+        line-height: 1.55;
+      }
+      .doc-body {
+        gap: 18px;
+      }
+      .doc-card {
+        padding: 20px 16px;
+        border-radius: 12px;
+      }
+      .doc-card h2 {
+        font-size: 17.5px;
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+        line-height: 1.35;
+      }
+      .doc-card h3 {
+        font-size: 15px;
+        margin: 14px 0 6px;
+      }
+      .doc-card p {
+        font-size: 14px;
+        line-height: 1.6;
+        margin-bottom: 10px;
+        word-break: break-word;
+      }
+      .doc-card ul {
+        margin: 8px 0 12px 10px;
+      }
+      .doc-card ul li {
+        font-size: 13.5px;
+        line-height: 1.55;
+        margin-bottom: 8px;
+        padding-left: 14px;
+        word-break: break-word;
+      }
+      .doc-card ul li::before {
+        top: 8px;
+        width: 5px;
+        height: 5px;
+      }
+      .doc-callout, .doc-callout-accent {
+        padding: 12px 14px;
+        margin: 12px 0;
+        border-radius: 8px;
+      }
+      .doc-callout p, .doc-callout-accent p {
+        font-size: 13px;
+        line-height: 1.55;
+      }
+      .contact-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+      .contact-item {
+        padding: 12px 14px;
+      }
+      .contact-item-value {
+        font-size: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="topbar">
+      <a class="brand" href="/#/">
+        <img class="brand-logo" src="/img/logo_mark.png" alt="FENIX SLS">
+        <span class="brand-text">
+          <strong>FENIX SLS</strong>
+          <small>Smart Legal Screening · <span class="brand-by">by Fenix Law</span></small>
+        </span>
+      </a>
+      <a class="back-btn" href="/#/">
+        <span>←</span>
+        <span class="back-btn-desktop">Вернуться на сайт</span>
+        <span class="back-btn-mobile">На сайт</span>
+      </a>
+    </header>
+  </div>
+
+  <main class="doc-container">
+    <header class="doc-header">
+      <div class="doc-badge">Официальный документ</div>
+      <h1 class="doc-title">Оформление заказа, оплата и возвраты</h1>
+      <p class="doc-subtitle">
+        Регламент оформления заказа, проведения онлайн-оплаты, безопасности платежных данных, предоставления услуги и порядка возврата денежных средств в сервисе FENIX SLS.
+      </p>
+    </header>
+
+    <div class="doc-body">
+      <!-- 1. Оформление заказа -->
+      <section class="doc-card">
+        <h2>1. Оформление заказа</h2>
+        <p>
+          <strong>FENIX SLS</strong> — цифровой сервис Fenix Law для проведения первичной автоматизированной юридической диагностики технологических компаний и проектов.
+        </p>
+        <p>Одна покупка FENIX SLS включает:</p>
+        <ul>
+          <li>однократный доступ к прохождению юридического скрининга в отношении одной компании или одного проекта;</li>
+          <li>автоматизированную обработку предоставленных Пользователем ответов;</li>
+          <li>расчет показателей юридической готовности;</li>
+          <li>выявление юридически значимых факторов и зон внимания;</li>
+          <li>формирование одного персонального электронного отчета.</li>
+        </ul>
+        <p>Для оформления заказа Пользователь:</p>
+        <ul>
+          <li>выбирает услугу FENIX SLS и знакомится с ее содержанием и стоимостью;</li>
+          <li>указывает запрашиваемые контактные данные;</li>
+          <li>знакомится и соглашается с Пользовательским соглашением и публичной офертой FENIX SLS, Политикой конфиденциальности и предоставляет необходимые согласия;</li>
+          <li>подтверждает заказ и переходит к оплате;</li>
+          <li>после успешной оплаты получает доступ к прохождению FENIX SLS.</li>
+        </ul>
+        <div class="doc-callout-accent">
+          <p>
+            Окончательная стоимость услуги указывается на сайте непосредственно до оплаты. Дополнительные обязательные платежи сверх отображаемой стоимости не взимаются, если прямо не указано иное до подтверждения заказа.
+          </p>
+        </div>
+        <p>
+          Доступ к оплаченному скринингу предоставляется на <strong>90 календарных дней</strong> с даты оплаты. Одна покупка предусматривает формирование одного итогового отчета.
+        </p>
+      </section>
+
+      <!-- 2. Оплата банковской картой -->
+      <section class="doc-card">
+        <h2>2. Оплата банковской картой</h2>
+        <p>
+          Оплата FENIX SLS производится онлайн посредством интернет-эквайринга.
+        </p>
+        <p>
+          После подтверждения заказа Пользователь перенаправляется на защищенную платежную страницу <strong>АО «Банк ЦентрКредит»</strong>, где вводятся реквизиты банковской карты.
+        </p>
+        <p>
+          К оплате принимаются банковские карты платежных систем, поддерживаемых Банком и отображаемых на платежной странице.
+        </p>
+        <p>
+          Для дополнительной проверки держателя карты может использоваться технология <strong>3-D Secure</strong>. Если банк, выпустивший карту Пользователя, требует дополнительного подтверждения операции, Пользователь будет перенаправлен на соответствующую страницу банка-эмитента.
+        </p>
+        <p>
+          Платеж считается успешно совершенным после получения FENIX SLS подтверждения об успешной операции от платежной системы.
+        </p>
+        <p>
+          Если платеж не был подтвержден, Пользователю может потребоваться повторить оплату либо обратиться в банк, выпустивший карту.
+        </p>
+      </section>
+
+      <!-- 3. Безопасность онлайн-платежей -->
+      <section class="doc-card">
+        <h2>3. Безопасность онлайн-платежей</h2>
+        <p>
+          Реквизиты банковской карты вводятся Пользователем непосредственно на защищенной платежной странице Банка.
+        </p>
+        <div class="doc-callout">
+          <p><strong>FENIX SLS и ИП «Fenix Law» не получают и не хранят:</strong></p>
+          <ul style="margin-bottom:0">
+            <li>полный номер банковской карты;</li>
+            <li>срок действия карты;</li>
+            <li>CVV/CVC-код.</li>
+          </ul>
+        </div>
+        <p>
+          Обработка карточных данных осуществляется платежной инфраструктурой Банка с применением используемых им технологий защиты и безопасной передачи платежной информации. Карточные данные вводятся непосредственно в системе авторизации Банка и не передаются интернет-ресурсу продавца.
+        </p>
+      </section>
+
+      <!-- 4. Порядок предоставления услуги -->
+      <section class="doc-card">
+        <h2>4. Порядок предоставления услуги</h2>
+        <p>
+          FENIX SLS предоставляется полностью в электронной форме. Физическая доставка отсутствует.
+        </p>
+        <p>
+          После подтверждения успешной оплаты Пользователю предоставляется доступ к прохождению скрининга. Пользователь самостоятельно отвечает на вопросы FENIX SLS. После завершения скрининга и направления ответов на окончательную обработку система:
+        </p>
+        <ul>
+          <li>обрабатывает предоставленные сведения;</li>
+          <li>рассчитывает показатели юридической готовности;</li>
+          <li>определяет соответствующие юридически значимые факторы;</li>
+          <li>формирует персональный электронный отчет.</li>
+        </ul>
+        <p>
+          Услуга по основному скринингу считается оказанной после формирования и предоставления Пользователю персонального отчета FENIX SLS.
+        </p>
+        <p>
+          Доступ к прохождению оплаченного скрининга сохраняется в течение <strong>90 календарных дней</strong> с момента оплаты. Если Пользователь самостоятельно не завершает скрининг в этот период, Исполнитель не обязан сохранять доступ бессрочно.
+        </p>
+      </section>
+
+      <!-- 5. Характер результата FENIX SLS -->
+      <section class="doc-card">
+        <h2>5. Характер результата FENIX SLS</h2>
+        <p>
+          FENIX SLS является инструментом первичной юридической диагностики. Персональный отчет формируется на основании сведений, предоставленных самим Пользователем.
+        </p>
+        <p>
+          Если прямо не указано иное, FENIX SLS не проводит самостоятельную проверку оригиналов документов и не подтверждает достоверность введенной информации по государственным, судебным или иным внешним источникам.
+        </p>
+        <div class="doc-callout">
+          <p><strong>Отчет FENIX SLS не является:</strong></p>
+          <ul style="margin-bottom:0">
+            <li>индивидуальной юридической консультацией;</li>
+            <li>официальным юридическим заключением;</li>
+            <li>аудиторским отчетом;</li>
+            <li>исчерпывающей юридической проверкой компании;</li>
+            <li>гарантией определенного юридического или коммерческого результата.</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- 6. Возврат денежных средств -->
+      <section class="doc-card">
+        <h2>6. Возврат денежных средств</h2>
+        <h3>6.1. До начала окончательной обработки</h3>
+        <p>
+          До направления заполненных данных на окончательную обработку и формирование персонального отчета Пользователь вправе обратиться за возвратом произведенной оплаты.
+        </p>
+        <h3>6.2. После начала обработки</h3>
+        <p>
+          После начала индивидуальной обработки данных для формирования персонального отчета возврат осуществляется с учетом фактически оказанной части услуги и понесенных Исполнителем расходов, если иной порядок не предусмотрен обязательными требованиями законодательства Республики Казахстан.
+        </p>
+        <h3>6.3. После формирования отчета</h3>
+        <p>
+          После формирования и предоставления персонального отчета основная услуга считается оказанной. После этого возврат производится в случаях:
+        </p>
+        <ul>
+          <li>ненадлежащего оказания услуги;</li>
+          <li>технической невозможности предоставить оплаченный результат по вине FENIX SLS;</li>
+          <li>иных случаях, прямо предусмотренных законодательством Республики Казахстан.</li>
+        </ul>
+        <h3>6.4. Техническая ошибка</h3>
+        <p>
+          Если оплаченный отчет не может быть сформирован по технической причине со стороны FENIX SLS, Исполнитель в первую очередь вправе:
+        </p>
+        <ul>
+          <li>восстановить доступ;</li>
+          <li>устранить техническую ошибку;</li>
+          <li>повторно сформировать отчет.</li>
+        </ul>
+        <p>
+          Если устранить проблему в разумный срок невозможно, Пользователю возвращается стоимость соответствующей услуги.
+        </p>
+      </section>
+
+      <!-- 7. Как оформить возврат -->
+      <section class="doc-card">
+        <h2>7. Как оформить возврат</h2>
+        <p>
+          Для обращения по вопросу возврата необходимо написать на электронную почту: <a href="mailto:fenixlaw@bk.ru"><strong>fenixlaw@bk.ru</strong></a>
+        </p>
+        <p>В обращении желательно указать:</p>
+        <ul>
+          <li>имя Пользователя;</li>
+          <li>адрес электронной почты, использованный при покупке;</li>
+          <li>номер заказа или номер отчета, если он был присвоен;</li>
+          <li>дату платежа;</li>
+          <li>сумму платежа;</li>
+          <li>причину обращения.</li>
+        </ul>
+        <p>
+          При необходимости Исполнитель может запросить дополнительные сведения, необходимые исключительно для идентификации Пользователя, платежа и рассмотрения обращения.
+        </p>
+      </section>
+
+      <!-- 8. Как производится возврат при оплате картой -->
+      <section class="doc-card">
+        <h2>8. Как производится возврат при оплате картой</h2>
+        <p>
+          При оплате банковской картой <strong>возврат наличными денежными средствами не производится</strong>.
+        </p>
+        <p>
+          Возврат осуществляется посредством платежной инфраструктуры на банковскую карту, с которой была произведена соответствующая оплата, если иной порядок не требуется законодательством, правилами Банка или платежной системы.
+        </p>
+        <p>
+          После подтверждения основания для возврата ИП «Fenix Law» инициирует соответствующую операцию через платежную систему.
+        </p>
+        <div class="doc-callout-accent">
+          <p>
+            Подтвержденный возврат инициируется Исполнителем <strong>не позднее 10 календарных дней</strong> с момента получения достаточной информации для его осуществления. Фактический срок зачисления денежных средств на карту после инициирования возврата может зависеть от банка-эмитента Пользователя и правил соответствующей платежной системы.
+          </p>
+        </div>
+      </section>
+
+      <!-- 9. Ошибочный или спорный платеж -->
+      <section class="doc-card">
+        <h2>9. Ошибочный или спорный платеж</h2>
+        <p>
+          Если Пользователь обнаружил:
+        </p>
+        <ul>
+          <li>ошибочное списание;</li>
+          <li>повторное списание;</li>
+          <li>неизвестную ему операцию;</li>
+          <li>неверную сумму платежа;</li>
+          <li>иную проблему с оплатой,</li>
+        </ul>
+        <p>
+          необходимо незамедлительно обратиться по адресу: <a href="mailto:fenixlaw@bk.ru"><strong>fenixlaw@bk.ru</strong></a> и сообщить сведения, позволяющие идентифицировать операцию.
+        </p>
+        <p>При необходимости могут быть дополнительно запрошены дата и сумма операции, номер заказа, подтверждение или квитанция об оплате.</p>
+        <div class="doc-callout">
+          <p>
+            <strong>Важно в целях безопасности:</strong> не следует направлять по электронной почте полный номер банковской карты, CVV/CVC-код или иные конфиденциальные реквизиты карты.
+          </p>
+        </div>
+      </section>
+
+      <!-- 10. Возможные причины отказа в оплате -->
+      <section class="doc-card">
+        <h2>10. Возможные причины отказа в оплате</h2>
+        <p>Банковская операция может быть отклонена, в частности, если:</p>
+        <ul>
+          <li>на карте недостаточно денежных средств;</li>
+          <li>банк-эмитент ограничил интернет-платежи;</li>
+          <li>были неверно введены реквизиты карты;</li>
+          <li>истек срок действия карты;</li>
+          <li>операция не прошла дополнительную проверку банка;</li>
+          <li>банк-эмитент отклонил операцию по иной причине.</li>
+        </ul>
+        <p>
+          Если проблема возникает на этапе авторизации банковской карты, Пользователю рекомендуется обратиться в банк, выпустивший соответствующую карту.
+        </p>
+      </section>
+
+      <!-- 11. Гарантии предоставления услуги -->
+      <section class="doc-card">
+        <h2>11. Гарантии предоставления услуги</h2>
+        <p>ИП «Fenix Law» обеспечивает:</p>
+        <ul>
+          <li>предоставление доступа к оплаченному FENIX SLS после подтверждения успешной оплаты;</li>
+          <li>сохранение доступа к прохождению скрининга в течение 90 календарных дней;</li>
+          <li>формирование одного персонального отчета после завершения скрининга и успешной обработки предоставленных Пользователем ответов;</li>
+          <li>принятие разумных мер для устранения технических неисправностей, препятствующих предоставлению оплаченной услуги.</li>
+        </ul>
+        <p>
+          Если по технической причине со стороны FENIX SLS оплаченная услуга не может быть предоставлена и восстановить ее предоставление невозможно, применяется предусмотренный выше порядок возврата денежных средств.
+        </p>
+        <div class="doc-callout">
+          <p><strong>При этом FENIX SLS не гарантирует:</strong></p>
+          <ul style="margin-bottom:0">
+            <li>определенный уровень юридической оценки;</li>
+            <li>отсутствие у компании юридических рисков;</li>
+            <li>успешное привлечение инвестиций;</li>
+            <li>заключение сделки;</li>
+            <li>получение разрешения, лицензии или согласования;</li>
+            <li>иной конкретный коммерческий или юридический результат.</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- 12. Контактная информация Исполнителя -->
+      <section class="doc-card">
+        <h2>12. Контактная информация Исполнителя</h2>
+        <div class="contact-grid">
+          <div class="contact-item">
+            <div class="contact-item-label">Исполнитель</div>
+            <div class="contact-item-value">ИП «Fenix Law»</div>
+          </div>
+          <div class="contact-item">
+            <div class="contact-item-label">Юридический адрес</div>
+            <div class="contact-item-value">Республика Казахстан, г. Астана, пр. Кабанбай Батыра, 60/18</div>
+          </div>
+          <div class="contact-item">
+            <div class="contact-item-label">Телефон</div>
+            <div class="contact-item-value"><a href="tel:+77005591377">+7 700 559 13 77</a></div>
+          </div>
+          <div class="contact-item">
+            <div class="contact-item-label">Электронная почта</div>
+            <div class="contact-item-value"><a href="mailto:fenixlaw@bk.ru">fenixlaw@bk.ru</a></div>
+          </div>
+          <div class="contact-item">
+            <div class="contact-item-label">Официальный сайт</div>
+            <div class="contact-item-value"><a href="https://fenixsls.org">fenixsls.org</a></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div class="wrap">
+    <footer class="footer">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <div class="footer-brand-row">
+            <img class="footer-brand-logo" src="/img/logo_mark.png" alt="FENIX SLS">
+            <span class="footer-brand-name">FENIX SLS</span>
+          </div>
+          <span class="footer-brand-sub">Smart Legal Screening by Fenix Law</span>
+        </div>
+        <nav class="footer-nav">
+          <div class="footer-nav-title">Навигация</div>
+          <a href="/#/">Главная</a>
+          <a href="/#/" onclick="sessionStorage.setItem('scrollToSection', 'about');">О продукте</a>
+          <a href="/#/" onclick="sessionStorage.setItem('scrollToSection', 'stats');">Статистика SLS</a>
+          <a href="/#/" onclick="sessionStorage.setItem('scrollToSection', 'how-it-works');">Как работает</a>
+          <a href="/#/" onclick="sessionStorage.setItem('scrollToSection', 'what-we-check');">Что проверяем</a>
+          <a href="/#/" onclick="sessionStorage.setItem('scrollToSection', 'pricing');">Стоимость</a>
+        </nav>
+        <div class="footer-docs">
+          <div class="footer-docs-title">Документы</div>
+          <a href="/docs/privacy-policy.pdf" target="_blank" rel="noopener noreferrer">Политика конфиденциальности</a>
+          <a href="/docs/user-agreement-offer.pdf" target="_blank" rel="noopener noreferrer">Пользовательское соглашение (оферта)</a>
+          <a href="/order-terms.html" style="color:var(--ink);font-weight:600">Оформление заказа, оплата и возвраты</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p class="footer-disclaimer">Результаты Fenix SLS основаны на информации, предоставленной пользователем, и являются первичной юридической диагностикой. Не заменяют индивидуальную юридическую консультацию.</p>
+        <p class="footer-copy">© 2026 Fenix Law. Все права защищены.</p>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Scroll to Top button -->
+  <button id="scrollTopBtn" class="scroll-top-btn" aria-label="Наверх">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+  </button>
+
+  <script>
+    (function () {
+      var btn = document.getElementById('scrollTopBtn');
+      if (!btn) return;
+      window.addEventListener('scroll', function () {
+        if (window.pageYOffset > 300) {
+          btn.classList.add('visible');
+        } else {
+          btn.classList.remove('visible');
+        }
+      }, { passive: true });
+      btn.addEventListener('click', function () {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    })();
+  </script>
+</body>
+</html>

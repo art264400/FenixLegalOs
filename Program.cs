@@ -118,10 +118,17 @@ app.UseRouting();
 app.MapControllers();
 
 // Admin HTML Route
-app.MapGet("/admin", () =>
+app.MapMethods("/admin", new[] { "GET", "HEAD" }, () =>
 {
     var adminHtml = Path.Combine(staticPath, "admin.html");
     return File.Exists(adminHtml) ? Results.File(adminHtml, "text/html") : Results.NotFound();
+});
+
+// Order Terms & Payment Rules Route
+app.MapMethods("/order-terms", new[] { "GET", "HEAD" }, () =>
+{
+    var orderTermsHtml = Path.Combine(staticPath, "order-terms.html");
+    return File.Exists(orderTermsHtml) ? Results.File(orderTermsHtml, "text/html; charset=utf-8") : Results.NotFound();
 });
 
 var portStr = Environment.GetEnvironmentVariable("PORT") ?? "5050";
