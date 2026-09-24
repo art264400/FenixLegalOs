@@ -905,13 +905,9 @@ public class TypstPdfService
 ]
 
 #v(0.3cm)
-#grid(
-  columns: (1.1fr, 1.1fr),
-  gutter: 12pt,
-  [
-    #card(fill: rgb(""#0D1628""), inset: 10pt)[
-      #text(font: serif, size: 9.5pt, weight: ""bold"", fill: rgb(""#E5C07B""))[ПОЧЕМУ СФОРМИРОВАНА ТАКАЯ ОЦЕНКА]
-      #v(4pt)
+#card(fill: rgb(""#0D1628""), inset: 10pt)[
+  #text(font: serif, size: 9.5pt, weight: ""bold"", fill: rgb(""#E5C07B""))[ПОЧЕМУ СФОРМИРОВАНА ТАКАЯ ОЦЕНКА]
+  #v(4pt)
 ");
             if (focus.NegativeDrivers.Count > 0)
             {
@@ -941,28 +937,7 @@ public class TypstPdfService
             }
 
             sb.AppendLine(@"
-    ]
-  ],
-  [
-    #card(fill: rgb(""#0D1628""), inset: 10pt)[
-      #text(font: serif, size: 9.5pt, weight: ""bold"", fill: rgb(""#E5C07B""))[ДЕТАЛИЗАЦИЯ ПО ФАКТОРАМ]
-      #v(4pt)
-      #table(
-        columns: (1fr, auto),
-        stroke: (x, y) => if y > 0 { (top: 0.5pt + rgb(""#1E2D4A"")) } else { none },
-        inset: (x: 2pt, y: 4pt),
-        align: (left + horizon, right + horizon),
-");
-            foreach (var row in focus.FactorBreakdown)
-            {
-                var rowColor = row.IsPositive ? "#34D399" : row.Severity.HasValue ? "#F87171" : "#FBBF24";
-                sb.AppendLine($"        [#text(font: sans, size: 7.5pt, fill: rgb(\"#CBD5E1\"))[{EscapeTypst(row.FactorName)}]], [#badge(\"{EscapeTypst(row.StatusText)}\", stroke: rgb(\"{rowColor}\"), text-color: rgb(\"{rowColor}\"))],");
-            }
-            sb.AppendLine(@"
-      )
-    ]
-  ]
-)
+]
 #pagebreak()
 ");
         }

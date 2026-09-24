@@ -622,10 +622,10 @@
           '</div>' +
         '</div>' +
         '<div class="cta-row">' +
-          '<button class="btn" id="start-btn">Проверить компанию за 15 минут</button>' +
+          '<button class="btn" id="start-btn">Пройти диагностику · около 30 минут</button>' +
         '</div>' +
         '<div class="trust-row">' +
-          '<span>✓ Бесплатно</span><span>✓ Около 15 минут</span><span>✓ Без загрузки документов</span><span>✓ Методология Fenix Law</span>' +
+          '<span>✓ Бесплатно</span><span>✓ Около 30 минут</span><span>✓ Без загрузки документов</span><span>✓ Методология Fenix Law</span>' +
         '</div>' +
         '<div class="flow-section" id="how-it-works">' +
           '<div class="flow-title">Как работает FENIX SLS</div>' +
@@ -633,7 +633,7 @@
             '<div class="flow-step">' +
               '<div class="step-tag">ШАГ 01 · ВАШИ ДАННЫЕ</div>' +
               '<h3>Ответьте на вопросы</h3>' +
-              '<p>Около 15 минут. Без сложных юридических терминов.</p>' +
+              '<p>Около 30 минут. Без сложных юридических терминов.</p>' +
             '</div>' +
             '<div class="flow-arrow">→</div>' +
             '<div class="flow-step active">' +
@@ -771,7 +771,7 @@
               '</ul>' +
               '<div class="pricing-cta">' +
                 '<button class="btn btn-secondary pricing-btn" id="start-btn-2">Проверить компанию</button>' +
-                '<div class="pricing-note">Около 15 минут · Без загрузки документов</div>' +
+                '<div class="pricing-note">Около 30 минут · Без загрузки документов</div>' +
               '</div>' +
             '</div>' +
             '<div class="pricing-card pricing-card--accent">' +
