@@ -710,6 +710,22 @@ code { color: var(--accent); }
 
 .pricing-btn { width: 100%; justify-content: center; }
 
+.pricing-btn.btn-secondary {
+  background: linear-gradient(135deg, #BAE6FD, #7DD3FC);
+  color: #060A13;
+  border-color: #BAE6FD;
+}
+
+.pricing-btn.btn-secondary:not(:disabled) {
+  box-shadow: 0 4px 20px rgba(56, 189, 248, 0.18);
+}
+
+.pricing-btn.btn-secondary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #DDF3FF, #A5E2FF);
+  border-color: #DDF3FF;
+  box-shadow: 0 6px 28px rgba(56, 189, 248, 0.3);
+}
+
 .pricing-note {
   text-align: center;
   font-size: 12px;
