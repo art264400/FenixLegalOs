@@ -1567,7 +1567,7 @@
       '<div class="pricing-cta">' +
         (payment
           ? '<span class="pricing-selection" id="tier-selection-' + tier + '">' + (selected ? 'Выбран' : 'Выбрать тариф') + '</span>'
-          : '<button class="btn' + (consultation ? '' : ' btn-secondary') + ' pricing-btn" id="start-btn-' + (consultation ? '3' : '2') + '">Пройти диагностику</button>') +
+          : '<button class="btn pricing-btn" id="start-btn-' + (consultation ? '3' : '2') + '">Пройти диагностику</button>') +
         '<div class="pricing-note">' + esc(offer.note) + '</div>' +
       '</div>' +
     '</div>';
