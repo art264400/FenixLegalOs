@@ -230,8 +230,9 @@ public class DbInitializer
         // Seed initial pricing
         conn.Execute(@"
             INSERT OR IGNORE INTO system_settings (key, value, updated_at)
-            VALUES ('report_price_kzt', '19999', datetime('now')),
-                   ('report_old_price_kzt', '49990', datetime('now'));
+            VALUES ('report_price_kzt', '49990', datetime('now')),
+                   ('report_old_price_kzt', '49990', datetime('now')),
+                   ('consultation_price_kzt', '90990', datetime('now'));
         ");
 
         // Safe migrations

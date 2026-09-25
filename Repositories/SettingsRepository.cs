@@ -5,9 +5,9 @@ namespace FenixLegalOs.Repositories;
 
 public class PricingConfig
 {
-    public int PriceKzt { get; set; } = 19999;
+    public int PriceKzt { get; set; } = 49990;
     public int OldPriceKzt { get; set; } = 49990;
-    public int ConsultationPriceKzt { get; set; } = 79900;
+    public int ConsultationPriceKzt { get; set; } = 90990;
     public string Currency { get; set; } = "₸";
     public int DiscountPercent => OldPriceKzt > PriceKzt ? (int)Math.Round((1.0 - (double)PriceKzt / OldPriceKzt) * 100) : 0;
 }
@@ -58,11 +58,11 @@ public class SettingsRepository
     {
         var pStr = Get("report_price_kzt", "49990");
         var oStr = Get("report_old_price_kzt", "49990");
-        var cStr = Get("consultation_price_kzt", "79900");
+        var cStr = Get("consultation_price_kzt", "90990");
 
         int price = int.TryParse(pStr, out var p) ? p : 49990;
         int oldPrice = int.TryParse(oStr, out var o) ? o : 49990;
-        int consultationPrice = int.TryParse(cStr, out var c) ? c : 79900;
+        int consultationPrice = int.TryParse(cStr, out var c) ? c : 90990;
 
         return new PricingConfig
         {

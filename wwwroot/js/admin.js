@@ -107,7 +107,7 @@
             '</div>' +
             '<div class="field">' +
               '<label for="p-consult-price" style="font-weight:600">Тариф 2: «⭐ FENIX SLS + разбор с юристом»</label>' +
-              '<input id="p-consult-price" type="number" min="0" step="1" required value="' + (data.consultationPriceKzt || 79900) + '" style="font-size:16px;font-weight:700;color:var(--gold)">' +
+              '<input id="p-consult-price" type="number" min="0" step="1" required value="' + (data.consultationPriceKzt ?? 90990) + '" style="font-size:16px;font-weight:700;color:var(--gold)">' +
             '</div>' +
 
             '<h3 style="font-size:15px;color:var(--ink);margin-top:14px;border-bottom:1px solid var(--line);padding-bottom:6px">Контакты для связи (в PDF-отчёте)</h3>' +

@@ -97,7 +97,7 @@ public class AdminController : ControllerBase
         if (!IsAdmin()) return Unauthorized();
         int price = body.TryGetProperty("priceKzt", out var pProp) ? pProp.GetInt32() : 49990;
         int oldPrice = body.TryGetProperty("oldPriceKzt", out var oProp) ? oProp.GetInt32() : price;
-        int consultationPrice = body.TryGetProperty("consultationPriceKzt", out var cProp) ? cProp.GetInt32() : 79900;
+        int consultationPrice = body.TryGetProperty("consultationPriceKzt", out var cProp) ? cProp.GetInt32() : 90990;
 
         _settings.UpdatePricing(price, oldPrice, consultationPrice);
 

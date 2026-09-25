@@ -558,7 +558,7 @@ code { color: var(--accent); }
 
 .pricing-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
   align-items: stretch;
 }
@@ -568,19 +568,25 @@ code { color: var(--accent); }
 }
 
 .pricing-card {
-  background: var(--bg-card);
-  border: 1px solid var(--line-strong);
+  --pricing-color: var(--accent);
+  --pricing-border: var(--line-strong);
+  --pricing-background: var(--bg-card);
+  background: var(--pricing-background);
+  border: 1px solid var(--pricing-border);
   border-radius: var(--radius-lg);
   padding: 32px;
   display: flex;
   flex-direction: column;
   gap: 24px;
   position: relative;
+  min-width: 0;
+  text-align: left;
 }
 
 .pricing-card--accent {
-  background: linear-gradient(160deg, rgba(212, 175, 55, 0.08), var(--bg-card) 60%);
-  border-color: rgba(212, 175, 55, 0.45);
+  --pricing-color: var(--gold);
+  --pricing-border: rgba(212, 175, 55, 0.45);
+  --pricing-background: linear-gradient(160deg, rgba(212, 175, 55, 0.08), var(--bg-card) 60%);
   box-shadow: 0 8px 40px rgba(212, 175, 55, 0.1);
 }
 
@@ -603,8 +609,8 @@ code { color: var(--accent); }
 .pricing-card-top { 
   display: flex; 
   flex-direction: column; 
-  gap: 6px; 
-  min-height: 115px; 
+  gap: 8px;
+  min-height: 200px;
 }
 
 .pricing-plan {
@@ -625,6 +631,7 @@ code { color: var(--accent); }
   font-weight: 700;
   color: #FFF;
   line-height: 1;
+  white-space: nowrap;
 }
 
 .pricing-price span {
@@ -633,9 +640,17 @@ code { color: var(--accent); }
 }
 
 .pricing-sub {
-  font-size: 13px;
-  color: var(--ink-soft);
+  margin-top: 8px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
   line-height: 1.45;
+}
+
+.pricing-description {
+  font-size: 14px;
+  color: var(--ink-soft);
+  line-height: 1.55;
 }
 
 .pricing-features {
@@ -670,6 +685,22 @@ code { color: var(--accent); }
   color: var(--gold);
 }
 
+.pricing-fit,
+.pricing-emphasis {
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.pricing-fit { color: var(--ink-soft); }
+
+.pricing-emphasis {
+  padding: 14px 16px;
+  border-left: 3px solid var(--gold);
+  border-radius: 0 8px 8px 0;
+  background: var(--gold-dim);
+  color: var(--ink);
+}
+
 .pricing-cta {
   display: flex;
   flex-direction: column;
@@ -683,6 +714,7 @@ code { color: var(--accent); }
   text-align: center;
   font-size: 12px;
   color: var(--ink-faint);
+  line-height: 1.5;
 }
 
 /* Diagnostic Questionnaire ------------------------------------------------ */
@@ -944,13 +976,54 @@ code { color: var(--accent); }
 }
 .close-btn:hover, .modal-close:hover { color: var(--ink); }
 
-.tariff-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin: 24px 0; }
+.tariff-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin: 24px 0; align-items: stretch; }
 .tariff-card {
   background: var(--bg-card); border: 1.5px solid var(--line); border-radius: var(--radius);
   padding: 24px; position: relative; cursor: pointer; transition: all 0.2s ease; text-align: left;
 }
 .tariff-card:hover { border-color: rgba(89, 194, 255, 0.4); }
 .tariff-card.selected { border-color: var(--accent); background: var(--accent-dim); }
+.tariff-card.pricing-card {
+  background: var(--pricing-background);
+  border: 1px solid var(--pricing-border);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.tariff-card.pricing-card:hover { border-color: var(--pricing-color); }
+.tariff-card.pricing-card.selected {
+  border-color: var(--pricing-color);
+  box-shadow: inset 0 0 0 1px var(--pricing-color);
+}
+.tariff-card.pricing-card:focus-visible {
+  outline: 3px solid var(--pricing-color);
+  outline-offset: 4px;
+}
+.pricing-selection {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-weight: 700;
+}
+.pricing-selection::before {
+  content: '';
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+.tariff-card.selected .pricing-selection { color: var(--pricing-color); }
+.tariff-card.selected .pricing-selection::before {
+  background: var(--pricing-color);
+  box-shadow: inset 0 0 0 3px var(--bg-card);
+}
 .tariff-badge {
   position: absolute; top: -12px; right: 16px; background: var(--accent); color: #080C12;
   font-size: 10.5px; font-weight: 700; text-transform: uppercase; padding: 3px 10px; border-radius: 12px;
@@ -1340,6 +1413,7 @@ table.data tr.clickable:hover td { background: rgba(89, 194, 255, 0.05); }
 
 @media (max-width: 860px) {
   .tariff-grid { grid-template-columns: 1fr; }
+  .tariff-card.pricing-card .pricing-card-top { min-height: 0; }
   .domain-grid { grid-template-columns: repeat(2, 1fr); }
   .hero-pillars { grid-template-columns: 1fr; gap: 12px; }
 }
@@ -1378,6 +1452,10 @@ table.data tr.clickable:hover td { background: rgba(89, 194, 255, 0.05); }
   body { padding-bottom: 70px; }
 }
 
+@media (max-width: 760px) {
+  .pricing-card-top { min-height: 0; }
+}
+
 @media (max-width: 480px) {
   .wrap { padding: 0 16px; }
   .hero { padding: 12px 0 44px; }
@@ -1385,6 +1463,9 @@ table.data tr.clickable:hover td { background: rgba(89, 194, 255, 0.05); }
   .hero-copy p.sub { font-size: 14.5px; }
   .btn { width: 100%; padding: 14px 20px; font-size: 15px; }
   .domain-grid { grid-template-columns: 1fr; }
+  .pricing-card,
+  .tariff-card.pricing-card { padding: 24px 20px; gap: 20px; }
+  .pricing-price { font-size: 34px; }
 }
 
 .fade-in { animation: fadeIn 0.3s ease; }
@@ -1448,7 +1529,7 @@ table.data tr.clickable:hover td { background: rgba(89, 194, 255, 0.05); }
   position: relative;
   z-index: 10;
   width: 100%;
-  max-width: 620px;
+  max-width: 980px;
   background: rgba(13, 20, 32, 0.94);
   backdrop-filter: blur(28px) saturate(180%);
   -webkit-backdrop-filter: blur(28px) saturate(180%);
@@ -1458,6 +1539,10 @@ table.data tr.clickable:hover td { background: rgba(89, 194, 255, 0.05); }
   text-align: center;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.9), 0 0 40px rgba(89, 194, 255, 0.2);
   margin: 0 auto;
+}
+@media (max-width: 520px) {
+  .paywall-overlay-wrapper { padding: 28px 10px; }
+  .pay-card-container { padding: 28px 12px; }
 }
 .pay-badge-top {
   display: inline-block;

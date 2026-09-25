@@ -401,7 +401,7 @@ public class SessionsController : ControllerBase
         var session = _sessions.GetSession(id);
         if (session == null) return NotFound(new { error = "session_not_found" });
 
-        int amount = body.TryGetProperty("amount", out var amProp) ? amProp.GetInt32() : 19999;
+        int amount = body.TryGetProperty("amount", out var amProp) ? amProp.GetInt32() : _settings.GetPricing().PriceKzt;
         string method = body.TryGetProperty("method", out var mProp) ? mProp.GetString() ?? "kaspi_pay" : "kaspi_pay";
 
         _sessions.MarkSessionPaid(id, amount, method);

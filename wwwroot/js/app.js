@@ -754,52 +754,17 @@
             '<h2>Выберите формат диагностики</h2>' +
           '</div>' +
           '<div class="pricing-grid">' +
-            '<div class="pricing-card">' +
-              '<div class="pricing-card-top">' +
-                '<div class="pricing-plan">FENIX SLS</div>' +
-                '<div class="pricing-price" id="landing-price-1">29 900 <span>₸</span></div>' +
-                '<div class="pricing-sub">Один скрининг компании</div>' +
-              '</div>' +
-              '<ul class="pricing-features">' +
-                '<li>Проверка 8 ключевых зон</li>' +
-                '<li>Оценка юридической готовности</li>' +
-                '<li>Персональная карта рисков</li>' +
-                '<li>Сильные и слабые стороны</li>' +
-                '<li>Приоритетный план действий</li>' +
-                '<li>Готовность к инвестициям</li>' +
-                '<li>Персональный итоговый отчёт</li>' +
-              '</ul>' +
-              '<div class="pricing-cta">' +
-                '<button class="btn btn-secondary pricing-btn" id="start-btn-2">Проверить компанию</button>' +
-                '<div class="pricing-note">Около 30 минут · Без загрузки документов</div>' +
-              '</div>' +
-            '</div>' +
-            '<div class="pricing-card pricing-card--accent">' +
-              '<div class="pricing-badge">⭐ Рекомендуем для раунда</div>' +
-              '<div class="pricing-card-top">' +
-                '<div class="pricing-plan">FENIX SLS + разбор с юристом</div>' +
-                '<div class="pricing-price" id="landing-price-2">79 900 <span>₸</span></div>' +
-                '<div class="pricing-sub">Все из FENIX SLS + 45 минут разбора результатов с Fenix Law</div>' +
-              '</div>' +
-              '<ul class="pricing-features">' +
-                '<li>Разбор критических зон</li>' +
-                '<li>Ответы на вопросы фаундеров</li>' +
-                '<li>Приоритеты исправления</li>' +
-                '<li>Что можно закрыть самостоятельно, а где нужен юрист</li>' +
-              '</ul>' +
-              '<div class="pricing-cta">' +
-                '<button class="btn pricing-btn" id="start-btn-3">Проверить компанию</button>' +
-                '<div class="pricing-note" style="visibility:hidden" aria-hidden="true">&nbsp;</div>' +
-              '</div>' +
-            '</div>' +
+            renderPricingCard('report') +
+            renderPricingCard('consultation') +
           '</div>' +
         '</div>' +
       '</section>'
     );
-    async function startDiagnosticSession() {
+    async function startDiagnosticSession(tier) {
+      if (tier === 'report' || tier === 'consultation') selectedTier = tier;
       if (!currentUser || !currentUser.termsAccepted) {
         openAuthModal(function () {
-          startDiagnosticSession();
+          startDiagnosticSession(tier);
         });
         return;
       }
@@ -832,22 +797,21 @@
       }
     }
 
-    document.getElementById('start-btn').addEventListener('click', startDiagnosticSession);
+    document.getElementById('start-btn').addEventListener('click', function () { startDiagnosticSession('report'); });
     const btn2 = document.getElementById('start-btn-2');
-    if (btn2) btn2.addEventListener('click', startDiagnosticSession);
+    if (btn2) btn2.addEventListener('click', function () { startDiagnosticSession('report'); });
     const btn3 = document.getElementById('start-btn-3');
-    if (btn3) btn3.addEventListener('click', startDiagnosticSession);
+    if (btn3) btn3.addEventListener('click', function () { startDiagnosticSession('consultation'); });
 
     // Обновляем цены из БД
     fetchPricing().then(function () {
       const p1 = document.getElementById('landing-price-1');
       const p2 = document.getElementById('landing-price-2');
-      if (p1 && currentPricing.priceKzt) {
-        p1.innerHTML = currentPricing.priceKzt.toLocaleString('ru') + ' <span>₸</span>';
+      if (p1) {
+        p1.innerHTML = getTierPriceKzt('report').toLocaleString('ru') + ' <span>₸</span>';
       }
-      // Цена второго тарифа — если есть отдельное поле, иначе умножаем примерно
-      if (p2 && currentPricing.consultationPriceKzt) {
-        p2.innerHTML = currentPricing.consultationPriceKzt.toLocaleString('ru') + ' <span>₸</span>';
+      if (p2) {
+        p2.innerHTML = getTierPriceKzt('consultation').toLocaleString('ru') + ' <span>₸</span>';
       }
     });
 
@@ -1541,13 +1505,79 @@
     );
   }
 
-  let currentPricing = { priceKzt: 19999, oldPriceKzt: 49990, currency: '₸', discountPercent: 60 };
+  const DEFAULT_PRICING = { priceKzt: 49990, oldPriceKzt: 49990, consultationPriceKzt: 90990, currency: '₸', discountPercent: 0 };
+  let currentPricing = { ...DEFAULT_PRICING };
+  const TARIFFS = {
+    report: {
+      title: 'FENIX SLS',
+      subtitle: 'Полная самостоятельная диагностика компании',
+      description: 'Пройдите скрининг и получите готовую юридическую картину бизнеса без созвона с юристом.',
+      features: [
+        'Проверка 8 ключевых юридических блоков',
+        'Оценка юридической готовности компании',
+        'Персональная карта выявленных рисков',
+        'Сильные стороны и зоны внимания',
+        'Приоритетный план действий',
+        'Оценка готовности к инвестициям',
+        'Персональный итоговый отчёт'
+      ],
+      footnote: 'Подойдёт, если вы хотите самостоятельно понять юридическое состояние компании и получить конкретный план действий.',
+      note: 'Около 30 минут · Без загрузки документов'
+    },
+    consultation: {
+      title: 'FENIX SLS + разбор с юристом',
+      subtitle: 'Полный FENIX SLS + персональная юридическая консультация по результатам',
+      description: 'Юрист Fenix Law заранее изучит ваш отчёт, а на 60-минутной встрече разберёт вопросы, которые требуют профессиональной юридической оценки.',
+      features: [
+        'Проверим выводы SLS с учётом реальной ситуации вашей компании',
+        'Разберём до 3 наиболее важных или спорных вопросов из отчёта',
+        'Определим подходящий механизм решения там, где возможны разные юридические варианты',
+        'Ответим на ваши вопросы, которые невозможно закрыть стандартным скринингом'
+      ],
+      footnote: 'Без пересказа отчёта. Встреча посвящена вашей конкретной ситуации и решениям.',
+      note: 'Консультация — 60 минут'
+    }
+  };
+
+  function getTierPriceKzt(tier) {
+    const key = tier === 'consultation' ? 'consultationPriceKzt' : 'priceKzt';
+    return currentPricing[key] ?? DEFAULT_PRICING[key];
+  }
+
+  // The landing page and payment screen share the same tariff contents and prices.
+  function renderPricingCard(tier, payment = false) {
+    const offer = TARIFFS[tier];
+    const consultation = tier === 'consultation';
+    const selected = selectedTier === tier;
+    const priceId = payment ? 'tier-price-' + tier : 'landing-price-' + (consultation ? '2' : '1');
+    const titleId = (payment ? 'payment' : 'landing') + '-title-' + tier;
+    const attributes = payment
+      ? ' id="tier-card-' + tier + '" data-tier="' + tier + '" role="radio" aria-labelledby="' + titleId + '" aria-checked="' + selected + '" tabindex="' + (selected ? '0' : '-1') + '"'
+      : '';
+    return '<div class="pricing-card' + (consultation ? ' pricing-card--accent' : '') +
+      (payment ? ' tariff-card' + (selected ? ' selected' : '') : '') + '"' + attributes + '>' +
+      '<div class="pricing-card-top">' +
+        '<div class="pricing-plan" id="' + titleId + '">' + esc(offer.title) + '</div>' +
+        '<div class="pricing-price" id="' + priceId + '">' + getTierPriceKzt(tier).toLocaleString('ru') + ' <span>₸</span></div>' +
+        '<div class="pricing-sub">' + esc(offer.subtitle) + '</div>' +
+        '<p class="pricing-description">' + esc(offer.description) + '</p>' +
+      '</div>' +
+      '<ul class="pricing-features">' + offer.features.map(function (feature) { return '<li>' + esc(feature) + '</li>'; }).join('') + '</ul>' +
+      '<p class="' + (consultation ? 'pricing-emphasis' : 'pricing-fit') + '">' + esc(offer.footnote) + '</p>' +
+      '<div class="pricing-cta">' +
+        (payment
+          ? '<span class="pricing-selection" id="tier-selection-' + tier + '">' + (selected ? 'Выбран' : 'Выбрать тариф') + '</span>'
+          : '<button class="btn' + (consultation ? '' : ' btn-secondary') + ' pricing-btn" id="start-btn-' + (consultation ? '3' : '2') + '">Пройти диагностику</button>') +
+        '<div class="pricing-note">' + esc(offer.note) + '</div>' +
+      '</div>' +
+    '</div>';
+  }
 
   async function fetchPricing() {
     try {
       const data = await api('GET', '/api/sessions/pricing');
-      if (data && data.priceKzt) {
-        currentPricing = data;
+      if (data && Number.isFinite(data.priceKzt) && data.priceKzt >= 0) {
+        currentPricing = { ...DEFAULT_PRICING, ...data };
       }
     } catch (e) {
       // fallback
@@ -1557,15 +1587,10 @@
   let selectedTier = 'consultation';
 
   function getSelectedPriceKzt() {
-    if (selectedTier === 'consultation') {
-      return currentPricing.consultationPriceKzt || 79900;
-    }
-    return currentPricing.priceKzt || 49990;
+    return getTierPriceKzt(selectedTier);
   }
 
   function renderPaywallSection(sessionId) {
-    const p = (currentPricing.priceKzt || 49990).toLocaleString('ru');
-    const c = (currentPricing.consultationPriceKzt || 79900).toLocaleString('ru');
     const currentSelectedPrice = getSelectedPriceKzt().toLocaleString('ru');
 
     return (
@@ -1574,28 +1599,9 @@
         '<h2 style="font-size:26px;color:#FFF;margin-bottom:8px">Выберите формат получения результатов</h2>' +
               '<p style="color:var(--ink-soft);max-width:580px;margin:0 auto 20px;font-size:14.5px">Получите полную диагностическую матрицу 8 направлений, детальный разбор рисков и официальный PDF-отчет для основателей и инвесторов.</p>' +
         
-        '<div class="tariff-grid">' +
-          '<div class="tariff-card ' + (selectedTier === 'report' ? 'selected' : '') + '" id="tier-card-report" data-tier="report">' +
-            '<div class="t-title">FENIX SLS — Отчёт</div>' +
-            '<div class="t-price">' + p + ' ₸</div>' +
-            '<ul class="tariff-checklist">' +
-              '<li><span class="chk">✓</span> Официальный подробный PDF-отчёт Fenix SLS</li>' +
-              '<li><span class="chk">✓</span> Разблокировка всех выявленных рисков и рекомендаций</li>' +
-              '<li><span class="chk">✓</span> Пошаговый 30–60 дневный Action Plan для фаундеров</li>' +
-            '</ul>' +
-          '</div>' +
-
-          '<div class="tariff-card ' + (selectedTier === 'consultation' ? 'selected' : '') + '" id="tier-card-consultation" data-tier="consultation">' +
-            '<div class="tariff-badge">⭐ Рекомендуем для раунда</div>' +
-            '<div class="t-title">FENIX SLS + разбор с юристом</div>' +
-            '<div class="t-price">' + c + ' ₸</div>' +
-            '<ul class="tariff-checklist">' +
-              '<li><span class="chk">✓</span> Всё из тарифа FENIX SLS</li>' +
-              '<li><span class="chk">✓</span> 45 минут персонального разбора результатов с Fenix Law</li>' +
-              '<li><span class="chk">✓</span> Экспертная приоритизация блокеров перед инвесторами</li>' +
-              '<li><span class="chk">✓</span> Прямые ответы на вопросы по вашей структуре</li>' +
-            '</ul>' +
-          '</div>' +
+        '<div class="tariff-grid" role="radiogroup" aria-label="Выберите тариф">' +
+          renderPricingCard('report', true) +
+          renderPricingCard('consultation', true) +
         '</div>' +
 
         '<div style="max-width:480px;margin:0 auto 16px;text-align:left">' +
@@ -1624,7 +1630,7 @@
     }
 
     const p = getSelectedPriceKzt().toLocaleString('ru');
-    const tierTitle = selectedTier === 'consultation' ? 'Тариф «FENIX SLS + разбор с юристом»' : 'Тариф «FENIX SLS — Отчёт»';
+    const tierTitle = selectedTier === 'consultation' ? 'Тариф «FENIX SLS + разбор с юристом»' : 'Тариф «FENIX SLS»';
 
     modalRoot.innerHTML =
       '<div class="paywall-modal-overlay" id="kaspi-overlay">' +
@@ -1678,7 +1684,7 @@
         await api('POST', '/api/leads', {
           sessionId: sessionId,
           type: selectedTier === 'consultation' ? 'consultation' : 'report_gate',
-          interest: selectedTier === 'consultation' ? 'Тариф FENIX SLS + 45-мин разбор с юристом' : 'Тариф FENIX SLS Полный отчёт',
+          interest: selectedTier === 'consultation' ? 'Тариф FENIX SLS + 60-мин разбор с юристом' : 'Тариф FENIX SLS Полный отчёт',
           name: name || 'Фаундер',
           email: email || 'demo@fenixlegal.kz',
           messenger: msg
@@ -1742,6 +1748,15 @@
       const consultCard = document.getElementById('tier-card-consultation');
       if (reportCard) reportCard.classList.toggle('selected', tier === 'report');
       if (consultCard) consultCard.classList.toggle('selected', tier === 'consultation');
+      ['report', 'consultation'].forEach(function (key) {
+        const card = document.getElementById('tier-card-' + key);
+        if (card) {
+          card.setAttribute('aria-checked', String(tier === key));
+          card.setAttribute('tabindex', tier === key ? '0' : '-1');
+        }
+        const label = document.getElementById('tier-selection-' + key);
+        if (label) label.textContent = tier === key ? 'Выбран' : 'Выбрать тариф';
+      });
       const curP = getSelectedPriceKzt().toLocaleString('ru');
       const kBtn = document.getElementById('btn-pay-kaspi');
       if (kBtn) kBtn.textContent = '🔴 Оплатить ' + curP + ' ₸ через Kaspi Pay';
@@ -1749,10 +1764,22 @@
       if (sBtn) sBtn.textContent = 'Разблокировать (' + curP + ' ₸)';
     }
 
-    const reportCard = document.getElementById('tier-card-report');
-    if (reportCard) reportCard.addEventListener('click', function () { updateTierSelection('report'); });
-    const consultCard = document.getElementById('tier-card-consultation');
-    if (consultCard) consultCard.addEventListener('click', function () { updateTierSelection('consultation'); });
+    ['report', 'consultation'].forEach(function (tier) {
+      const card = document.getElementById('tier-card-' + tier);
+      if (!card) return;
+      card.addEventListener('click', function () { updateTierSelection(tier); });
+      card.addEventListener('keydown', function (event) {
+        if (event.key === ' ' || event.key === 'Enter') {
+          event.preventDefault();
+          updateTierSelection(tier);
+        } else if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+          event.preventDefault();
+          const nextTier = tier === 'report' ? 'consultation' : 'report';
+          updateTierSelection(nextTier);
+          document.getElementById('tier-card-' + nextTier).focus();
+        }
+      });
+    });
 
     const kaspiBtn = document.getElementById('btn-pay-kaspi');
     if (kaspiBtn) kaspiBtn.addEventListener('click', function () { openKaspiPayModal(state.sessionId); });
