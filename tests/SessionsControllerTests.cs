@@ -298,18 +298,6 @@ public class SessionsControllerTests
         Assert.Contains("PREMIUM_BLOCKER_SECRET", paidResult.InvestmentReadiness.Blockers);
     }
 
-    [Fact(DisplayName = "12. Demo payment endpoint is closed unless explicitly enabled")]
-    public void ProcessPayment_WhenDemoDisabled_DoesNotMarkSessionPaid()
-    {
-        var sessionId = _sRepo.CreateSession();
-        var body = JsonDocument.Parse("{\"amount\":49990,\"method\":\"demo_instant\"}").RootElement;
-
-        var actionResult = _controller.ProcessPayment(sessionId, body);
-
-        Assert.IsType<NotFoundObjectResult>(actionResult);
-        Assert.False(_sRepo.GetSession(sessionId)!.Paid);
-    }
-
     private static ScoreResult CreateSensitiveResult()
     {
         return new ScoreResult

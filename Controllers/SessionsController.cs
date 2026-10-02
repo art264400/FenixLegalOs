@@ -20,8 +20,6 @@ public class SessionsController : ControllerBase
     private readonly SettingsRepository _settings;
     private readonly QuestionRepository _questionRepo;
     private readonly UserRepository? _users;
-    private readonly IWebHostEnvironment? _environment;
-    private readonly IConfiguration? _configuration;
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Task<byte[]?>> _pdfGenerationTasks = new();
 
     public SessionsController(
@@ -32,9 +30,7 @@ public class SessionsController : ControllerBase
         AiReportService aiReportService,
         SettingsRepository settings,
         QuestionRepository questionRepo,
-        UserRepository? users = null,
-        IWebHostEnvironment? environment = null,
-        IConfiguration? configuration = null)
+        UserRepository? users = null)
     {
         _sessions = sessions;
         _leads = leads;
@@ -44,13 +40,7 @@ public class SessionsController : ControllerBase
         _settings = settings;
         _questionRepo = questionRepo;
         _users = users;
-        _environment = environment;
-        _configuration = configuration;
     }
-
-    private bool DemoPaymentEnabled =>
-        string.Equals(_environment?.EnvironmentName, "Development", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(_configuration?["FENIX_ENABLE_DEMO_PAYMENT"], "true", StringComparison.OrdinalIgnoreCase);
 
     private UserAccount? GetAuthenticatedUser()
     {
@@ -89,16 +79,7 @@ public class SessionsController : ControllerBase
     [HttpGet("pricing")]
     public IActionResult GetPricing()
     {
-        var pricing = _settings.GetPricing();
-        return Ok(new
-        {
-            pricing.PriceKzt,
-            pricing.OldPriceKzt,
-            pricing.ConsultationPriceKzt,
-            pricing.Currency,
-            pricing.DiscountPercent,
-            demoPaymentEnabled = DemoPaymentEnabled
-        });
+        return Ok(_settings.GetPricing());
     }
 
     [HttpPost]
@@ -427,33 +408,6 @@ public class SessionsController : ControllerBase
 
         cache?.Set(cacheKey, finalPdf, TimeSpan.FromHours(2));
         return File(finalPdf, "application/pdf", $"Fenix_SLS_Report_{id}.pdf");
-    }
-
-    [HttpPost("{id}/pay")]
-    [RequireSessionAccess]
-    public IActionResult ProcessPayment(string id, [FromBody] JsonElement body)
-    {
-        if (!DemoPaymentEnabled)
-            return NotFound(new { error = "not_found" });
-
-        var session = _sessions.GetSession(id);
-        if (session == null) return NotFound(new { error = "session_not_found" });
-
-        var pricing = _settings.GetPricing();
-        int amount = body.TryGetProperty("amount", out var amProp) ? amProp.GetInt32() : pricing.PriceKzt;
-        string method = body.TryGetProperty("method", out var mProp) ? mProp.GetString() ?? "" : "";
-
-        if (!string.Equals(method, "demo_instant", StringComparison.Ordinal) ||
-            (amount != pricing.PriceKzt && amount != pricing.ConsultationPriceKzt))
-        {
-            return BadRequest(new { error = "invalid_demo_payment" });
-        }
-
-        _sessions.MarkSessionPaid(id, amount, method);
-        _leads.RecordEvent("payment_completed", id, new { amount, method });
-        _leads.AuditLog("system", "session_paid", $"{id} ({amount} KZT via {method})");
-
-        return Ok(new { ok = true, paid = true, amount, method });
     }
 
     [HttpPost("{id}/ai-summary")]

@@ -31,7 +31,6 @@
   let lastResult = null;
   let unlocked = false;
   let isPaid = false;
-  let demoPaymentEnabled = false;
   var serverNav = null;
   let cachedPdfBlob = null;
   let cachedPdfSessionId = null;
@@ -1857,12 +1856,15 @@
     return currentPricing[key] ?? DEFAULT_PRICING[key];
   }
 
-  // The landing page and payment screen share the same tariff contents and prices.
+  // Главная страница и экран оплаты используют одинаковое содержимое тарифов и цены.
   function renderPricingCard(tier, payment = false) {
     const offer = TARIFFS[tier];
     const consultation = tier === 'consultation';
     const selected = selectedTier === tier;
     const note = payment && tier === 'report' ? '' : offer.note;
+    const noteHtml = note
+      ? '<div class="pricing-note">' + esc(note) + '</div>'
+      : (payment ? '<div class="pricing-note pricing-note--placeholder" aria-hidden="true">Консультация — 60 минут</div>' : '');
     const priceId = payment ? 'tier-price-' + tier : 'landing-price-' + (consultation ? '2' : '1');
     const titleId = (payment ? 'payment' : 'landing') + '-title-' + tier;
     const attributes = payment
@@ -1882,7 +1884,7 @@
         (payment
           ? '<span class="pricing-selection" id="tier-selection-' + tier + '">' + (selected ? 'Выбран' : 'Выбрать тариф') + '</span>'
           : '<button class="btn pricing-btn" id="start-btn-' + (consultation ? '3' : '2') + '">Пройти диагностику</button>') +
-        (note ? '<div class="pricing-note">' + esc(note) + '</div>' : '') +
+        noteHtml +
       '</div>' +
     '</div>';
   }
@@ -1892,7 +1894,6 @@
       const data = await api('GET', '/api/sessions/pricing');
       if (data && Number.isFinite(data.priceKzt) && data.priceKzt >= 0) {
         currentPricing = { ...DEFAULT_PRICING, ...data };
-        demoPaymentEnabled = data.demoPaymentEnabled === true;
       }
     } catch (e) {
       // fallback
@@ -1907,9 +1908,6 @@
 
   function renderPaywallSection(sessionId) {
     const currentSelectedPrice = getSelectedPriceKzt().toLocaleString('ru');
-    const demoButton = demoPaymentEnabled
-      ? '<button class="btn-demo" id="btn-pay-demo">⚡ Демо-оплата в 1 клик (Бесплатно)</button>'
-      : '';
 
     return (
       '<section class="pay-card-container" id="pay-section">' +
@@ -1922,21 +1920,19 @@
           renderPricingCard('consultation', true) +
         '</div>' +
         '<div class="pay-btn-group">' +
-          '<button class="btn-kaspi" id="btn-pay-kaspi">🔴 Оплатить ' + currentSelectedPrice + ' ₸ через Kaspi Pay</button>' +
-          demoButton +
+          '<button class="btn-card-payment" id="btn-pay-card">💳 Оплатить ' + currentSelectedPrice + ' ₸ картой</button>' +
         '</div>' +
         '<div style="margin-top:14px;font-size:12px;color:var(--ink-faint);text-align:center;line-height:1.4">' +
           'Оплачивая услугу, вы подтверждаете согласие с <a href="/docs/user-agreement-offer.pdf" target="_blank" rel="noopener" style="color:var(--gold, #E5C07B);text-decoration:underline;">Пользовательским соглашением (офертой)</a> и <a href="/docs/privacy-policy.pdf" target="_blank" rel="noopener" style="color:var(--gold, #E5C07B);text-decoration:underline;">Политикой конфиденциальности</a>.' +
         '</div>' +
-        '<div class="form-error" id="pay-err" hidden style="margin-top:14px"></div>' +
       '</section>'
     );
   }
 
-  function openKaspiPayModal(sessionId) {
+  function openCardPaymentModal(sessionId) {
     if (!currentUser || !currentUser.termsAccepted) {
       openAuthModal(function () {
-        openKaspiPayModal(sessionId);
+        openCardPaymentModal(sessionId);
       });
       return;
     }
@@ -1944,94 +1940,27 @@
     const p = getSelectedPriceKzt().toLocaleString('ru');
     const tierTitle = selectedTier === 'consultation' ? 'Тариф «FENIX SLS + разбор с юристом»' : 'Тариф «FENIX SLS»';
 
-    const demoDescription = demoPaymentEnabled
-      ? '<p style="color:var(--ink-soft);font-size:13.5px;line-height:1.5">Прямой эквайринг Kaspi QR / Kaspi Pay сейчас на этапе сертификации. Для тестирования можно использовать демо-оплату.</p>'
-      : '<p style="color:var(--ink-soft);font-size:13.5px;line-height:1.5">Прямой эквайринг Kaspi QR / Kaspi Pay сейчас на этапе подключения. Демо-оплата в боевой среде отключена.</p>';
-    const demoModalButton = demoPaymentEnabled
-      ? '<button class="btn-demo" id="kaspi-modal-demo-btn" style="width:100%">⚡ Открыть полный отчёт через Демо-оплату</button>'
-      : '';
-
     modalRoot.innerHTML =
-      '<div class="paywall-modal-overlay" id="kaspi-overlay">' +
+      '<div class="paywall-modal-overlay" id="card-payment-overlay">' +
         '<div class="paywall-modal fade-in" role="dialog" aria-modal="true">' +
-          '<button class="close-btn" id="kaspi-close" aria-label="Закрыть">×</button>' +
-          '<h2 style="color:#F14635;display:flex;align-items:center;gap:10px">🔴 Оплата через Kaspi Pay</h2>' +
+          '<button class="close-btn" id="card-payment-close" aria-label="Закрыть">×</button>' +
+          '<h2 style="color:var(--accent);display:flex;align-items:center;gap:10px">💳 Оплата банковской картой</h2>' +
           '<p style="color:var(--ink);font-weight:600;margin-top:6px">' + esc(tierTitle) + '</p>' +
           '<div class="pay-price-box" style="justify-content:flex-start;margin:16px 0">' +
             '<span class="pay-price-current" style="font-size:32px">' + p + ' ₸</span>' +
           '</div>' +
           '<div style="background:var(--bg-card);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin:16px 0">' +
-            '<p style="color:var(--ink);font-weight:600;margin-bottom:8px">Интеграция Kaspi Pay в процессе подключения</p>' +
-            demoDescription +
+            '<p style="color:var(--ink);font-weight:600;margin-bottom:8px">Защищённая оплата через BCC</p>' +
+            '<p style="color:var(--ink-soft);font-size:13.5px;line-height:1.5">Платёжный шлюз подключается. После запуска вы будете перенаправлены на защищённую страницу банка для ввода данных карты.</p>' +
           '</div>' +
-          demoModalButton +
         '</div>' +
       '</div>';
 
     function close() { modalRoot.innerHTML = ''; }
-    document.getElementById('kaspi-close').addEventListener('click', close);
-    document.getElementById('kaspi-overlay').addEventListener('click', function (e) {
+    document.getElementById('card-payment-close').addEventListener('click', close);
+    document.getElementById('card-payment-overlay').addEventListener('click', function (e) {
       if (e.target === e.currentTarget) close();
     });
-    const modalDemoButton = document.getElementById('kaspi-modal-demo-btn');
-    if (modalDemoButton) {
-      modalDemoButton.addEventListener('click', function () {
-        close();
-        executeDemoPayment(sessionId);
-      });
-    }
-  }
-
-  async function executeDemoPayment(sessionId) {
-    if (!currentUser || !currentUser.termsAccepted) {
-      openAuthModal(function () {
-        executeDemoPayment(sessionId);
-      });
-      return;
-    }
-
-    const errEl = document.getElementById('pay-err');
-    if (errEl) errEl.hidden = true;
-
-    const name = String(currentUser.name || currentUser.company || 'Фаундер').trim();
-    const email = String(currentUser.email || '').trim();
-    const msg = String(currentUser.messenger || '').trim();
-
-    if (name || email) {
-      try {
-        await api('POST', '/api/leads', {
-          sessionId: sessionId,
-          type: selectedTier === 'consultation' ? 'consultation' : 'report_gate',
-          interest: selectedTier === 'consultation' ? 'Тариф FENIX SLS + 60-мин разбор с юристом' : 'Тариф FENIX SLS Полный отчёт',
-          name: name || 'Фаундер',
-          email: email || 'demo@fenixlegal.kz',
-          messenger: msg
-        });
-      } catch (e) {
-        // ignore
-      }
-    }
-
-    try {
-      await api('POST', '/api/sessions/' + sessionId + '/pay', {
-        amount: getSelectedPriceKzt(),
-        method: 'demo_instant'
-      });
-      isPaid = true;
-      unlocked = true;
-      lastResult = null;
-      const reportHash = '#/report/' + sessionId;
-      if (location.hash === reportHash) {
-        screenFullReport(sessionId);
-      } else {
-        location.hash = reportHash;
-      }
-    } catch (err) {
-      if (errEl) {
-        errEl.textContent = 'Ошибка проведения оплаты: ' + err.message;
-        errEl.hidden = false;
-      }
-    }
   }
 
   async function screenResults() {
@@ -2081,8 +2010,8 @@
         if (label) label.textContent = tier === key ? 'Выбран' : 'Выбрать тариф';
       });
       const curP = getSelectedPriceKzt().toLocaleString('ru');
-      const kBtn = document.getElementById('btn-pay-kaspi');
-      if (kBtn) kBtn.textContent = '🔴 Оплатить ' + curP + ' ₸ через Kaspi Pay';
+      const cardButton = document.getElementById('btn-pay-card');
+      if (cardButton) cardButton.textContent = '💳 Оплатить ' + curP + ' ₸ картой';
       const sBtn = document.getElementById('sticky-pay-btn');
       if (sBtn) sBtn.textContent = 'Разблокировать (' + curP + ' ₸)';
     }
@@ -2104,11 +2033,8 @@
       });
     });
 
-    const kaspiBtn = document.getElementById('btn-pay-kaspi');
-    if (kaspiBtn) kaspiBtn.addEventListener('click', function () { openKaspiPayModal(state.sessionId); });
-
-    const demoBtn = document.getElementById('btn-pay-demo');
-    if (demoBtn) demoBtn.addEventListener('click', function () { executeDemoPayment(state.sessionId); });
+    const cardButton = document.getElementById('btn-pay-card');
+    if (cardButton) cardButton.addEventListener('click', function () { openCardPaymentModal(state.sessionId); });
 
     const stickyBtn = document.getElementById('sticky-pay-btn');
     if (stickyBtn) {

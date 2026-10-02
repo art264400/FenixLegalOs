@@ -9,7 +9,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'wwwroot', 'js', 'app.js'), 'utf8');
-const startup = /  window\.addEventListener\('hashchange', route\);\s+route\(\);(?=\s*\}\)\(\);\s*$)/;
+const startup = /  window\.addEventListener\('hashchange', route\);[\s\S]*?  route\(\);(?=\s*\}\)\(\);\s*$)/;
 assert.match(source, startup);
 
 async function flush() {
@@ -77,7 +77,6 @@ function harness(pricing = { priceKzt: 35000, consultationPriceKzt: 79000 }) {
       if (url === '/api/sessions/pricing') result = pricing;
       else if (url === '/api/stats/benchmark' || url === '/api/events') result = {};
       else if (url === '/api/sessions') result = { id: 'new-session' };
-      else if (url === '/api/leads' || url === '/api/sessions/new-session/pay') result = { ok: true };
       else throw new Error('Unexpected request: ' + url);
       return { ok: true, status: 200, json: async () => result };
     },
@@ -108,7 +107,7 @@ function harness(pricing = { priceKzt: 35000, consultationPriceKzt: 79000 }) {
 
 const money = amount => amount.toLocaleString('ru');
 
-test('configured prices match both pages and actual payment follows the clicked tariff', async () => {
+test('configured prices match both pages and card payment modal follows the clicked tariff', async () => {
   const h = harness();
   h.api.authorize();
   h.api.screenLanding();
@@ -125,19 +124,21 @@ test('configured prices match both pages and actual payment follows the clicked 
   assert.equal(h.el('tier-price-report').textContent.trim(), money(35000) + ' ₸');
   assert.equal(h.el('tier-price-consultation').textContent.trim(), money(79000) + ' ₸');
   assert.equal(h.el('tier-card-report').getAttribute('aria-checked'), 'true');
-  assert.ok(h.el('btn-pay-kaspi').textContent.includes(money(35000)));
+  assert.ok(h.el('btn-pay-card').textContent.includes(money(35000)));
+  assert.equal(h.elements.has('btn-pay-demo'), false);
+  assert.equal(h.elements.has('btn-pay-kaspi'), false);
 
   h.el('tier-card-consultation').emit('click');
   assert.equal(h.el('tier-card-report').getAttribute('aria-checked'), 'false');
   assert.equal(h.el('tier-card-consultation').getAttribute('aria-checked'), 'true');
   assert.ok(h.el('sticky-pay-btn').textContent.includes(money(79000)));
-  h.el('btn-pay-demo').emit('click');
+  h.el('btn-pay-card').emit('click');
   await flush();
-  const pay = h.requests.find(request => request.url.endsWith('/pay'));
-  assert.equal(pay.body.amount, 79000);
-  const lead = h.requests.find(request => request.url === '/api/leads');
-  assert.equal(lead.body.type, 'consultation');
-  assert.match(lead.body.interest, /60-мин/);
+  assert.equal(h.elements.has('card-payment-overlay'), true);
+  assert.match(h.el('modal-root').innerHTML, /79[\s ]?000 ₸/);
+  assert.match(h.el('modal-root').innerHTML, /BCC/);
+  assert.equal(h.requests.some(request => request.url.endsWith('/pay')), false);
+  assert.equal(h.requests.some(request => request.url === '/api/leads'), false);
 });
 
 test('consultation selected on landing survives registration callback and session creation', async () => {
@@ -154,7 +155,7 @@ test('consultation selected on landing survives registration callback and sessio
   h.api.prepareResult();
   await h.api.screenResults();
   assert.equal(h.el('tier-card-consultation').getAttribute('aria-checked'), 'true');
-  assert.ok(h.el('btn-pay-kaspi').textContent.includes(money(79000)));
+  assert.ok(h.el('btn-pay-card').textContent.includes(money(79000)));
 });
 
 test('payment keyboard selection updates focus, radio state and both payment amounts', async () => {
@@ -167,7 +168,7 @@ test('payment keyboard selection updates focus, radio state and both payment amo
   assert.equal(h.el('tier-card-report').getAttribute('tabindex'), '0');
   assert.equal(h.el('tier-card-consultation').getAttribute('aria-checked'), 'false');
   assert.equal(h.api.getSelectedPriceKzt(), 35000);
-  assert.ok(h.el('btn-pay-kaspi').textContent.includes(money(35000)));
+  assert.ok(h.el('btn-pay-card').textContent.includes(money(35000)));
   assert.ok(h.el('sticky-pay-btn').textContent.includes(money(35000)));
 
   h.el('tier-card-consultation').emit('keydown', { key: 'Enter', preventDefault() { prevented++; } });
