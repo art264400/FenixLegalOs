@@ -103,7 +103,9 @@ public class AuthController : ControllerBase
         _leads.RecordEvent("user_registered", sessionId, new { userId = user.Id, email = user.Email });
 
         string token = _users.CreateSessionToken(user.Id);
-        Response?.Headers.Append("Set-Cookie", $"fenix_user_token={token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=2592000");
+        bool isHttps = Request.IsHttps || Request.Headers["X-Forwarded-Proto"] == "https";
+        string secureFlag = isHttps ? "; Secure" : "";
+        Response?.Headers.Append("Set-Cookie", $"fenix_user_token={token}; HttpOnly; Path=/; SameSite=Lax{secureFlag}; Max-Age=2592000");
 
         return Ok(new
         {
@@ -147,7 +149,9 @@ public class AuthController : ControllerBase
         _leads.RecordEvent("user_logged_in", sessionId, new { userId = user.Id, email = user.Email });
 
         string token = _users.CreateSessionToken(user.Id);
-        Response?.Headers.Append("Set-Cookie", $"fenix_user_token={token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=2592000");
+        bool isHttps = Request.IsHttps || Request.Headers["X-Forwarded-Proto"] == "https";
+        string secureFlag = isHttps ? "; Secure" : "";
+        Response?.Headers.Append("Set-Cookie", $"fenix_user_token={token}; HttpOnly; Path=/; SameSite=Lax{secureFlag}; Max-Age=2592000");
 
         return Ok(new
         {
@@ -165,4 +169,114 @@ public class AuthController : ControllerBase
             }
         });
     }
+
+    private UserAccount? GetAuthenticatedUser()
+    {
+        try
+        {
+            var req = HttpContext?.Request;
+            if (req == null) return null;
+
+            string? token = null;
+            if (req.Headers.TryGetValue("Authorization", out var authHeader))
+            {
+                var headerStr = authHeader.ToString();
+                if (headerStr.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                {
+                    token = headerStr.Substring("Bearer ".Length).Trim();
+                }
+            }
+
+            if (string.IsNullOrEmpty(token) && req.Cookies.TryGetValue("fenix_user_token", out var cookieToken))
+            {
+                token = cookieToken;
+            }
+
+            if (string.IsNullOrEmpty(token)) return null;
+
+            return _users.GetUserByToken(token);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    [HttpGet("me")]
+    public IActionResult GetMe()
+    {
+        var user = GetAuthenticatedUser();
+        if (user == null)
+        {
+            return Unauthorized(new { error = "unauthorized", message = "Пользователь не авторизован." });
+        }
+
+        return Ok(new
+        {
+            ok = true,
+            user = new
+            {
+                id = user.Id,
+                email = user.Email,
+                name = user.Name,
+                company = user.Company,
+                position = user.Position,
+                messenger = user.Messenger,
+                termsAccepted = user.TermsAccepted
+            }
+        });
+    }
+
+    [HttpGet("me/reports")]
+    public IActionResult GetMyReports()
+    {
+        var user = GetAuthenticatedUser();
+        if (user == null)
+        {
+            return Unauthorized(new { error = "unauthorized", message = "Пользователь не авторизован." });
+        }
+
+        var reports = _users.GetUserSessions(user.Id);
+        return Ok(new
+        {
+            ok = true,
+            reports
+        });
+    }
+
+    [HttpPost("logout")]
+    public IActionResult Logout()
+    {
+        string? token = null;
+        var req = HttpContext?.Request;
+        if (req != null)
+        {
+            if (req.Headers.TryGetValue("Authorization", out var authHeader))
+            {
+                var headerStr = authHeader.ToString();
+                if (headerStr.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                {
+                    token = headerStr.Substring("Bearer ".Length).Trim();
+                }
+            }
+
+            if (string.IsNullOrEmpty(token) && req.Cookies.TryGetValue("fenix_user_token", out var cookieToken))
+            {
+                token = cookieToken;
+            }
+        }
+
+        if (!string.IsNullOrEmpty(token))
+        {
+            _users.RevokeSessionToken(token);
+        }
+
+        bool isHttps = Request.IsHttps || Request.Headers["X-Forwarded-Proto"] == "https";
+        string secureFlag = isHttps ? "; Secure" : "";
+        Response?.Headers.Append("Set-Cookie", $"fenix_user_token=; HttpOnly; Path=/; SameSite=Lax{secureFlag}; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT");
+        return Ok(new { ok = true });
+    }
 }
+
+
+

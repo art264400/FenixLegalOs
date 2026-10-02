@@ -1,4 +1,4 @@
-﻿using FenixLegalOs.Data;
+using FenixLegalOs.Data;
 using FenixLegalOs.Models;
 using FenixLegalOs.Repositories;
 using FenixLegalOs.Services;
@@ -173,5 +173,34 @@ public class ServerDrivenNavigationTests
         var ids = _engine.GetVisibleQuestionIds(answers);
         Assert.NotEmpty(ids);
         Assert.Equal(ids.Count, ids.Distinct().Count());
+    }
+
+    [Fact(DisplayName = "Nav.13 When all visible questions are answered, GetNavigationState returns completed navigation")]
+    public void AllAnswered_Returns_Completed_NavigationState()
+    {
+        var answers = new Dictionary<string, object>();
+        List<string> visibleIds;
+        while (true)
+        {
+            visibleIds = _engine.GetVisibleQuestionIds(answers);
+            bool added = false;
+            foreach (var qId in visibleIds)
+            {
+                if (!answers.ContainsKey(qId))
+                {
+                    answers[qId] = "test_val";
+                    added = true;
+                }
+            }
+            if (!added) break;
+        }
+
+        var nav = _engine.GetNavigationState(answers, null, null);
+
+        Assert.Null(nav.CurrentQuestionId);
+        Assert.Null(nav.NextQuestionId);
+        Assert.Equal(visibleIds[^1], nav.PreviousQuestionId);
+        Assert.Equal(visibleIds.Count + 1, nav.Current);
+        Assert.Equal(visibleIds.Count, nav.TotalVisible);
     }
 }

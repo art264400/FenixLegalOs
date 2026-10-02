@@ -75,6 +75,7 @@
   }
 
   function clearDiagnosticAndPdfState() {
+
     cancelInFlightPdfFetch();
     state.answers = {};
     state.currentQuestionId = null;
@@ -86,6 +87,7 @@
     cachedPdfSessionId = null;
     saveState();
   }
+
 
   const USER_STORAGE_KEY = 'fenix_sls_user_v1';
   try {
@@ -121,6 +123,7 @@
       if (u) localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(u));
       else localStorage.removeItem(USER_STORAGE_KEY);
     } catch (e) { /* ignore */ }
+    updateTopbarAuth();
   }
 
   function openAuthModal(onSuccess, force, onCancel) {
@@ -355,6 +358,286 @@
   }
 
   // ---------------------------------------------------------------------
+  // User Topbar & Cabinet ("Мои отчёты")
+  // ---------------------------------------------------------------------
+
+  function updateTopbarAuth() {
+    const el = document.getElementById('topbar-actions');
+    if (!el) return;
+
+    if (currentUser && currentUser.termsAccepted) {
+      const displayName = currentUser.name || currentUser.company || currentUser.email || 'Кабинет';
+      el.innerHTML =
+        '<button type="button" class="user-badge-btn" id="btn-open-cabinet" title="Открыть личный кабинет и историю отчетов">' +
+          '<span>👤 ' + esc(displayName) + '</span>' +
+          '<span style="opacity:0.6;font-size:11px;">(Отчёты)</span>' +
+        '</button>' +
+        '<button type="button" class="btn-ghost" id="btn-logout" style="padding:6px 12px;font-size:12.5px" title="Выйти из аккаунта">Выйти</button>';
+
+      const btnCab = document.getElementById('btn-open-cabinet');
+      if (btnCab) btnCab.addEventListener('click', openCabinetModal);
+
+      const btnOut = document.getElementById('btn-logout');
+      if (btnOut) {
+        btnOut.addEventListener('click', async function () {
+          try { await api('POST', '/api/auth/logout'); } catch (e) { /* ignore */ }
+          saveUser(null);
+          clearDiagnosticAndPdfState();
+          location.hash = '#/';
+          route();
+        });
+      }
+    } else {
+      el.innerHTML =
+        '<button type="button" class="btn-ghost" id="btn-login-top" style="padding:6px 14px;font-size:13px;border:1px solid var(--line);border-radius:6px;">' +
+          'Войти' +
+        '</button>';
+
+      const btnLogin = document.getElementById('btn-login-top');
+      if (btnLogin) {
+        btnLogin.addEventListener('click', function () {
+          openAuthModal(function () {
+            updateTopbarAuth();
+          }, true);
+        });
+      }
+    }
+  }
+
+  async function startFreshSession() {
+    try {
+      const created = await api('POST', '/api/sessions');
+      state.sessionId = created.id;
+      clearDiagnosticAndPdfState();
+      state.sessionId = created.id;
+      saveState();
+      location.hash = '#/diagnostic';
+      route();
+    } catch (e) {
+      alert('Не удалось создать новый скрининг. Пожалуйста, проверьте интернет-соединение.');
+    }
+  }
+
+  async function openCabinetModal() {
+    if (!currentUser) return;
+
+    modalRoot.innerHTML =
+      '<div class="cabinet-modal-overlay" id="cab-overlay">' +
+        '<div class="cabinet-modal fade-in" role="dialog" aria-modal="true">' +
+          '<div class="cabinet-modal-header">' +
+            '<div class="cabinet-user-info">' +
+              '<h2>👤 ' + esc(currentUser.name || 'Личный кабинет') + '</h2>' +
+              '<div class="cabinet-user-meta">' +
+                esc(currentUser.email) +
+                (currentUser.company ? ' · ' + esc(currentUser.company) : '') +
+                (currentUser.position ? ' (' + esc(currentUser.position) + ')' : '') +
+              '</div>' +
+            '</div>' +
+            '<div style="display:flex;align-items:center;gap:10px">' +
+              '<button type="button" class="cabinet-btn-new" id="cab-new-screening">+ Новая проверка</button>' +
+              '<button class="auth-modal-close" id="cab-close" aria-label="Закрыть" style="position:static;line-height:1">×</button>' +
+            '</div>' +
+          '</div>' +
+          '<div class="cabinet-modal-body" id="cab-body">' +
+            '<div class="spinner" style="margin:40px auto"></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    function closeCab() {
+      modalRoot.innerHTML = '';
+    }
+
+    const closeBtn = document.getElementById('cab-close');
+    if (closeBtn) closeBtn.addEventListener('click', closeCab);
+
+    const overlay = document.getElementById('cab-overlay');
+    if (overlay) {
+      overlay.addEventListener('click', function (e) {
+        if (e.target === e.currentTarget) closeCab();
+      });
+    }
+
+    const newBtn = document.getElementById('cab-new-screening');
+    if (newBtn) {
+      newBtn.addEventListener('click', function () {
+        closeCab();
+        startFreshSession();
+      });
+    }
+
+    try {
+      const res = await api('GET', '/api/auth/me/reports');
+      const reports = (res && res.reports) || [];
+      const bodyEl = document.getElementById('cab-body');
+      if (!bodyEl) return;
+
+      if (reports.length === 0) {
+        bodyEl.innerHTML =
+          '<div class="cabinet-empty-state">' +
+            '<h3>У вас пока нет сохранённых скринингов</h3>' +
+            '<p style="margin-bottom:20px;">Начните первичную диагностику вашей компании, чтобы выявить юридические риски и получить персональный отчет.</p>' +
+            '<button type="button" class="btn" id="cab-start-first-btn">Пройти диагностику</button>' +
+          '</div>';
+
+        const startFirst = document.getElementById('cab-start-first-btn');
+        if (startFirst) {
+          startFirst.addEventListener('click', function () {
+            closeCab();
+            startFreshSession();
+          });
+        }
+        return;
+      }
+
+      let cardsHtml = '';
+      reports.forEach(function (r, index) {
+        const isCurrent = r.id === state.sessionId;
+        const d = r.createdAt ? new Date(r.createdAt) : null;
+        const dateStr = d ? d.toLocaleDateString('ru', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+        const numLabel = 'Скрининг #' + (reports.length - index);
+        const title = r.companyName ? (numLabel + ' · ' + esc(r.companyName)) : numLabel;
+
+
+        let pillClass = 'pill-in-progress';
+        let pillText = 'В процессе';
+
+        if (r.isPaid) {
+          pillClass = 'pill-paid';
+          pillText = 'Оплачен';
+        } else if (r.isCompleted) {
+          pillClass = 'pill-completed';
+          pillText = 'Завершён';
+        }
+
+        let actionBtnText = 'Открыть отчёт';
+        let targetHash = '#/report/' + r.id;
+        if (!r.isCompleted) {
+          actionBtnText = 'Продолжить';
+          targetHash = '#/diagnostic';
+        } else if (!r.isPaid) {
+          actionBtnText = 'Посмотреть результат';
+          targetHash = '#/results';
+        }
+
+        cardsHtml +=
+          '<div class="cabinet-session-card' + (isCurrent ? ' active-session' : '') + '">' +
+            '<div class="cabinet-session-main">' +
+              '<div class="cabinet-session-title">' +
+                title +
+                '<span class="cabinet-status-pill ' + pillClass + '">' + pillText + '</span>' +
+                (isCurrent ? '<span style="font-size:11px;color:var(--gold);font-weight:600;">(Текущая)</span>' : '') +
+              '</div>' +
+              '<div class="cabinet-session-sub">' +
+                '<span>📅 ' + dateStr + '</span>' +
+                '<span>🆔 ' + esc(r.id.substring(0, 8)) + '…</span>' +
+                (r.isCompleted ? ('<span>Критических: <b style="color:var(--critical)">' + r.criticalCount + '</b></span>') : '') +
+                (r.isCompleted ? ('<span>Высоких: <b style="color:var(--warning)">' + r.highCount + '</b></span>') : '') +
+              '</div>' +
+            '</div>' +
+            '<div class="cabinet-session-right">' +
+              (r.overallScore !== null && r.overallScore !== undefined
+                ? ('<div class="cabinet-score-badge">' +
+                     '<div class="cabinet-score-val">' + r.overallScore + '<span style="font-size:13px;color:var(--ink-faint)">/100</span></div>' +
+                     '<div class="cabinet-score-lbl">Score</div>' +
+                   '</div>')
+                : '') +
+              '<button type="button" class="btn btn-sm cab-open-btn" data-id="' + esc(r.id) + '" data-target="' + targetHash + '" data-completed="' + r.isCompleted + '">' +
+                actionBtnText +
+              '</button>' +
+            '</div>' +
+          '</div>';
+      });
+
+      bodyEl.innerHTML = cardsHtml;
+
+      bodyEl.querySelectorAll('.cab-open-btn').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+          const sid = btn.getAttribute('data-id');
+          const thash = btn.getAttribute('data-target');
+          const isComp = btn.getAttribute('data-completed') === 'true';
+
+          closeCab();
+
+          if (state.sessionId !== sid) {
+            state.sessionId = sid;
+            state.answers = {};
+            state.currentQuestionId = null;
+            serverNav = null;
+            lastResult = null;
+            unlocked = false;
+            isPaid = false;
+            saveState();
+          }
+
+          if (thash === '#/diagnostic') {
+            loadSessionAnswersAndResume(sid);
+          } else if (thash === '#/results') {
+            location.hash = '#/results';
+            loadResultFromServer(sid, '#/results');
+          } else {
+            location.hash = thash;
+            screenFullReport(sid);
+          }
+        });
+      });
+
+    } catch (err) {
+      const bodyEl = document.getElementById('cab-body');
+      if (bodyEl) {
+        bodyEl.innerHTML = '<div style="color:var(--critical);padding:20px;text-align:center;">Не удалось загрузить историю сессий. Попробуйте позже.</div>';
+      }
+    }
+  }
+
+  function renderAnswersLoadError(sessionId) {
+    render(
+      '<section class="q-screen wrap-narrow">' +
+        '<h2 style="color:var(--critical); font-size:24px;">Не удалось загрузить ответы</h2>' +
+        '<p style="color:var(--ink-soft); margin:12px 0 24px;">Произошла сетевая ошибка при получении сохранённых ответов вашей анкеты с сервера. Чтобы не потерять данные, скрининг не может быть продолжен без загрузки ответов.</p>' +
+        '<div class="q-nav">' +
+          '<button class="btn" id="retry-load-answers-btn">Повторить</button>' +
+          '<button class="btn-ghost" onclick="location.hash=\'#/\'">На главную</button>' +
+        '</div>' +
+      '</section>'
+    );
+    const retryBtn = document.getElementById('retry-load-answers-btn');
+    if (retryBtn) {
+      retryBtn.addEventListener('click', function () {
+        loadSessionAnswersAndResume(sessionId);
+      });
+    }
+  }
+
+  async function loadSessionAnswersAndResume(sessionId) {
+    render(
+      '<section class="q-screen wrap-narrow">' +
+        '<div class="spinner" style="margin:50px auto"></div>' +
+        '<p style="text-align:center;color:var(--ink-soft);font-size:14px;">Загружаем сохранённые ответы…</p>' +
+      '</section>'
+    );
+    try {
+      const ansRes = await api('GET', '/api/sessions/' + sessionId + '/answers');
+      if (!ansRes || !ansRes.answers || typeof ansRes.answers !== 'object') {
+        throw new Error('invalid_answers_response');
+      }
+      state.sessionId = sessionId;
+      state.answers = ansRes.answers;
+      state.currentQuestionId = ansRes.currentQuestionId || null;
+      saveState();
+
+      location.hash = '#/diagnostic';
+      route();
+
+    } catch (err) {
+      console.error('[Diagnostic] Failed to fetch session answers for ' + sessionId, err);
+      renderAnswersLoadError(sessionId);
+    }
+  }
+
+
+
+  // ---------------------------------------------------------------------
   // Re-authentication on session expiry
   // ---------------------------------------------------------------------
 
@@ -507,15 +790,18 @@
       state.sessionId = created.id;
       saveState();
     }
+    const targetQId = currentQuestionId || state.currentQuestionId || null;
     var nav = await api('POST', '/api/sessions/' + state.sessionId + '/navigate', {
       answers: answers,
-      currentQuestionId: currentQuestionId || state.currentQuestionId || null
+      currentQuestionId: targetQId
     });
     serverNav = nav;
     state.currentQuestionId = nav.currentQuestionId;
     saveState();
     return nav;
   }
+
+
 
   function renderNavError() {
     render(
@@ -1279,6 +1565,8 @@
         } else {
           await syncNav(state.answers, state.currentQuestionId);
         }
+
+
 
         if (!serverNav || !serverNav.currentQuestionId) {
           finishDiagnostic();
@@ -2162,17 +2450,49 @@
           '<div class="spinner" style="margin:50px auto"></div>' +
         '</section>'
       );
-      syncNav(state.answers, state.currentQuestionId).then(function () {
+      (async function () {
+        // If state has an existing sessionId but answers is empty, restore them from server
+        if (state.sessionId && (!state.answers || Object.keys(state.answers).length === 0)) {
+          const ansRes = await api('GET', '/api/sessions/' + state.sessionId + '/answers');
+          if (!ansRes || !ansRes.answers || typeof ansRes.answers !== 'object') {
+            throw new Error('invalid_answers_response');
+          }
+          state.answers = ansRes.answers;
+          state.currentQuestionId = ansRes.currentQuestionId || null;
+          saveState();
+        }
+        return syncNav(state.answers, state.currentQuestionId);
+
+      })().then(function () {
         screenQuestion();
-      }).catch(function () {
-        renderNavError();
+      }).catch(function (err) {
+        if (state.sessionId && (!state.answers || Object.keys(state.answers).length === 0)) {
+          renderAnswersLoadError(state.sessionId);
+        } else {
+          renderNavError();
+        }
       });
       return;
     }
+
     if (hash === '#/results') { screenResults(); return; }
     screenLanding();
+
   }
 
   window.addEventListener('hashchange', route);
+  updateTopbarAuth();
+  // Check auth session freshness from server
+  api('GET', '/api/auth/me').then(function (res) {
+    if (res && res.user) {
+      saveUser(res.user);
+    }
+  }).catch(function () {
+    // If token invalid, clear stale local storage user
+    if (currentUser) {
+      saveUser(null);
+    }
+  });
   route();
 })();
+

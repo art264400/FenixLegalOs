@@ -121,7 +121,11 @@ public class SessionsController : ControllerBase
         string? currentQuestionId = body.TryGetProperty("currentQuestionId", out var cqProp) ? cqProp.GetString() : null;
         string? answeredQuestionId = body.TryGetProperty("answeredQuestionId", out var aqProp) ? aqProp.GetString() : null;
 
-        bool ok = _sessions.SaveAnswers(id, answersJson, lastSectionId);
+        // Step 2: Calculate next navigation question first
+        var navigation = _scoringEngine.GetNavigationState(answersDict, currentQuestionId, answeredQuestionId);
+
+        // Step 3: Save answers, last_section_id and calculated current_question_id in a single DB update
+        bool ok = _sessions.SaveAnswers(id, answersJson, lastSectionId, navigation.CurrentQuestionId);
         if (!ok)
         {
             var curSession = _sessions.GetSession(id);
@@ -132,8 +136,6 @@ public class SessionsController : ControllerBase
             return NotFound(new { error = "not_found" });
         }
 
-        // Architecture A: Return authoritative navigation state alongside save acknowledgement.
-        var navigation = _scoringEngine.GetNavigationState(answersDict, currentQuestionId, answeredQuestionId);
         return Ok(new { accepted = true, navigation });
     }
 
@@ -145,8 +147,23 @@ public class SessionsController : ControllerBase
         if (session == null) return NotFound(new { error = "not_found" });
 
         var answersDict = JsonSerializer.Deserialize<Dictionary<string, object>>(session.AnswersJson) ?? new();
-        return Ok(new { answers = answersDict, lastSectionId = session.LastSectionId });
+        string? currentQuestionId = session.CurrentQuestionId;
+
+        // Fallback for legacy sessions where CurrentQuestionId is null in DB
+        if (string.IsNullOrEmpty(currentQuestionId) && string.IsNullOrEmpty(session.CompletedAt))
+        {
+            var nav = _scoringEngine.GetNavigationState(answersDict, null, null);
+            currentQuestionId = nav.CurrentQuestionId;
+        }
+
+        return Ok(new
+        {
+            answers = answersDict,
+            currentQuestionId,
+            lastSectionId = session.LastSectionId
+        });
     }
+
 
     [HttpPost("{id}/complete")]
     [RequireSessionAccess(disallowCompleted: true)]

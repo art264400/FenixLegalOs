@@ -2132,3 +2132,306 @@ table.data tr.clickable:hover td { background: rgba(89, 194, 255, 0.05); }
   color: var(--critical, #F87171);
   padding: 10px 14px; border-radius: 6px; font-size: 13px; line-height: 1.4;
 }
+
+/* User topbar controls & Cabinet Modal -------------------------------------- */
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-badge-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line-strong, rgba(255,255,255,0.12));
+  color: var(--ink, #FFF);
+  padding: 8px 16px;
+  border-radius: var(--radius-sm, 6px);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.user-badge-btn:hover {
+  background: rgba(229, 192, 123, 0.12);
+  border-color: var(--gold, #E5C07B);
+  color: var(--gold, #E5C07B);
+}
+
+.cabinet-btn-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, var(--gold, #E5C07B), #C59B48);
+  color: #060A13;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm, 6px);
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 0.2s ease;
+}
+.cabinet-btn-new:hover {
+  filter: brightness(1.15);
+}
+
+.cabinet-modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(6, 10, 19, 0.88);
+  backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000; padding: 20px;
+}
+
+.cabinet-modal {
+  background: var(--bg-surface, #0A0F1D);
+  border: 1px solid var(--line-strong, rgba(255,255,255,0.15));
+  border-radius: var(--radius, 12px);
+  width: 100%; max-width: 780px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+  animation: modalIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cabinet-modal-header {
+  padding: 24px 28px 18px;
+  border-bottom: 1px solid var(--line, rgba(255,255,255,0.08));
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.cabinet-user-info h2 {
+  font-size: 20px;
+  color: #FFF;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cabinet-user-meta {
+  font-size: 13px;
+  color: var(--ink-soft, #94A3B8);
+}
+
+.cabinet-modal-body {
+  padding: 24px 28px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cabinet-session-card {
+  background: var(--bg-card, #070B14);
+  border: 1px solid var(--line, rgba(255,255,255,0.08));
+  border-radius: var(--radius-sm, 8px);
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  transition: border-color 0.2s ease, transform 0.15s ease;
+}
+
+.cabinet-session-card:hover {
+  border-color: rgba(229, 192, 123, 0.4);
+  transform: translateY(-1px);
+}
+
+.cabinet-session-card.active-session {
+  border-left: 4px solid var(--gold, #E5C07B);
+}
+
+.cabinet-session-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cabinet-session-title {
+  font-size: 15.5px;
+  font-weight: 600;
+  color: #FFF;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cabinet-status-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.pill-completed {
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ADE80;
+  border: 1px solid rgba(74, 222, 128, 0.3);
+}
+
+.pill-in-progress {
+  background: rgba(251, 191, 36, 0.15);
+  color: #FBBF24;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.pill-paid {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38BDF8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.cabinet-session-sub {
+  font-size: 12.5px;
+  color: var(--ink-faint, #64748B);
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.cabinet-session-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.cabinet-score-badge {
+  text-align: right;
+  min-width: 65px;
+}
+
+.cabinet-score-val {
+  font-size: 22px;
+  font-weight: 700;
+  font-family: var(--serif, 'Cinzel', serif);
+  color: var(--gold, #E5C07B);
+  line-height: 1;
+}
+
+.cabinet-score-lbl {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--ink-faint, #64748B);
+  letter-spacing: 0.05em;
+}
+
+.cabinet-empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--ink-soft, #94A3B8);
+}
+
+.cabinet-empty-state h3 {
+  font-size: 18px;
+  color: #FFF;
+  margin-bottom: 8px;
+}
+
+/* Cabinet and Topbar Mobile Responsive ------------------------------------- */
+
+@media (max-width: 768px) {
+  .topbar {
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 16px 0;
+    margin-bottom: 24px;
+  }
+  .topbar .tagline {
+    display: none; /* Hide long tagline on mobile to keep header clean */
+  }
+  .topbar-actions {
+    margin-left: auto;
+    gap: 8px;
+  }
+  .user-badge-btn {
+    padding: 7px 12px;
+    font-size: 12.5px;
+    max-width: 170px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .cabinet-modal-overlay {
+    padding: 12px;
+  }
+  .cabinet-modal {
+    max-height: 94vh;
+    border-radius: 12px;
+  }
+  .cabinet-modal-header {
+    padding: 18px 18px 14px;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .cabinet-modal-header > div:last-child {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .cabinet-btn-new {
+    flex: 1;
+    justify-content: center;
+    padding: 9px 14px;
+    font-size: 13px;
+  }
+  .cabinet-modal-body {
+    padding: 16px;
+    gap: 12px;
+  }
+  .cabinet-session-card {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 16px;
+    gap: 14px;
+  }
+  .cabinet-session-main {
+    width: 100%;
+  }
+  .cabinet-session-title {
+    flex-wrap: wrap;
+    font-size: 14.5px;
+    gap: 8px;
+  }
+  .cabinet-session-right {
+    width: 100%;
+    justify-content: space-between;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .cab-open-btn {
+    flex: 1;
+    max-width: 180px;
+    padding: 8px 14px;
+    text-align: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .brand-logo {
+    height: 38px;
+  }
+  .brand-text strong {
+    font-size: 17px;
+  }
+  .user-badge-btn {
+    max-width: 140px;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  .user-badge-btn span:last-child {
+    display: none; /* Hide (Отчёты) label on very narrow screens */
+  }
+}
+
+

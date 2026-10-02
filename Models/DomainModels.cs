@@ -225,7 +225,9 @@ public class DiagnosticSession
     public string? TermsAcceptedAt { get; set; }
     public byte[]? PdfBytes { get; set; }
     public string? PdfGeneratedAt { get; set; }
+    public string? CurrentQuestionId { get; set; }
 }
+
 
 public class Lead
 {

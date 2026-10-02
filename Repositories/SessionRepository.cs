@@ -44,26 +44,29 @@ public class SessionRepository
                     paid AS Paid, paid_at AS PaidAt, payment_amount AS PaymentAmount,
                     payment_method AS PaymentMethod, user_id AS UserId,
                     terms_accepted AS TermsAccepted, terms_accepted_at AS TermsAcceptedAt,
-                    pdf_bytes AS PdfBytes, pdf_generated_at AS PdfGeneratedAt
+                    pdf_bytes AS PdfBytes, pdf_generated_at AS PdfGeneratedAt,
+                    current_question_id AS CurrentQuestionId
              FROM sessions WHERE id = @id", new { id });
         return session;
     }
 
-    public bool SaveAnswers(string id, string answersJson, string? lastSectionId)
+    public bool SaveAnswers(string id, string answersJson, string? lastSectionId, string? currentQuestionId = null)
     {
         using var conn = GetConn();
         var now = DateTime.UtcNow.ToString("o");
         int rows = conn.Execute(@"
-            INSERT INTO sessions (id, created_at, updated_at, answers, last_section_id)
-            VALUES (@id, @now, @now, @answersJson, @lastSectionId)
+            INSERT INTO sessions (id, created_at, updated_at, answers, last_section_id, current_question_id)
+            VALUES (@id, @now, @now, @answersJson, @lastSectionId, @currentQuestionId)
             ON CONFLICT(id) DO UPDATE SET
                 answers = excluded.answers,
                 last_section_id = excluded.last_section_id,
+                current_question_id = excluded.current_question_id,
                 updated_at = excluded.updated_at
             WHERE sessions.completed_at IS NULL;
-        ", new { answersJson, lastSectionId, now, id });
+        ", new { answersJson, lastSectionId, currentQuestionId, now, id });
         return rows > 0;
     }
+
 
     public bool CompleteSession(string id, string answersJson, ScoreResult result)
     {

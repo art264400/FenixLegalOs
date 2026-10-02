@@ -222,8 +222,33 @@ public class ScoringEngine
             currentIndex = visibleIds.IndexOf(currentQuestionId);
         }
 
-        // 3. Fallback: snap to first visible question
-        if (currentIndex < 0) currentIndex = 0;
+        // 3. Fallback for existing/restored sessions: find first unanswered visible question
+        if (currentIndex < 0)
+        {
+            for (int i = 0; i < visibleIds.Count; i++)
+            {
+                var qId = visibleIds[i];
+                if (!answers.ContainsKey(qId) || answers[qId] == null)
+                {
+                    currentIndex = i;
+                    break;
+                }
+            }
+        }
+
+        // 4. Fallback if all questions are answered: return completed navigation
+        if (currentIndex < 0)
+        {
+            return new NavigationState
+            {
+                VisibleQuestionIds = visibleIds,
+                CurrentQuestionId = null,
+                PreviousQuestionId = visibleIds[^1],
+                NextQuestionId = null,
+                Current = total + 1,
+                TotalVisible = total
+            };
+        }
 
         return new NavigationState
         {

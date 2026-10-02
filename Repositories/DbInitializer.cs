@@ -104,8 +104,10 @@ public class DbInitializer
                 payment_amount INTEGER,
                 payment_method TEXT,
                 pdf_bytes BLOB,
-                pdf_generated_at TEXT
+                pdf_generated_at TEXT,
+                current_question_id TEXT
             );
+
 
             CREATE TABLE IF NOT EXISTS leads (
                 id TEXT PRIMARY KEY,
@@ -269,8 +271,10 @@ public class DbInitializer
         TryAddColumn(conn, "sessions", "terms_accepted_at", "TEXT");
         TryAddColumn(conn, "sessions", "pdf_bytes", "BLOB");
         TryAddColumn(conn, "sessions", "pdf_generated_at", "TEXT");
+        TryAddColumn(conn, "sessions", "current_question_id", "TEXT");
 
         TryAddColumn(conn, "leads", "paid", "INTEGER NOT NULL DEFAULT 0");
+
         TryAddColumn(conn, "leads", "paid_at", "TEXT");
         TryAddColumn(conn, "leads", "payment_amount", "INTEGER");
         TryAddColumn(conn, "leads", "payment_method", "TEXT");

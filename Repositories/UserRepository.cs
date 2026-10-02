@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text.Json;
 using Dapper;
 using FenixLegalOs.Models;
 using Microsoft.Data.Sqlite;
@@ -185,4 +186,89 @@ public class UserRepository
 
         return user;
     }
+
+    public bool RevokeSessionToken(string token)
+    {
+        if (string.IsNullOrWhiteSpace(token)) return false;
+
+        using var conn = GetConn();
+        int rows = conn.Execute(@"
+            DELETE FROM user_tokens
+            WHERE token = @token
+        ", new { token });
+
+        return rows > 0;
+    }
+
+    public List<UserSessionSummaryDto> GetUserSessions(string userId)
+
+    {
+        using var conn = GetConn();
+        var user = GetUserById(userId);
+        string? userCompany = user?.Company;
+
+        var sessions = conn.Query<DiagnosticSession>(@"
+            SELECT id AS Id, created_at AS CreatedAt, updated_at AS UpdatedAt,
+                   answers AS AnswersJson, completed_at AS CompletedAt,
+                   result AS ResultJson, paid AS Paid, paid_at AS PaidAt,
+                   user_id AS UserId, (pdf_bytes IS NOT NULL AND length(pdf_bytes) > 0) AS TermsAccepted
+            FROM sessions
+            WHERE user_id = @userId
+            ORDER BY created_at DESC
+        ", new { userId }).ToList();
+
+        var list = new List<UserSessionSummaryDto>();
+        foreach (var s in sessions)
+        {
+            var summary = new UserSessionSummaryDto
+            {
+                Id = s.Id,
+                CreatedAt = s.CreatedAt,
+                UpdatedAt = s.UpdatedAt,
+                CompletedAt = s.CompletedAt,
+                IsCompleted = !string.IsNullOrEmpty(s.CompletedAt),
+                IsPaid = s.Paid,
+                PaidAt = s.PaidAt,
+                HasPdf = s.TermsAccepted, // mapped from alias
+                CompanyName = userCompany
+            };
+
+
+            // Extract score and counts from result if available
+            if (!string.IsNullOrWhiteSpace(s.ResultJson))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(s.ResultJson);
+                    var root = doc.RootElement;
+                    if (root.TryGetProperty("Overall", out var ov) && ov.TryGetInt32(out var score))
+                    {
+                        summary.OverallScore = score;
+                    }
+                    if (root.TryGetProperty("LevelTitle", out var lt))
+                    {
+                        summary.LevelTitle = lt.GetString();
+                    }
+                    if (root.TryGetProperty("CriticalCount", out var cc) && cc.TryGetInt32(out var cVal))
+                    {
+                        summary.CriticalCount = cVal;
+                    }
+                    if (root.TryGetProperty("HighCount", out var hc) && hc.TryGetInt32(out var hVal))
+                    {
+                        summary.HighCount = hVal;
+                    }
+                    if (root.TryGetProperty("MediumCount", out var mc) && mc.TryGetInt32(out var mVal))
+                    {
+                        summary.MediumCount = mVal;
+                    }
+                }
+                catch { }
+            }
+
+            list.Add(summary);
+        }
+
+        return list;
+    }
 }
+
