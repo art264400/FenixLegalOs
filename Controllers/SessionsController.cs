@@ -20,6 +20,8 @@ public class SessionsController : ControllerBase
     private readonly SettingsRepository _settings;
     private readonly QuestionRepository _questionRepo;
     private readonly UserRepository? _users;
+    private readonly IWebHostEnvironment? _environment;
+    private readonly IConfiguration? _configuration;
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Task<byte[]?>> _pdfGenerationTasks = new();
 
     public SessionsController(
@@ -30,7 +32,9 @@ public class SessionsController : ControllerBase
         AiReportService aiReportService,
         SettingsRepository settings,
         QuestionRepository questionRepo,
-        UserRepository? users = null)
+        UserRepository? users = null,
+        IWebHostEnvironment? environment = null,
+        IConfiguration? configuration = null)
     {
         _sessions = sessions;
         _leads = leads;
@@ -40,7 +44,13 @@ public class SessionsController : ControllerBase
         _settings = settings;
         _questionRepo = questionRepo;
         _users = users;
+        _environment = environment;
+        _configuration = configuration;
     }
+
+    private bool DemoPaymentEnabled =>
+        string.Equals(_environment?.EnvironmentName, "Development", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(_configuration?["FENIX_ENABLE_DEMO_PAYMENT"], "true", StringComparison.OrdinalIgnoreCase);
 
     private UserAccount? GetAuthenticatedUser()
     {
@@ -79,7 +89,16 @@ public class SessionsController : ControllerBase
     [HttpGet("pricing")]
     public IActionResult GetPricing()
     {
-        return Ok(_settings.GetPricing());
+        var pricing = _settings.GetPricing();
+        return Ok(new
+        {
+            pricing.PriceKzt,
+            pricing.OldPriceKzt,
+            pricing.ConsultationPriceKzt,
+            pricing.Currency,
+            pricing.DiscountPercent,
+            demoPaymentEnabled = DemoPaymentEnabled
+        });
     }
 
     [HttpPost]
@@ -197,7 +216,14 @@ public class SessionsController : ControllerBase
         }
         _leads.RecordEvent("diagnostic_completed", id, new { overall = result.Overall, critical = result.CriticalCount });
 
-        return Ok(new { result });
+        bool paid = session.Paid;
+        object clientResult = paid ? result : ScoreResultPreviewDto.From(result);
+        return Ok(new
+        {
+            result = clientResult,
+            preview = !paid,
+            paid
+        });
     }
 
     [HttpPost("{id}/navigate")]
@@ -228,27 +254,19 @@ public class SessionsController : ControllerBase
             return NotFound(new { error = "not_found" });
 
         var result = JsonSerializer.Deserialize<ScoreResult>(session.ResultJson);
+        if (result == null)
+            return StatusCode(StatusCodes.Status500InternalServerError, new { error = "invalid_result" });
+
         bool unlocked = _leads.FindLeadsBySession(id).Any();
         bool paid = session.Paid;
-
-        if (!paid && result != null)
-        {
-            for (int i = 0; i < result.Risks.Count; i++)
-            {
-                if (i >= 2)
-                {
-                    result.Risks[i].Finding = "Детальный разбор доступен в полном платном отчете";
-                    result.Risks[i].WhyItMatters = "Информация скрыта в бесплатной демо-версии";
-                    result.Risks[i].Recommendation = "Разблокируйте отчёт и дорожную карту для просмотра рекомендаций юриста";
-                }
-            }
-        }
+        object clientResult = paid ? result : ScoreResultPreviewDto.From(result);
 
         return Ok(new
         {
-            result,
+            result = clientResult,
+            preview = !paid,
             unlocked,
-            paid = session.Paid,
+            paid,
             paidAt = session.PaidAt,
             paymentAmount = session.PaymentAmount,
             paymentMethod = session.PaymentMethod
@@ -415,11 +433,21 @@ public class SessionsController : ControllerBase
     [RequireSessionAccess]
     public IActionResult ProcessPayment(string id, [FromBody] JsonElement body)
     {
+        if (!DemoPaymentEnabled)
+            return NotFound(new { error = "not_found" });
+
         var session = _sessions.GetSession(id);
         if (session == null) return NotFound(new { error = "session_not_found" });
 
-        int amount = body.TryGetProperty("amount", out var amProp) ? amProp.GetInt32() : _settings.GetPricing().PriceKzt;
-        string method = body.TryGetProperty("method", out var mProp) ? mProp.GetString() ?? "kaspi_pay" : "kaspi_pay";
+        var pricing = _settings.GetPricing();
+        int amount = body.TryGetProperty("amount", out var amProp) ? amProp.GetInt32() : pricing.PriceKzt;
+        string method = body.TryGetProperty("method", out var mProp) ? mProp.GetString() ?? "" : "";
+
+        if (!string.Equals(method, "demo_instant", StringComparison.Ordinal) ||
+            (amount != pricing.PriceKzt && amount != pricing.ConsultationPriceKzt))
+        {
+            return BadRequest(new { error = "invalid_demo_payment" });
+        }
 
         _sessions.MarkSessionPaid(id, amount, method);
         _leads.RecordEvent("payment_completed", id, new { amount, method });

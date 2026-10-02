@@ -31,6 +31,7 @@
   let lastResult = null;
   let unlocked = false;
   let isPaid = false;
+  let demoPaymentEnabled = false;
   var serverNav = null;
   let cachedPdfBlob = null;
   let cachedPdfSessionId = null;
@@ -1644,7 +1645,7 @@
       const data = await api('POST', '/api/sessions/' + state.sessionId + '/complete', { answers: state.answers });
       lastResult = data.result;
       unlocked = false;
-      isPaid = false;
+      isPaid = Boolean(data.paid);
       if (location.hash === '#/results') {
         screenResults();
       } else {
@@ -1747,7 +1748,10 @@
     if (r.criticalCount) chips.push('<span class="chip-critical">' + r.criticalCount + ' критических</span>');
     if (r.highCount) chips.push('<span class="chip-high">' + r.highCount + ' высоких</span>');
     if (r.mediumCount) chips.push('<span class="chip-medium">' + r.mediumCount + ' умеренных</span>');
-    if (r.strengths && r.strengths.length) chips.push('<span class="chip-positive">' + r.strengths.length + ' сильных областей</span>');
+    const strengthCount = Number.isFinite(r.strengthCount)
+      ? r.strengthCount
+      : (r.strengths && r.strengths.length ? r.strengths.length : 0);
+    if (strengthCount) chips.push('<span class="chip-positive">' + strengthCount + ' сильных областей</span>');
     const confVal = r.confidence || 85;
     const confText = r.confidenceText || 'Высокая определенность ответов.';
     return (
@@ -1775,20 +1779,41 @@
 
 
   function renderBlurredReportBackground(r, sessionId) {
-    const bySeverity = { critical: [], high: [], medium: [] };
-    r.risks.forEach(function (x) {
-      const s = (x.severity || '').toLowerCase();
-      if (s === 'critical' || s === 'blocker') bySeverity.critical.push(x);
-      else if (s === 'high') bySeverity.high.push(x);
-      else bySeverity.medium.push(x);
-    });
+    function lockedItems(count, severity, label) {
+      const visibleCount = Math.min(Math.max(Number(count) || 0, 0), 3);
+      return Array.from({ length: visibleCount }, function (_, index) {
+        return {
+          code: 'LOCKED-' + severity + '-' + index,
+          severity: severity,
+          title: label + ' — детали доступны после оплаты',
+          finding: 'Персональный разбор выявленного риска скрыт в предварительной версии.',
+          whyItMatters: 'Полный отчёт содержит влияние риска на компанию и возможные последствия.',
+          recommendation: 'После оплаты будет доступен приоритетный план действий.',
+          resolution: 'SelfService',
+          lawyerRequired: false
+        };
+      });
+    }
+
+    const bySeverity = {
+      critical: lockedItems(r.criticalCount, 'critical', 'Критический вопрос'),
+      high: lockedItems(r.highCount, 'high', 'Существенный вопрос'),
+      medium: lockedItems(r.mediumCount, 'medium', 'Умеренный вопрос')
+    };
+
+    const lockedRoadmap =
+      '<section class="roadmap">' +
+        '<h2>Что делать дальше</h2>' +
+        '<div class="phase"><div class="phase-title">Сейчас</div><ol><li>Персональный приоритетный шаг доступен в полном отчёте</li></ol></div>' +
+        '<div class="phase"><div class="phase-title">В течение 30 дней</div><ol><li>Детальная дорожная карта откроется после оплаты</li></ol></div>' +
+      '</section>';
 
     return (
       '<div class="blurred-preview-layer">' +
         block('Критические вопросы', bySeverity.critical, 'Вопросы, которые могут влиять на контроль над компанией, принадлежность продукта или ближайшую сделку.') +
         block('Существенные вопросы', bySeverity.high, 'Пробелы, которые, вероятно, потребуется закрыть при росте или инвестиционном раунде.') +
         block('Умеренные вопросы', bySeverity.medium, 'Вопросы, требующие внимания в рабочем порядке.') +
-        buildRoadmap(r) +
+        lockedRoadmap +
       '</div>'
     );
   }
@@ -1837,6 +1862,7 @@
     const offer = TARIFFS[tier];
     const consultation = tier === 'consultation';
     const selected = selectedTier === tier;
+    const note = payment && tier === 'report' ? '' : offer.note;
     const priceId = payment ? 'tier-price-' + tier : 'landing-price-' + (consultation ? '2' : '1');
     const titleId = (payment ? 'payment' : 'landing') + '-title-' + tier;
     const attributes = payment
@@ -1856,7 +1882,7 @@
         (payment
           ? '<span class="pricing-selection" id="tier-selection-' + tier + '">' + (selected ? 'Выбран' : 'Выбрать тариф') + '</span>'
           : '<button class="btn pricing-btn" id="start-btn-' + (consultation ? '3' : '2') + '">Пройти диагностику</button>') +
-        '<div class="pricing-note">' + esc(offer.note) + '</div>' +
+        (note ? '<div class="pricing-note">' + esc(note) + '</div>' : '') +
       '</div>' +
     '</div>';
   }
@@ -1866,6 +1892,7 @@
       const data = await api('GET', '/api/sessions/pricing');
       if (data && Number.isFinite(data.priceKzt) && data.priceKzt >= 0) {
         currentPricing = { ...DEFAULT_PRICING, ...data };
+        demoPaymentEnabled = data.demoPaymentEnabled === true;
       }
     } catch (e) {
       // fallback
@@ -1880,6 +1907,9 @@
 
   function renderPaywallSection(sessionId) {
     const currentSelectedPrice = getSelectedPriceKzt().toLocaleString('ru');
+    const demoButton = demoPaymentEnabled
+      ? '<button class="btn-demo" id="btn-pay-demo">⚡ Демо-оплата в 1 клик (Бесплатно)</button>'
+      : '';
 
     return (
       '<section class="pay-card-container" id="pay-section">' +
@@ -1891,15 +1921,9 @@
           renderPricingCard('report', true) +
           renderPricingCard('consultation', true) +
         '</div>' +
-
-        '<div style="max-width:480px;margin:0 auto 16px;text-align:left">' +
-          '<div class="field"><label for="g-name" style="font-size:12.5px">Ваше имя</label><input id="g-name" value="' + esc((currentUser && currentUser.name) || '') + '" placeholder="Фаундер / СЕО" maxlength="120"></div>' +
-          '<div class="field" style="margin-top:10px"><label for="g-email" style="font-size:12.5px">Email (для отправки копии PDF)</label><input id="g-email" type="email" value="' + esc((currentUser && currentUser.email) || '') + '" placeholder="founder@company.com" maxlength="200"></div>' +
-          '<div class="field" style="margin-top:10px"><label for="g-msg" style="font-size:12.5px">WhatsApp / Telegram (необязательно)</label><input id="g-msg" value="' + esc((currentUser && currentUser.messenger) || '') + '" placeholder="@username / +7..." maxlength="120"></div>' +
-        '</div>' +
         '<div class="pay-btn-group">' +
           '<button class="btn-kaspi" id="btn-pay-kaspi">🔴 Оплатить ' + currentSelectedPrice + ' ₸ через Kaspi Pay</button>' +
-          '<button class="btn-demo" id="btn-pay-demo">⚡ Демо-оплата в 1 клик (Бесплатно)</button>' +
+          demoButton +
         '</div>' +
         '<div style="margin-top:14px;font-size:12px;color:var(--ink-faint);text-align:center;line-height:1.4">' +
           'Оплачивая услугу, вы подтверждаете согласие с <a href="/docs/user-agreement-offer.pdf" target="_blank" rel="noopener" style="color:var(--gold, #E5C07B);text-decoration:underline;">Пользовательским соглашением (офертой)</a> и <a href="/docs/privacy-policy.pdf" target="_blank" rel="noopener" style="color:var(--gold, #E5C07B);text-decoration:underline;">Политикой конфиденциальности</a>.' +
@@ -1920,6 +1944,13 @@
     const p = getSelectedPriceKzt().toLocaleString('ru');
     const tierTitle = selectedTier === 'consultation' ? 'Тариф «FENIX SLS + разбор с юристом»' : 'Тариф «FENIX SLS»';
 
+    const demoDescription = demoPaymentEnabled
+      ? '<p style="color:var(--ink-soft);font-size:13.5px;line-height:1.5">Прямой эквайринг Kaspi QR / Kaspi Pay сейчас на этапе сертификации. Для тестирования можно использовать демо-оплату.</p>'
+      : '<p style="color:var(--ink-soft);font-size:13.5px;line-height:1.5">Прямой эквайринг Kaspi QR / Kaspi Pay сейчас на этапе подключения. Демо-оплата в боевой среде отключена.</p>';
+    const demoModalButton = demoPaymentEnabled
+      ? '<button class="btn-demo" id="kaspi-modal-demo-btn" style="width:100%">⚡ Открыть полный отчёт через Демо-оплату</button>'
+      : '';
+
     modalRoot.innerHTML =
       '<div class="paywall-modal-overlay" id="kaspi-overlay">' +
         '<div class="paywall-modal fade-in" role="dialog" aria-modal="true">' +
@@ -1931,9 +1962,9 @@
           '</div>' +
           '<div style="background:var(--bg-card);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin:16px 0">' +
             '<p style="color:var(--ink);font-weight:600;margin-bottom:8px">Интеграция Kaspi Pay в процессе подключения</p>' +
-            '<p style="color:var(--ink-soft);font-size:13.5px;line-height:1.5">Прямой эквайринг Kaspi QR / Kaspi Pay сейчас на этапе сертификации. Для мгновенного открытия отчёта и тестирования функционала вы можете воспользоваться бесплатной демо-оплатой в 1 клик.</p>' +
+            demoDescription +
           '</div>' +
-          '<button class="btn-demo" id="kaspi-modal-demo-btn" style="width:100%">⚡ Открыть полный отчёт через Демо-оплату</button>' +
+          demoModalButton +
         '</div>' +
       '</div>';
 
@@ -1942,10 +1973,13 @@
     document.getElementById('kaspi-overlay').addEventListener('click', function (e) {
       if (e.target === e.currentTarget) close();
     });
-    document.getElementById('kaspi-modal-demo-btn').addEventListener('click', function () {
-      close();
-      executeDemoPayment(sessionId);
-    });
+    const modalDemoButton = document.getElementById('kaspi-modal-demo-btn');
+    if (modalDemoButton) {
+      modalDemoButton.addEventListener('click', function () {
+        close();
+        executeDemoPayment(sessionId);
+      });
+    }
   }
 
   async function executeDemoPayment(sessionId) {
@@ -1959,13 +1993,9 @@
     const errEl = document.getElementById('pay-err');
     if (errEl) errEl.hidden = true;
 
-    const nameIn = document.getElementById('g-name');
-    const emailIn = document.getElementById('g-email');
-    const msgIn = document.getElementById('g-msg');
-
-    const name = nameIn ? nameIn.value.trim() : '';
-    const email = emailIn ? emailIn.value.trim() : '';
-    const msg = msgIn ? msgIn.value.trim() : '';
+    const name = String(currentUser.name || currentUser.company || 'Фаундер').trim();
+    const email = String(currentUser.email || '').trim();
+    const msg = String(currentUser.messenger || '').trim();
 
     if (name || email) {
       try {
@@ -1989,8 +2019,13 @@
       });
       isPaid = true;
       unlocked = true;
-      location.hash = '#/report/' + sessionId;
-      screenFullReport(sessionId);
+      lastResult = null;
+      const reportHash = '#/report/' + sessionId;
+      if (location.hash === reportHash) {
+        screenFullReport(sessionId);
+      } else {
+        location.hash = reportHash;
+      }
     } catch (err) {
       if (errEl) {
         errEl.textContent = 'Ошибка проведения оплаты: ' + err.message;
@@ -2286,10 +2321,17 @@
   }
 
   function screenFullReport(sessionId) {
-    if (!lastResult) { loadResultFromServer(sessionId, '#/report/' + sessionId); return; }
+    if (!lastResult) {
+      loadResultFromServer(sessionId, '#/report/' + sessionId);
+      return;
+    }
     if (!isPaid) {
       location.hash = '#/results';
       screenResults();
+      return;
+    }
+    if (lastResult.isPreview === true) {
+      loadResultFromServer(sessionId, '#/report/' + sessionId);
       return;
     }
 
@@ -2495,4 +2537,3 @@
   });
   route();
 })();
-

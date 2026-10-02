@@ -158,7 +158,12 @@ public class UserJourneyE2ETests
         var completeResult = _controller.CompleteSession(sessionId, completeBody) as OkObjectResult;
         Assert.NotNull(completeResult);
 
-        var scoreResult = completeResult.Value?.GetType().GetProperty("result")?.GetValue(completeResult.Value) as ScoreResult;
+        var previewResult = completeResult.Value?.GetType().GetProperty("result")?.GetValue(completeResult.Value);
+        Assert.IsType<ScoreResultPreviewDto>(previewResult);
+
+        var storedSession = _sessionRepo.GetSession(sessionId);
+        Assert.NotNull(storedSession);
+        var scoreResult = JsonSerializer.Deserialize<ScoreResult>(storedSession.ResultJson!);
         Assert.NotNull(scoreResult);
 
         return new JourneyResult(sessionId, steps, visitedQuestions, currentAnswers, scoreResult);
@@ -439,7 +444,12 @@ public class UserJourneyE2ETests
             var completeResult = _controller.CompleteSession(sessionId, completeBody) as OkObjectResult;
             Assert.NotNull(completeResult);
 
-            var scoreResult = completeResult.Value?.GetType().GetProperty("result")?.GetValue(completeResult.Value) as ScoreResult;
+            var previewResult = completeResult.Value?.GetType().GetProperty("result")?.GetValue(completeResult.Value);
+            Assert.IsType<ScoreResultPreviewDto>(previewResult);
+
+            var storedSession = _sessionRepo.GetSession(sessionId);
+            Assert.NotNull(storedSession);
+            var scoreResult = JsonSerializer.Deserialize<ScoreResult>(storedSession.ResultJson!);
             Assert.NotNull(scoreResult);
             Assert.InRange(scoreResult.Overall, 0, 100);
         }

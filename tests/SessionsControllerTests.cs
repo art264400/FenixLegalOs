@@ -259,5 +259,97 @@ public class SessionsControllerTests
         Assert.Equal("application/pdf", fileResult.ContentType);
         Assert.Equal(canonicalPdf, fileResult.FileContents);
     }
-}
 
+    [Fact(DisplayName = "10. Unpaid result endpoint returns preview without premium findings")]
+    public void GetResult_WhenUnpaid_ReturnsSafePreview()
+    {
+        var sessionId = _sRepo.CreateSession();
+        var fullResult = CreateSensitiveResult();
+        _sRepo.CompleteSession(sessionId, "{\"FND-C01\":\"solo\"}", fullResult);
+
+        var actionResult = Assert.IsType<OkObjectResult>(_controller.GetResult(sessionId));
+        var result = actionResult.Value?.GetType().GetProperty("result")?.GetValue(actionResult.Value);
+        var preview = Assert.IsType<ScoreResultPreviewDto>(result);
+
+        Assert.True(preview.IsPreview);
+        Assert.Equal(fullResult.Overall, preview.Overall);
+        Assert.Equal(fullResult.Sections[0].Score, preview.Sections[0].Score);
+
+        var json = JsonSerializer.Serialize(preview);
+        Assert.DoesNotContain("PREMIUM_FINDING_SECRET", json);
+        Assert.DoesNotContain("PREMIUM_RECOMMENDATION_SECRET", json);
+        Assert.DoesNotContain("PREMIUM_BLOCKER_SECRET", json);
+    }
+
+    [Fact(DisplayName = "11. Paid result endpoint returns full stored result")]
+    public void GetResult_WhenPaid_ReturnsFullResult()
+    {
+        var sessionId = _sRepo.CreateSession();
+        var fullResult = CreateSensitiveResult();
+        _sRepo.CompleteSession(sessionId, "{\"FND-C01\":\"solo\"}", fullResult);
+        _sRepo.MarkSessionPaid(sessionId, 49990, "test");
+
+        var actionResult = Assert.IsType<OkObjectResult>(_controller.GetResult(sessionId));
+        var result = actionResult.Value?.GetType().GetProperty("result")?.GetValue(actionResult.Value);
+        var paidResult = Assert.IsType<ScoreResult>(result);
+
+        Assert.Equal("PREMIUM_FINDING_SECRET", paidResult.Risks[0].Finding);
+        Assert.Equal("PREMIUM_RECOMMENDATION_SECRET", paidResult.Risks[0].Recommendation);
+        Assert.Contains("PREMIUM_BLOCKER_SECRET", paidResult.InvestmentReadiness.Blockers);
+    }
+
+    [Fact(DisplayName = "12. Demo payment endpoint is closed unless explicitly enabled")]
+    public void ProcessPayment_WhenDemoDisabled_DoesNotMarkSessionPaid()
+    {
+        var sessionId = _sRepo.CreateSession();
+        var body = JsonDocument.Parse("{\"amount\":49990,\"method\":\"demo_instant\"}").RootElement;
+
+        var actionResult = _controller.ProcessPayment(sessionId, body);
+
+        Assert.IsType<NotFoundObjectResult>(actionResult);
+        Assert.False(_sRepo.GetSession(sessionId)!.Paid);
+    }
+
+    private static ScoreResult CreateSensitiveResult()
+    {
+        return new ScoreResult
+        {
+            Overall = 42,
+            Confidence = 91,
+            ConfidenceText = "Preview-safe confidence",
+            LevelTitle = "Зона внимания",
+            LevelText = "Preview-safe summary",
+            Sections = new List<SectionScore>
+            {
+                new()
+                {
+                    SectionId = "founders",
+                    Title = "Основатели",
+                    Score = 42,
+                    Findings = new List<string> { "PREMIUM_SECTION_SECRET" }
+                }
+            },
+            Risks = new List<RiskFinding>
+            {
+                new()
+                {
+                    Code = "SECRET_RISK",
+                    Title = "PREMIUM_TITLE_SECRET",
+                    Finding = "PREMIUM_FINDING_SECRET",
+                    WhyItMatters = "PREMIUM_IMPACT_SECRET",
+                    Recommendation = "PREMIUM_RECOMMENDATION_SECRET"
+                }
+            },
+            CriticalCount = 1,
+            Strengths = new List<string> { "PREMIUM_STRENGTH_SECRET" },
+            InvestmentReadiness = new InvestmentReadinessOverlay
+            {
+                Blockers = new List<string> { "PREMIUM_BLOCKER_SECRET" }
+            },
+            Consulting = new ConsultingRecommendation
+            {
+                PrimaryCta = "PREMIUM_CTA_SECRET"
+            }
+        };
+    }
+}
