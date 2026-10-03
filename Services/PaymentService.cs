@@ -2,6 +2,7 @@ using System;
 using FenixLegalOs.Models;
 using FenixLegalOs.Models.Payments;
 using FenixLegalOs.Repositories;
+using Microsoft.Data.Sqlite;
 
 namespace FenixLegalOs.Services;
 
@@ -100,9 +101,10 @@ public sealed class PaymentService
 
         // 5. Проверить существующую активную попытку
         var latestPayment = _payments.GetLatestBySessionId(sessionId);
-        if (latestPayment != null && (latestPayment.Status == PaymentStatuses.Created || latestPayment.Status == PaymentStatuses.Pending))
+        bool hasActivePayment = latestPayment != null && (latestPayment.Status == PaymentStatuses.Created || latestPayment.Status == PaymentStatuses.Pending);
+        if (hasActivePayment)
         {
-            if (!string.Equals(latestPayment.Tariff, tariff, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(latestPayment!.Tariff, tariff, StringComparison.OrdinalIgnoreCase))
             {
                 return PaymentServiceResult.Conflict(new
                 {
@@ -113,21 +115,6 @@ public sealed class PaymentService
                     requestedTariff = tariff
                 });
             }
-
-            return PaymentServiceResult.Ok(new
-            {
-                payment = new ActivePaymentDto
-                {
-                    OrderId = latestPayment.OrderId,
-                    Tariff = latestPayment.Tariff,
-                    AmountKzt = latestPayment.AmountKzt,
-                    Currency = latestPayment.Currency,
-                    Status = latestPayment.Status,
-                    Provider = latestPayment.Provider,
-                    Environment = latestPayment.Environment
-                },
-                message = "Используется существующая активная попытка оплаты."
-            });
         }
 
         // 6. Получить пользователя через session.UserId
@@ -151,10 +138,18 @@ public sealed class PaymentService
         }
 
         // 9. Определить сумму на сервере
-        var pricing = _settings.GetPricing();
-        int amountKzt = tariff == "consultation"
-            ? pricing.ConsultationPriceKzt
-            : pricing.PriceKzt;
+        int amountKzt;
+        if (hasActivePayment)
+        {
+            amountKzt = latestPayment!.AmountKzt;
+        }
+        else
+        {
+            var pricing = _settings.GetPricing();
+            amountKzt = tariff == "consultation"
+                ? pricing.ConsultationPriceKzt
+                : pricing.PriceKzt;
+        }
 
         // 10. Вызвать IPaymentGateway.CreatePaymentAsync
         var initRequest = new PaymentGatewayInitRequest
@@ -163,6 +158,7 @@ public sealed class PaymentService
             Tariff = tariff,
             AmountKzt = amountKzt,
             Currency = "KZT",
+            OrderId = hasActivePayment ? latestPayment!.OrderId : null,
             ClientIp = clientIp,
             Phone = normalizedPhone,
             BrowserScreenHeight = browserScreenHeight,
@@ -192,7 +188,7 @@ public sealed class PaymentService
                 initResult.ErrorMessage ?? "Не удалось создать платёж в платёжном шлюзе.");
         }
 
-        // Сохранить попытку в таблице payments
+        // Формируем метаданные шлюза (MERCH_RN_ID должен быть идентичен возвращённому в formFields)
         string? providerMetadataJson = null;
         if (!string.IsNullOrWhiteSpace(initResult.MerchRnId))
         {
@@ -202,6 +198,73 @@ public sealed class PaymentService
             });
         }
 
+        if (hasActivePayment)
+        {
+            // Атомарно обновляем параметры активной попытки в БД. Разрешено только для статусов created и pending.
+            bool updated = _payments.UpdateAttempt(
+                latestPayment!.OrderId,
+                initResult.Nonce ?? "",
+                initResult.RequestTimestamp ?? "",
+                providerMetadataJson);
+
+            if (!updated)
+            {
+                // Запись уже изменила статус параллельно (например, стала paid, refunded или failed)
+                var current = _payments.GetByOrderId(latestPayment.OrderId);
+                if (current != null && current.Status == PaymentStatuses.Paid)
+                {
+                    return PaymentServiceResult.Conflict(new
+                    {
+                        error = "already_paid",
+                        message = "Диагностика уже оплачена. Повторная оплата не требуется.",
+                        orderId = current.OrderId,
+                        isPaid = true
+                    });
+                }
+                if (current != null && current.Status == PaymentStatuses.Refunded)
+                {
+                    return PaymentServiceResult.Conflict(new
+                    {
+                        error = "payment_refunded",
+                        message = "По данной сессии уже был выполнен возврат средств. Создание новых платежей запрещено.",
+                        refundedOrderId = current.OrderId
+                    });
+                }
+
+                return PaymentServiceResult.Conflict(new
+                {
+                    error = "payment_conflict",
+                    message = $"Состояние платежа изменилось (текущий статус: '{current?.Status ?? "неизвестен"}'). Повторное открытие формы невозможно.",
+                    activeOrderId = latestPayment.OrderId,
+                    status = current?.Status
+                });
+            }
+
+            return PaymentServiceResult.Ok(new
+            {
+                orderId = initResult.OrderId,
+                actionUrl = initResult.ActionUrl,
+                method = initResult.Method,
+                checkoutType = initResult.CheckoutType,
+                formFields = initResult.FormFields,
+                tariff = latestPayment.Tariff,
+                amountKzt = latestPayment.AmountKzt,
+                provider = latestPayment.Provider,
+                payment = new ActivePaymentDto
+                {
+                    OrderId = latestPayment.OrderId,
+                    Tariff = latestPayment.Tariff,
+                    AmountKzt = latestPayment.AmountKzt,
+                    Currency = latestPayment.Currency,
+                    Status = latestPayment.Status,
+                    Provider = latestPayment.Provider,
+                    Environment = latestPayment.Environment
+                },
+                message = "Используется существующая активная попытка оплаты."
+            });
+        }
+
+        // Сохранить новую попытку в таблице payments
         var paymentRecord = new Payment
         {
             Id = Guid.NewGuid().ToString(),
@@ -221,7 +284,23 @@ public sealed class PaymentService
             UpdatedAt = DateTime.UtcNow.ToString("o")
         };
 
-        _payments.Create(paymentRecord);
+        try
+        {
+            _payments.Create(paymentRecord);
+        }
+        catch (SqliteException ex) when (ex.SqliteErrorCode == 19)
+        {
+            // Перехват конфликта параллельного создания активного платежа (частичный уникальный индекс uq_payments_active_session)
+            var existing = _payments.GetLatestBySessionId(sessionId);
+            return PaymentServiceResult.Conflict(new
+            {
+                error = "payment_in_progress",
+                message = "Уже существует активная попытка оплаты для данной сессии.",
+                activeOrderId = existing?.OrderId,
+                activeTariff = existing?.Tariff,
+                requestedTariff = tariff
+            });
+        }
 
         return PaymentServiceResult.Ok(new
         {

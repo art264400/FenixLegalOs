@@ -704,19 +704,23 @@
       body: body ? JSON.stringify(body) : undefined,
     });
     if (!res.ok) {
-      if (!isRetry && !url.includes('/api/auth/')) {
-        let errData = null;
-        try {
-          errData = await res.clone().json();
-        } catch (e) { /* ignore */ }
+      let errData = null;
+      try {
+        errData = await res.json();
+      } catch (e) { /* ignore */ }
 
-        // [P2 Fix]: Distinguish payment requirement from auth expiration!
+      if (!isRetry && !url.includes('/api/auth/')) {
+        // [P2 Fix]: Разделяем требование оплаты от истечения авторизации!
         if (errData && errData.error === 'payment_required') {
           showPaymentPrompt(state.sessionId);
-          throw new Error('payment_required');
+          const payErr = new Error((errData && errData.message) || 'payment_required');
+          payErr.code = (errData && errData.error) || 'payment_required';
+          payErr.status = res.status;
+          payErr.data = errData;
+          throw payErr;
         }
 
-        // Handle completed session immutability
+        // Обработка неизменяемости завершённой сессии
         if (errData && errData.error === 'session_already_completed') {
           alert('Диагностика по этой анкете уже завершена. Ответы и результат зафиксированы. Для нового прохождения создана новая анкета.');
           const created = await api('POST', '/api/sessions');
@@ -724,10 +728,14 @@
           clearDiagnosticAndPdfState();
           location.hash = '#/diagnostic';
           route();
-          throw new Error('session_already_completed');
+          const sessErr = new Error((errData && errData.message) || 'session_already_completed');
+          sessErr.code = (errData && errData.error) || 'session_already_completed';
+          sessErr.status = res.status;
+          sessErr.data = errData;
+          throw sessErr;
         }
 
-        // [P1 Fix]: Only auth expiration/rejection triggers re-auth.
+        // [P1 Fix]: Только истечение/отклонение авторизации запускает повторную авторизацию.
         if (res.status === 401 || (errData && (errData.error === 'forbidden_session_owner' || errData.error === 'terms_required' || errData.error === 'unauthorized'))) {
           const prevUserId = currentUser ? currentUser.id : null;
           const prevSessionId = state.sessionId;
@@ -738,17 +746,28 @@
           const sameSession = state.sessionId === prevSessionId;
 
           if (sameUser && sameSession) {
-            // User and session match: safe to retry the interrupted action
+            // Пользователь и сессия совпадают: безопасно повторить прерванное действие
             return api(method, url, body, true);
           } else {
-            // Account switched or session mismatch: stop retry and reset local diagnostic & PDF cache!
+            // Аккаунт или сессия изменились: прекращаем повтор и сбрасываем локальное состояние
             clearDiagnosticAndPdfState();
             route();
-            throw new Error(sameUser ? 'session_switched' : 'account_switched');
+            const switchCode = sameUser ? 'session_switched' : 'account_switched';
+            const switchErr = new Error(switchCode);
+            switchErr.code = switchCode;
+            switchErr.status = res.status;
+            switchErr.data = errData;
+            throw switchErr;
           }
         }
       }
-      throw new Error('api_error_' + res.status);
+
+      const errorMessage = (errData && errData.message) || (errData && errData.error) || ('api_error_' + res.status);
+      const error = new Error(errorMessage);
+      error.code = (errData && errData.error) || ('api_error_' + res.status);
+      error.status = res.status;
+      error.data = errData;
+      throw error;
     }
     return res.json();
   }
@@ -1992,7 +2011,7 @@
         cardBtn.textContent = originalText;
       }
       let msg = err && err.message ? err.message : 'Не удалось запустить оплату. Попробуйте ещё раз.';
-      if (err && err.message && err.message.indexOf('phone_required') !== -1) {
+      if (err && err.code === 'phone_required') {
         msg = 'Для оплаты необходимо указать корректный номер телефона в профиле.';
       }
       alert(msg);

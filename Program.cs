@@ -4,6 +4,7 @@ using FenixLegalOs.Repositories;
 using FenixLegalOs.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 
@@ -11,6 +12,17 @@ using Microsoft.Extensions.FileProviders;
 LoadDotEnv();
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Настройка Forwarded Headers для обратного прокси Nginx
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+    options.KnownProxies.Add(System.Net.IPAddress.Loopback);
+    options.KnownProxies.Add(System.Net.IPAddress.IPv6Loopback);
+    options.ForwardLimit = 1;
+});
 
 // Register Controllers
 builder.Services.AddControllers();
@@ -78,6 +90,9 @@ void LoadDotEnv()
         }
     }
 }
+
+// Применяем Forwarded Headers до статических файлов и остальных middleware
+app.UseForwardedHeaders();
 
 // Static Files Configuration (serving wwwroot directory)
 var staticPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");

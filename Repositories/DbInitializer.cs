@@ -321,6 +321,27 @@ public class DbInitializer
 
         TryAddColumn(conn, "payments", "provider_metadata", "TEXT");
 
+        // Проверка наличия дубликатов активных платежей перед созданием частичного уникального индекса
+        var duplicateActiveSessions = conn.Query<string>(@"
+            SELECT session_id
+            FROM payments
+            WHERE status IN ('created', 'pending')
+            GROUP BY session_id
+            HAVING COUNT(*) > 1
+        ").AsList();
+
+        if (duplicateActiveSessions.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"Невозможно создать уникальный индекс uq_payments_active_session: обнаружены дублирующиеся активные платежи (со статусом created или pending) для сессий: [{string.Join(", ", duplicateActiveSessions)}]. Финансовые записи не изменяются автоматически — требуется ручной разбор данных.");
+        }
+
+        conn.Execute(@"
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_payments_active_session
+            ON payments(session_id)
+            WHERE status IN ('created', 'pending');
+        ");
+
         // Seed or update Question Bank in DB
         SeedQuestionBank(conn);
         _initialized = true;

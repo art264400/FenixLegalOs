@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using FenixLegalOs.Models.Payments;
@@ -46,6 +47,11 @@ public sealed class PaymentGatewayInitRequest
     public string Tariff { get; init; } = "report";
     public int AmountKzt { get; init; }
     public string Currency { get; init; } = "KZT";
+
+    /// <summary>
+    /// Идентификатор существующего заказа для повторного открытия платёжной формы.
+    /// </summary>
+    public string? OrderId { get; init; }
 
     /// <summary>
     /// IP-адрес клиента (покупателя). Получается только на сервере.

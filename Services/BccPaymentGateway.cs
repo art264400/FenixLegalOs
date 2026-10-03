@@ -140,7 +140,9 @@ public sealed class BccPaymentGateway : IPaymentGateway
         }
 
         // По спецификации BCC: ORDER должен быть длиной от 6 до 32 символов (только цифры/символы)
-        string orderId = $"{DateTime.UtcNow:yyyyMMddHHmmss}{Random.Shared.Next(1000, 9999)}";
+        string orderId = !string.IsNullOrWhiteSpace(request.OrderId)
+            ? request.OrderId
+            : $"{DateTime.UtcNow:yyyyMMddHHmmss}{Random.Shared.Next(1000, 9999)}";
         string nonce = GenerateNonce();
         string timestamp = GenerateTimestamp();
         string merchRnId = GenerateMerchRnId();

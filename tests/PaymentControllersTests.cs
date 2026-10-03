@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Dapper;
 using FenixLegalOs.Controllers;
 using FenixLegalOs.Data;
 using FenixLegalOs.Models;
@@ -617,6 +618,19 @@ public sealed class PaymentControllersTests : IDisposable
     [Fact(DisplayName = "StartPayment returns existing attempt if status is created or pending")]
     public async Task StartPayment_WhenAttemptCreatedOrPending_ReturnsExistingAttempt()
     {
+        var fullyGateway = CreateFullyConfiguredGateway();
+        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo);
+        var fullyPayments = new PaymentsController(fullyService)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    Connection = { RemoteIpAddress = System.Net.IPAddress.Parse("127.0.0.1") }
+                }
+            }
+        };
+
         string sessionId = CreateCompletedSession();
 
         var existingPending = new Payment
@@ -634,7 +648,7 @@ public sealed class PaymentControllersTests : IDisposable
         _paymentRepo.Create(existingPending);
         _paymentRepo.UpdateStatus("ORD-PENDING-01", PaymentStatuses.Pending);
 
-        var result = await _payments.StartPayment(sessionId, new StartPaymentRequest
+        var result = await fullyPayments.StartPayment(sessionId, new StartPaymentRequest
         {
             Tariff = "report",
             BrowserScreenHeight = 1080,
@@ -656,6 +670,8 @@ public sealed class PaymentControllersTests : IDisposable
         Assert.Contains("\"provider\":\"bcc\"", json);
         Assert.Contains("\"environment\":\"test\"", json);
         Assert.Contains("\"status\":\"pending\"", json);
+        Assert.Contains("actionUrl", json);
+        Assert.Contains("formFields", json);
 
         // Служебные и банковские поля НЕ должны утекать клиенту
         Assert.DoesNotContain("TID1", json);
@@ -1356,6 +1372,367 @@ public sealed class PaymentControllersTests : IDisposable
         var session = _sessions.GetSession(sessionId);
         Assert.NotNull(session);
         Assert.False(session.Paid);
+    }
+
+    [Fact(DisplayName = "Client IP is read strictly from RemoteIpAddress and not directly from header")]
+    public async Task StartPayment_ClientIpReadFromRemoteIpAddress_NotDirectlyFromHeader()
+    {
+        var fullyGateway = CreateFullyConfiguredGateway();
+        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo);
+        var httpContext = new DefaultHttpContext();
+        httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("203.0.113.195");
+        httpContext.Request.Headers["X-Forwarded-For"] = "198.51.100.42"; // Сырой заголовок не должен использоваться напрямую
+
+        var payments = new PaymentsController(fullyService)
+        {
+            ControllerContext = new ControllerContext { HttpContext = httpContext }
+        };
+
+        string sessionId = CreateCompletedSession();
+        var result = await payments.StartPayment(sessionId, new StartPaymentRequest
+        {
+            Tariff = "report",
+            BrowserScreenHeight = 1080,
+            BrowserScreenWidth = 1920
+        });
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var jsonOptions = new JsonSerializerOptions
+        {
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        };
+        string json = JsonSerializer.Serialize(ok.Value, jsonOptions);
+        using var doc = JsonDocument.Parse(json);
+        var formFields = doc.RootElement.GetProperty("formFields");
+        // IP должен строго браться из RemoteIpAddress ("203.0.113.195"), а не напрямую из X-Forwarded-For ("198.51.100.42")
+        Assert.Equal("203.0.113.195", formFields.GetProperty("CLIENT_IP").GetString());
+    }
+
+    [Fact(DisplayName = "Two concurrent starts do not create two active records in DB")]
+    public async Task StartPayment_ConcurrentStarts_DoNotCreateTwoActiveRecords()
+    {
+        var fullyGateway = CreateFullyConfiguredGateway();
+        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo);
+        var fullyPayments = new PaymentsController(fullyService)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    Connection = { RemoteIpAddress = System.Net.IPAddress.Parse("127.0.0.1") }
+                }
+            }
+        };
+
+        string sessionId = CreateCompletedSession();
+
+        // Запуск двух параллельных запросов создания платежа
+        var task1 = fullyPayments.StartPayment(sessionId, new StartPaymentRequest
+        {
+            Tariff = "report",
+            BrowserScreenHeight = 1080,
+            BrowserScreenWidth = 1920
+        });
+        var task2 = fullyPayments.StartPayment(sessionId, new StartPaymentRequest
+        {
+            Tariff = "report",
+            BrowserScreenHeight = 1080,
+            BrowserScreenWidth = 1920
+        });
+
+        var results = await Task.WhenAll(task1, task2);
+
+        // В БД должна быть ровно одна активная запись
+        var activePayments = _paymentRepo.GetBySessionId(sessionId)
+            .Where(p => p.Status == PaymentStatuses.Created || p.Status == PaymentStatuses.Pending)
+            .ToList();
+        Assert.Single(activePayments);
+
+        // Никаких необработанных исключений и 500 ошибок
+        Assert.All(results, res =>
+        {
+            Assert.True(res is OkObjectResult || res is ConflictObjectResult);
+            Assert.False(res is ObjectResult obj && obj.StatusCode == 500);
+        });
+    }
+
+    [Fact(DisplayName = "Partial unique index uq_payments_active_session rejects second active payment at SQLite level")]
+    public void Db_PartialUniqueIndex_RejectsSecondActivePaymentForSameSession()
+    {
+        string sessionId = CreateCompletedSession();
+
+        var payment1 = new Payment
+        {
+            SessionId = sessionId,
+            OrderId = "ORD-ACTIVE-01",
+            Tariff = "report",
+            AmountKzt = 49990,
+            Provider = "bcc",
+            Status = PaymentStatuses.Created
+        };
+        _paymentRepo.Create(payment1);
+
+        var payment2 = new Payment
+        {
+            SessionId = sessionId,
+            OrderId = "ORD-ACTIVE-02",
+            Tariff = "report",
+            AmountKzt = 49990,
+            Provider = "bcc",
+            Status = PaymentStatuses.Created
+        };
+
+        // Попытка создать вторую активную запись для этой же сессии должна нарушить частичный уникальный индекс
+        var ex = Assert.Throws<Microsoft.Data.Sqlite.SqliteException>(() => _paymentRepo.Create(payment2));
+        Assert.Equal(19, ex.SqliteErrorCode); // SQLITE_CONSTRAINT
+    }
+
+    [Fact(DisplayName = "Reopening active payment preserves original ORDER, tariff and amount")]
+    public async Task StartPayment_ReopeningActivePayment_PreservesOriginalOrderTariffAndAmount()
+    {
+        var fullyGateway = CreateFullyConfiguredGateway();
+        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo);
+        var fullyPayments = new PaymentsController(fullyService)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    Connection = { RemoteIpAddress = System.Net.IPAddress.Parse("127.0.0.1") }
+                }
+            }
+        };
+
+        string sessionId = CreateCompletedSession();
+
+        // 1. Первый старт
+        var firstResult = await fullyPayments.StartPayment(sessionId, new StartPaymentRequest
+        {
+            Tariff = "report",
+            BrowserScreenHeight = 1080,
+            BrowserScreenWidth = 1920
+        });
+        var ok1 = Assert.IsType<OkObjectResult>(firstResult);
+        string json1 = JsonSerializer.Serialize(ok1.Value);
+        using var doc1 = JsonDocument.Parse(json1);
+        string initialOrderId = doc1.RootElement.GetProperty("orderId").GetString()!;
+        int initialAmount = doc1.RootElement.GetProperty("amountKzt").GetInt32();
+        string initialTariff = doc1.RootElement.GetProperty("tariff").GetString()!;
+
+        // 2. Повторный старт для той же сессии
+        var secondResult = await fullyPayments.StartPayment(sessionId, new StartPaymentRequest
+        {
+            Tariff = "report",
+            BrowserScreenHeight = 1080,
+            BrowserScreenWidth = 1920
+        });
+        var ok2 = Assert.IsType<OkObjectResult>(secondResult);
+        string json2 = JsonSerializer.Serialize(ok2.Value);
+        using var doc2 = JsonDocument.Parse(json2);
+
+        Assert.Equal(initialOrderId, doc2.RootElement.GetProperty("orderId").GetString());
+        Assert.Equal(initialAmount, doc2.RootElement.GetProperty("amountKzt").GetInt32());
+        Assert.Equal(initialTariff, doc2.RootElement.GetProperty("tariff").GetString());
+        Assert.Equal(initialOrderId, doc2.RootElement.GetProperty("formFields").GetProperty("ORDER").GetString());
+        Assert.Equal($"{initialAmount}.00", doc2.RootElement.GetProperty("formFields").GetProperty("AMOUNT").GetString());
+    }
+
+    [Fact(DisplayName = "Reopening active payment atomically updates MERCH_RN_ID, NONCE and TIMESTAMP in DB matching form")]
+    public async Task StartPayment_ReopeningActivePayment_UpdatesDbMatchingFormFields()
+    {
+        var fullyGateway = CreateFullyConfiguredGateway();
+        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo);
+        var fullyPayments = new PaymentsController(fullyService)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    Connection = { RemoteIpAddress = System.Net.IPAddress.Parse("127.0.0.1") }
+                }
+            }
+        };
+
+        string sessionId = CreateCompletedSession();
+        var initialRes = await fullyPayments.StartPayment(sessionId, new StartPaymentRequest
+        {
+            Tariff = "report",
+            BrowserScreenHeight = 1080,
+            BrowserScreenWidth = 1920
+        });
+        var okInitial = Assert.IsType<OkObjectResult>(initialRes);
+        string initialJson = JsonSerializer.Serialize(okInitial.Value);
+        using var initDoc = JsonDocument.Parse(initialJson);
+        string orderId = initDoc.RootElement.GetProperty("orderId").GetString()!;
+
+        // Повторный старт через небольшую задержку
+        await Task.Delay(20);
+        var reopenRes = await fullyPayments.StartPayment(sessionId, new StartPaymentRequest
+        {
+            Tariff = "report",
+            BrowserScreenHeight = 1080,
+            BrowserScreenWidth = 1920
+        });
+        var okReopen = Assert.IsType<OkObjectResult>(reopenRes);
+        string reopenJson = JsonSerializer.Serialize(okReopen.Value);
+        using var reopenDoc = JsonDocument.Parse(reopenJson);
+        var formFields = reopenDoc.RootElement.GetProperty("formFields");
+        string newNonce = formFields.GetProperty("NONCE").GetString()!;
+        string newTimestamp = formFields.GetProperty("TIMESTAMP").GetString()!;
+        string newMerchRnId = formFields.GetProperty("MERCH_RN_ID").GetString()!;
+
+        // Читаем запись из БД
+        var stored = _paymentRepo.GetByOrderId(orderId);
+        Assert.NotNull(stored);
+        Assert.Equal(newNonce, stored.Nonce);
+        Assert.Equal(newTimestamp, stored.RequestTimestamp);
+        Assert.NotNull(stored.ProviderMetadata);
+        Assert.Contains(newMerchRnId, stored.ProviderMetadata);
+    }
+
+    [Fact(DisplayName = "Paid or refunded payment cannot be reopened")]
+    public async Task StartPayment_WhenAttemptPaidOrRefunded_CannotReopen()
+    {
+        var fullyGateway = CreateFullyConfiguredGateway();
+        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo);
+        var fullyPayments = new PaymentsController(fullyService)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    Connection = { RemoteIpAddress = System.Net.IPAddress.Parse("127.0.0.1") }
+                }
+            }
+        };
+
+        // 1. Оплаченный платёж
+        string sessionPaid = CreateCompletedSession();
+        var pPaid = new Payment
+        {
+            SessionId = sessionPaid,
+            OrderId = "ORD-TEST-PAID",
+            Tariff = "report",
+            AmountKzt = 49990,
+            Provider = "bcc",
+            Status = PaymentStatuses.Created
+        };
+        _paymentRepo.Create(pPaid);
+        _paymentRepo.UpdateStatus("ORD-TEST-PAID", PaymentStatuses.Paid, paidAt: DateTime.UtcNow.ToString("o"));
+        _sessions.MarkSessionPaid(sessionPaid, 49990, "bcc");
+
+        var resPaid = await fullyPayments.StartPayment(sessionPaid, new StartPaymentRequest
+        {
+            Tariff = "report",
+            BrowserScreenHeight = 1080,
+            BrowserScreenWidth = 1920
+        });
+        var conflictPaid = Assert.IsType<ConflictObjectResult>(resPaid);
+        Assert.Contains("already_paid", JsonSerializer.Serialize(conflictPaid.Value));
+
+        // 2. Возвращённый платёж
+        string sessionRef = CreateCompletedSession();
+        var pRef = new Payment
+        {
+            SessionId = sessionRef,
+            OrderId = "ORD-TEST-REF",
+            Tariff = "report",
+            AmountKzt = 49990,
+            Provider = "bcc",
+            Status = PaymentStatuses.Created
+        };
+        _paymentRepo.Create(pRef);
+        _paymentRepo.UpdateStatus("ORD-TEST-REF", PaymentStatuses.Paid, paidAt: DateTime.UtcNow.ToString("o"));
+        _sessions.MarkSessionPaid(sessionRef, 49990, "bcc");
+        _paymentRepo.UpdateStatus("ORD-TEST-REF", PaymentStatuses.Refunded);
+
+        var resRef = await fullyPayments.StartPayment(sessionRef, new StartPaymentRequest
+        {
+            Tariff = "report",
+            BrowserScreenHeight = 1080,
+            BrowserScreenWidth = 1920
+        });
+        var conflictRef = Assert.IsType<ConflictObjectResult>(resRef);
+        Assert.Contains("payment_refunded", JsonSerializer.Serialize(conflictRef.Value));
+    }
+
+    [Fact(DisplayName = "StartPayment when attempt created or pending and gateway not configured returns 503")]
+    public async Task StartPayment_WhenAttemptCreatedOrPendingAndGatewayNotConfigured_Returns503()
+    {
+        string sessionId = CreateCompletedSession();
+        var existingPending = new Payment
+        {
+            SessionId = sessionId,
+            OrderId = "ORD-UNCONF-01",
+            Tariff = "report",
+            AmountKzt = 49990,
+            Provider = "bcc",
+            TerminalId = "TID1",
+            Status = PaymentStatuses.Created,
+            Nonce = "nonce-unconf",
+            RequestTimestamp = DateTime.UtcNow.ToString("o")
+        };
+        _paymentRepo.Create(existingPending);
+
+        var result = await _payments.StartPayment(sessionId, new StartPaymentRequest
+        {
+            Tariff = "report",
+            BrowserScreenHeight = 1080,
+            BrowserScreenWidth = 1920
+        });
+
+        var unavailable = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, unavailable.StatusCode);
+        string json = JsonSerializer.Serialize(unavailable.Value);
+        Assert.Contains("payment_gateway_not_configured", json);
+    }
+
+    [Fact(DisplayName = "DbInitializer throws diagnostic exception when duplicate active payments exist and does not alter records")]
+    public void DbInitializer_WhenDuplicateActivePaymentsExist_ThrowsDiagnosticExceptionWithoutModifyingData()
+    {
+        string testDbPath = Path.Combine(Path.GetTempPath(), $"test_dup_diag_{Guid.NewGuid():N}.db");
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["FENIX_DB_PATH"] = testDbPath })
+            .Build();
+
+        var db = new DbInitializer(config);
+        db.Initialize();
+
+        // Временно удаляем частичный уникальный индекс, чтобы смоделировать базу данных с историческими дубликатами
+        using (var conn = new SqliteConnection(db.ConnectionString))
+        {
+            conn.Open();
+            conn.Execute("DROP INDEX IF EXISTS uq_payments_active_session;");
+
+            // Создаём сессию и вставляем две активные записи для одной сессии
+            conn.Execute("INSERT INTO sessions (id, created_at, updated_at) VALUES ('sess-dup-01', datetime('now'), datetime('now'));");
+            conn.Execute(@"
+                INSERT INTO payments (id, session_id, order_id, tariff, amount_kzt, currency, provider, environment, status, created_at, updated_at)
+                VALUES ('p1', 'sess-dup-01', 'ORD-D1', 'report', 49990, 'KZT', 'bcc', 'test', 'created', datetime('now'), datetime('now')),
+                       ('p2', 'sess-dup-01', 'ORD-D2', 'report', 49990, 'KZT', 'bcc', 'test', 'pending', datetime('now'), datetime('now'));
+            ");
+        }
+
+        // Повторный запуск инициализации БД обязан обнаружить дубликаты и выбросить диагностическое исключение
+        var ex = Assert.Throws<InvalidOperationException>(() => db.Initialize());
+        Assert.Contains("uq_payments_active_session", ex.Message);
+        Assert.Contains("sess-dup-01", ex.Message);
+
+        // Финансовые записи не должны быть автоматически изменены или удалены
+        using (var conn = new SqliteConnection(db.ConnectionString))
+        {
+            conn.Open();
+            int count = conn.ExecuteScalar<int>("SELECT COUNT(*) FROM payments WHERE session_id = 'sess-dup-01';");
+            Assert.Equal(2, count);
+        }
+
+        SqliteConnection.ClearAllPools();
+        foreach (string suffix in new[] { "", "-wal", "-shm" })
+        {
+            string path = testDbPath + suffix;
+            if (File.Exists(path)) File.Delete(path);
+        }
     }
 
     private static BccPaymentGateway CreateFullyConfiguredGateway()

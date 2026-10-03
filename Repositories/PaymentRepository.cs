@@ -89,7 +89,7 @@ public class PaymentRepository
     {
         using var conn = GetConn();
         return conn.QuerySingleOrDefault<Payment>(@"
-            SELECT 
+            SELECT
                 id AS Id, session_id AS SessionId, order_id AS OrderId,
                 tariff AS Tariff, amount_kzt AS AmountKzt, currency AS Currency,
                 provider AS Provider, environment AS Environment, terminal_id AS TerminalId,
@@ -109,7 +109,7 @@ public class PaymentRepository
     {
         using var conn = GetConn();
         return conn.QuerySingleOrDefault<Payment>(@"
-            SELECT 
+            SELECT
                 id AS Id, session_id AS SessionId, order_id AS OrderId,
                 tariff AS Tariff, amount_kzt AS AmountKzt, currency AS Currency,
                 provider AS Provider, environment AS Environment, terminal_id AS TerminalId,
@@ -129,7 +129,7 @@ public class PaymentRepository
     {
         using var conn = GetConn();
         return conn.Query<Payment>(@"
-            SELECT 
+            SELECT
                 id AS Id, session_id AS SessionId, order_id AS OrderId,
                 tariff AS Tariff, amount_kzt AS AmountKzt, currency AS Currency,
                 provider AS Provider, environment AS Environment, terminal_id AS TerminalId,
@@ -150,7 +150,7 @@ public class PaymentRepository
     {
         using var conn = GetConn();
         return conn.QueryFirstOrDefault<Payment>(@"
-            SELECT 
+            SELECT
                 id AS Id, session_id AS SessionId, order_id AS OrderId,
                 tariff AS Tariff, amount_kzt AS AmountKzt, currency AS Currency,
                 provider AS Provider, environment AS Environment, terminal_id AS TerminalId,
@@ -172,7 +172,7 @@ public class PaymentRepository
     {
         using var conn = GetConn();
         return conn.QueryFirstOrDefault<Payment>(@"
-            SELECT 
+            SELECT
                 id AS Id, session_id AS SessionId, order_id AS OrderId,
                 tariff AS Tariff, amount_kzt AS AmountKzt, currency AS Currency,
                 provider AS Provider, environment AS Environment, terminal_id AS TerminalId,
@@ -194,7 +194,7 @@ public class PaymentRepository
     {
         using var conn = GetConn();
         return conn.QueryFirstOrDefault<Payment>(@"
-            SELECT 
+            SELECT
                 id AS Id, session_id AS SessionId, order_id AS OrderId,
                 tariff AS Tariff, amount_kzt AS AmountKzt, currency AS Currency,
                 provider AS Provider, environment AS Environment, terminal_id AS TerminalId,
@@ -210,6 +210,34 @@ public class PaymentRepository
             WHERE session_id = @sessionId AND status = 'refunded'
             ORDER BY updated_at DESC
             LIMIT 1", new { sessionId });
+    }
+
+    /// <summary>
+    /// Атомарно обновляет параметры активной попытки (nonce, request_timestamp, provider_metadata)
+    /// при повторном открытии платёжной формы только для записей в статусе created или pending.
+    /// </summary>
+    public bool UpdateAttempt(string orderId, string nonce, string requestTimestamp, string? providerMetadata = null)
+    {
+        if (string.IsNullOrWhiteSpace(orderId))
+            return false;
+
+        using var conn = GetConn();
+        int rows = conn.Execute(@"
+            UPDATE payments
+            SET
+                nonce = @nonce,
+                request_timestamp = @requestTimestamp,
+                provider_metadata = COALESCE(@providerMetadata, provider_metadata),
+                updated_at = @updatedAt
+            WHERE order_id = @orderId AND status IN ('created', 'pending')", new
+        {
+            orderId,
+            nonce,
+            requestTimestamp,
+            providerMetadata,
+            updatedAt = DateTime.UtcNow.ToString("o")
+        });
+        return rows > 0;
     }
 
     public bool UpdateStatus(
@@ -252,7 +280,7 @@ public class PaymentRepository
             {
                 conn.Execute(@"
                     UPDATE payments
-                    SET 
+                    SET
                         last_status_check_at = COALESCE(@lastStatusCheckAt, last_status_check_at),
                         notification_received_at = COALESCE(@notificationReceivedAt, notification_received_at),
                         updated_at = @updatedAt
@@ -279,7 +307,7 @@ public class PaymentRepository
 
         int rows = conn.Execute(@"
             UPDATE payments
-            SET 
+            SET
                 status = @status,
                 updated_at = @updatedAt,
                 rrn = COALESCE(@rrn, rrn),
@@ -313,7 +341,7 @@ public class PaymentRepository
         {
             // Находим другой действующий платёж со статусом 'paid' для этой же сессии
             var remainingPaid = conn.QueryFirstOrDefault<Payment>(@"
-                SELECT 
+                SELECT
                     id AS Id, session_id AS SessionId, order_id AS OrderId,
                     tariff AS Tariff, amount_kzt AS AmountKzt, currency AS Currency,
                     provider AS Provider, environment AS Environment, terminal_id AS TerminalId,
