@@ -14,7 +14,7 @@ public class DbInitializer
     public DbInitializer(IConfiguration config)
     {
         _dbPath = config["FENIX_DB_PATH"] ?? Path.Combine(Directory.GetCurrentDirectory(), "fenix.db");
-        _connectionString = $"Data Source={_dbPath};Mode=ReadWriteCreate;Cache=Default;";
+        _connectionString = $"Data Source={_dbPath};Mode=ReadWriteCreate;Cache=Default;Foreign Keys=True;";
     }
 
     public string ConnectionString => _connectionString;
@@ -168,6 +168,39 @@ public class DbInitializer
                 created_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS payments (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                order_id TEXT NOT NULL UNIQUE,
+                tariff TEXT NOT NULL,
+                amount_kzt INTEGER NOT NULL,
+                currency TEXT NOT NULL DEFAULT 'KZT',
+                provider TEXT NOT NULL,
+                environment TEXT NOT NULL DEFAULT 'test',
+                terminal_id TEXT,
+                status TEXT NOT NULL DEFAULT 'created',
+                nonce TEXT,
+                request_timestamp TEXT,
+                provider_metadata TEXT,
+                rrn TEXT,
+                int_ref TEXT,
+                approval_code TEXT,
+                action_code TEXT,
+                response_code TEXT,
+                merchant_advice_code TEXT,
+                bank_message TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                paid_at TEXT,
+                notification_received_at TEXT,
+                last_status_check_at TEXT,
+                FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE RESTRICT
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_payments_session_id ON payments(session_id);
+            CREATE INDEX IF NOT EXISTS idx_payments_order_id ON payments(order_id);
+            CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
+
             -- Question Bank Tables
             CREATE TABLE IF NOT EXISTS sections (
                 id TEXT PRIMARY KEY,
@@ -247,6 +280,7 @@ public class DbInitializer
                 name TEXT NOT NULL,
                 company TEXT NOT NULL,
                 position TEXT NOT NULL,
+                phone TEXT,
                 messenger TEXT,
                 terms_accepted INTEGER NOT NULL DEFAULT 1,
                 terms_accepted_at TEXT NOT NULL,
@@ -261,6 +295,8 @@ public class DbInitializer
                 expires_at TEXT NOT NULL
             );
         ");
+
+        TryAddColumn(conn, "users", "phone", "TEXT");
 
         TryAddColumn(conn, "sessions", "paid", "INTEGER NOT NULL DEFAULT 0");
         TryAddColumn(conn, "sessions", "paid_at", "TEXT");
@@ -282,6 +318,8 @@ public class DbInitializer
         TryAddColumn(conn, "leads", "position", "TEXT");
         TryAddColumn(conn, "leads", "terms_accepted", "INTEGER NOT NULL DEFAULT 1");
         TryAddColumn(conn, "leads", "terms_accepted_at", "TEXT");
+
+        TryAddColumn(conn, "payments", "provider_metadata", "TEXT");
 
         // Seed or update Question Bank in DB
         SeedQuestionBank(conn);

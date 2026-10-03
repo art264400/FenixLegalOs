@@ -1,4 +1,4 @@
-namespace FenixLegalOs.Models;
+namespace FenixLegalOs.Models.Payments;
 
 /// <summary>
 /// Выбранный пользователем тариф для новой попытки оплаты.
@@ -7,4 +7,6 @@ namespace FenixLegalOs.Models;
 public sealed class StartPaymentRequest
 {
     public string Tariff { get; init; } = "report";
+    public int BrowserScreenHeight { get; init; }
+    public int BrowserScreenWidth { get; init; }
 }

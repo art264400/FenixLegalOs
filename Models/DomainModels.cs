@@ -200,6 +200,7 @@ public class UserAccount
     public string Name { get; set; } = "";
     public string Company { get; set; } = "";
     public string Position { get; set; } = "";
+    public string? Phone { get; set; }
     public string? Messenger { get; set; }
     public bool TermsAccepted { get; set; } = true;
     public string TermsAcceptedAt { get; set; } = DateTime.UtcNow.ToString("o");

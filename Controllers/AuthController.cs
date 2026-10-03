@@ -1,4 +1,5 @@
 using System.Text.Json;
+using FenixLegalOs.Infrastructure;
 using FenixLegalOs.Models;
 using FenixLegalOs.Repositories;
 using Microsoft.AspNetCore.Mvc;
@@ -26,7 +27,7 @@ public class AuthController : ControllerBase
         string Name,
         string Company,
         string Position,
-        string? Messenger,
+        string? Phone,
         string? SessionId,
         bool TermsAccepted
     );
@@ -54,6 +55,11 @@ public class AuthController : ControllerBase
             return BadRequest(new { error = "missing_fields", message = "Пожалуйста, заполните все обязательные поля (ФИО, Email, пароль, должность, компания)." });
         }
 
+        if (string.IsNullOrWhiteSpace(dto.Phone) || !PhoneHelper.TryNormalizePhone(dto.Phone, out string normalizedPhone))
+        {
+            return BadRequest(new { error = "invalid_phone", message = "Введите корректный номер телефона." });
+        }
+
         if (dto.Password.Length < 6)
         {
             return BadRequest(new { error = "weak_password", message = "Пароль должен содержать как минимум 6 символов." });
@@ -71,7 +77,7 @@ public class AuthController : ControllerBase
             dto.Name,
             dto.Company,
             dto.Position,
-            dto.Messenger
+            phone: normalizedPhone
         );
 
         string sessionId = dto.SessionId ?? "";
@@ -92,7 +98,6 @@ public class AuthController : ControllerBase
             Email = user.Email,
             Company = user.Company,
             Position = user.Position,
-            Messenger = user.Messenger,
             UserId = user.Id,
             TermsAccepted = true,
             TermsAcceptedAt = user.TermsAcceptedAt,
@@ -118,6 +123,7 @@ public class AuthController : ControllerBase
                 name = user.Name,
                 company = user.Company,
                 position = user.Position,
+                phone = user.Phone,
                 messenger = user.Messenger,
                 termsAccepted = user.TermsAccepted
             }
@@ -164,6 +170,7 @@ public class AuthController : ControllerBase
                 name = user.Name,
                 company = user.Company,
                 position = user.Position,
+                phone = user.Phone,
                 messenger = user.Messenger,
                 termsAccepted = user.TermsAccepted
             }
@@ -221,6 +228,7 @@ public class AuthController : ControllerBase
                 name = user.Name,
                 company = user.Company,
                 position = user.Position,
+                phone = user.Phone,
                 messenger = user.Messenger,
                 termsAccepted = user.TermsAccepted
             }

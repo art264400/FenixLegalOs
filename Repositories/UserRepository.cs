@@ -66,7 +66,7 @@ public class UserRepository
         using var conn = GetConn();
         return conn.QueryFirstOrDefault<UserAccount>(@"
             SELECT id AS Id, email AS Email, password_hash AS PasswordHash, salt AS Salt,
-                   name AS Name, company AS Company, position AS Position, messenger AS Messenger,
+                   name AS Name, company AS Company, position AS Position, phone AS Phone, messenger AS Messenger,
                    terms_accepted AS TermsAccepted, terms_accepted_at AS TermsAcceptedAt,
                    created_at AS CreatedAt, updated_at AS UpdatedAt
             FROM users
@@ -79,7 +79,7 @@ public class UserRepository
         using var conn = GetConn();
         return conn.QueryFirstOrDefault<UserAccount>(@"
             SELECT id AS Id, email AS Email, password_hash AS PasswordHash, salt AS Salt,
-                   name AS Name, company AS Company, position AS Position, messenger AS Messenger,
+                   name AS Name, company AS Company, position AS Position, phone AS Phone, messenger AS Messenger,
                    terms_accepted AS TermsAccepted, terms_accepted_at AS TermsAcceptedAt,
                    created_at AS CreatedAt, updated_at AS UpdatedAt
             FROM users
@@ -87,7 +87,7 @@ public class UserRepository
         ", new { id });
     }
 
-    public UserAccount CreateUser(string email, string password, string name, string company, string position, string? messenger)
+    public UserAccount CreateUser(string email, string password, string name, string company, string position, string? phone, string? messenger = null)
     {
         using var conn = GetConn();
         var id = Guid.NewGuid().ToString();
@@ -95,8 +95,8 @@ public class UserRepository
         var (hash, salt) = PasswordHelper.HashPassword(password);
 
         conn.Execute(@"
-            INSERT INTO users (id, email, password_hash, salt, name, company, position, messenger, terms_accepted, terms_accepted_at, created_at, updated_at)
-            VALUES (@id, LOWER(@email), @hash, @salt, @name, @company, @position, @messenger, 1, @now, @now, @now)
+            INSERT INTO users (id, email, password_hash, salt, name, company, position, phone, messenger, terms_accepted, terms_accepted_at, created_at, updated_at)
+            VALUES (@id, LOWER(@email), @hash, @salt, @name, @company, @position, @phone, @messenger, 1, @now, @now, @now)
         ", new
         {
             id,
@@ -106,6 +106,7 @@ public class UserRepository
             name = name.Trim(),
             company = company.Trim(),
             position = position.Trim(),
+            phone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim(),
             messenger = string.IsNullOrWhiteSpace(messenger) ? null : messenger.Trim(),
             now
         });
@@ -119,6 +120,7 @@ public class UserRepository
             Name = name.Trim(),
             Company = company.Trim(),
             Position = position.Trim(),
+            Phone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim(),
             Messenger = string.IsNullOrWhiteSpace(messenger) ? null : messenger.Trim(),
             TermsAccepted = true,
             TermsAcceptedAt = now,
@@ -176,7 +178,7 @@ public class UserRepository
         var now = DateTime.UtcNow.ToString("o");
         var user = conn.QuerySingleOrDefault<UserAccount>(@"
             SELECT u.id AS Id, u.email AS Email, u.password_hash AS PasswordHash, u.salt AS Salt,
-                   u.name AS Name, u.company AS Company, u.position AS Position, u.messenger AS Messenger,
+                   u.name AS Name, u.company AS Company, u.position AS Position, u.phone AS Phone, u.messenger AS Messenger,
                    u.terms_accepted AS TermsAccepted, u.terms_accepted_at AS TermsAcceptedAt,
                    u.created_at AS CreatedAt, u.updated_at AS UpdatedAt
             FROM users u

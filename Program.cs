@@ -1,5 +1,10 @@
+using System;
+using System.IO;
 using FenixLegalOs.Repositories;
 using FenixLegalOs.Services;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 
 // 1. Automatically load .env file if present
@@ -19,6 +24,9 @@ builder.Services.AddSingleton<SessionRepository>();
 builder.Services.AddSingleton<UserRepository>();
 builder.Services.AddSingleton<LeadRepository>();
 builder.Services.AddSingleton<SettingsRepository>();
+builder.Services.AddSingleton<PaymentRepository>();
+builder.Services.AddSingleton<IPaymentGateway, BccPaymentGateway>();
+builder.Services.AddSingleton<PaymentService>();
 builder.Services.AddSingleton<ScoringEngine>();
 builder.Services.AddSingleton<TypstPdfService>();
 builder.Services.AddSingleton<AiReportService>();
