@@ -2759,6 +2759,371 @@ public sealed class PaymentControllersTests : IDisposable
         return sessionId;
     }
 
+    [Fact(DisplayName = "PaymentService logs Information with OrderId on start")]
+    public async Task PaymentService_LogsInformationWithOrderId_OnStart()
+    {
+        var logger = new ListLogger<PaymentService>();
+        var configuredGateway = CreateFullyConfiguredGateway();
+        var serviceWithLogger = new PaymentService(_sessions, _settings, _paymentRepo, configuredGateway, _userRepo, logger);
+
+        string sessionId = CreateCompletedSession();
+        var result = await serviceWithLogger.StartAsync(
+            sessionId: sessionId,
+            requestedTariff: "report",
+            browserScreenHeight: 1080,
+            browserScreenWidth: 1920,
+            clientIp: "127.0.0.1",
+            billingAddress: "г. Астана, ул. Абая, д. 10");
+
+        Assert.Equal(200, result.StatusCode);
+        var createdLogs = logger.Entries.Where(e => e.EventId == PaymentEvents.PaymentCreated).ToList();
+        Assert.NotEmpty(createdLogs);
+        var createdLog = createdLogs.First();
+        Assert.Equal(Microsoft.Extensions.Logging.LogLevel.Information, createdLog.LogLevel);
+
+        // Проверяем, что OrderId присутствует в логах
+        string json = JsonSerializer.Serialize(result.Value);
+        using var doc = JsonDocument.Parse(json);
+        string orderId = doc.RootElement.GetProperty("orderId").GetString()!;
+        Assert.False(string.IsNullOrWhiteSpace(orderId));
+        Assert.Contains(orderId, createdLog.Message);
+    }
+
+    [Fact(DisplayName = "BccNotificationService logs ACTION and RC on successful callback")]
+    public async Task BccNotificationService_LogsActionAndRc_OnSuccess()
+    {
+        var logger = new ListLogger<BccNotificationService>();
+        var notifyService = new BccNotificationService(_paymentRepo, null, new BccPaymentOptions
+        {
+            Environment = "test",
+            TerminalId = "88888881",
+            AllowUnauthenticatedTestNotifications = true
+        }, logger);
+
+        string sessionId = CreateCompletedSession();
+        string orderId = $"ORDER_{Guid.NewGuid():N}";
+        _paymentRepo.Create(new Payment
+        {
+            Id = Guid.NewGuid().ToString(),
+            SessionId = sessionId,
+            OrderId = orderId,
+            Tariff = "report",
+            AmountKzt = 49990,
+            Currency = "KZT",
+            Provider = "bcc",
+            Environment = "test",
+            TerminalId = "88888881",
+            Status = PaymentStatuses.Created
+        });
+
+        var form = new FormCollection(new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>
+        {
+            ["ORDER"] = orderId,
+            ["AMOUNT"] = "49990.00",
+            ["CURRENCY"] = "398",
+            ["TERMINAL"] = "88888881",
+            ["TRTYPE"] = "1",
+            ["ACTION"] = "0",
+            ["RC"] = "00",
+            ["RRN"] = "123456789012",
+            ["INT_REF"] = "INT999"
+        });
+
+        var res = await notifyService.ProcessNotificationAsync(null, form);
+        Assert.Equal(200, res.StatusCode);
+
+        var actionRcLogs = logger.Entries.Where(e => e.Message.Contains("Банковский результат принят")).ToList();
+        Assert.NotEmpty(actionRcLogs);
+        var log = actionRcLogs.First();
+        Assert.Contains("ACTION 0", log.Message);
+        Assert.Contains("RC 00", log.Message);
+        Assert.Contains(orderId, log.Message);
+    }
+
+    [Fact(DisplayName = "BccNotificationService logs Warning on invalid callback")]
+    public async Task BccNotificationService_LogsWarning_OnInvalidCallback()
+    {
+        var logger = new ListLogger<BccNotificationService>();
+        var notifyService = new BccNotificationService(_paymentRepo, null, new BccPaymentOptions
+        {
+            Environment = "test",
+            TerminalId = "88888881",
+            AllowUnauthenticatedTestNotifications = true
+        }, logger);
+
+        var form = new FormCollection(new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>
+        {
+            ["ORDER"] = "NON_EXISTING_ORDER_999",
+            ["AMOUNT"] = "49990.00",
+            ["CURRENCY"] = "398",
+            ["TERMINAL"] = "88888881",
+            ["TRTYPE"] = "1",
+            ["ACTION"] = "0",
+            ["RC"] = "00"
+        });
+
+        var res = await notifyService.ProcessNotificationAsync(null, form);
+        Assert.Equal(400, res.StatusCode);
+
+        var warnings = logger.Entries.Where(e => e.LogLevel == Microsoft.Extensions.Logging.LogLevel.Warning).ToList();
+        Assert.NotEmpty(warnings);
+        Assert.Contains(warnings, w => w.Message.Contains("не найден"));
+    }
+
+    [Fact(DisplayName = "BccNotificationService logs separate Warning when callback received unauthenticated in test environment")]
+    public async Task BccNotificationService_LogsSeparateWarning_WhenUnauthenticatedInTest()
+    {
+        var logger = new ListLogger<BccNotificationService>();
+        var notifyService = new BccNotificationService(_paymentRepo, null, new BccPaymentOptions
+        {
+            Environment = "test",
+            TerminalId = "88888881",
+            AllowUnauthenticatedTestNotifications = true
+        }, logger);
+
+        string sessionId = CreateCompletedSession();
+        string orderId = $"ORDER_{Guid.NewGuid():N}";
+        _paymentRepo.Create(new Payment
+        {
+            Id = Guid.NewGuid().ToString(),
+            SessionId = sessionId,
+            OrderId = orderId,
+            Tariff = "report",
+            AmountKzt = 49990,
+            Currency = "KZT",
+            Provider = "bcc",
+            Environment = "test",
+            TerminalId = "88888881",
+            Status = PaymentStatuses.Created
+        });
+
+        var form = new FormCollection(new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>
+        {
+            ["ORDER"] = orderId,
+            ["AMOUNT"] = "49990.00",
+            ["CURRENCY"] = "398",
+            ["TERMINAL"] = "88888881",
+            ["TRTYPE"] = "1",
+            ["ACTION"] = "0",
+            ["RC"] = "00"
+        });
+
+        await notifyService.ProcessNotificationAsync(null, form);
+
+        var testUnauthWarnings = logger.Entries.Where(e =>
+            e.LogLevel == Microsoft.Extensions.Logging.LogLevel.Warning &&
+            e.EventId == PaymentEvents.BccUnauthenticatedTestCallbackAccepted &&
+            e.Message.Contains("без авторизации")).ToList();
+
+        Assert.NotEmpty(testUnauthWarnings);
+    }
+
+    [Fact(DisplayName = "BccNotificationService logs forbidden status transition or protected status")]
+    public async Task BccNotificationService_LogsForbiddenStatusTransition()
+    {
+        var logger = new ListLogger<BccNotificationService>();
+        var notifyService = new BccNotificationService(_paymentRepo, null, new BccPaymentOptions
+        {
+            Environment = "test",
+            TerminalId = "88888881",
+            AllowUnauthenticatedTestNotifications = true
+        }, logger);
+
+        string sessionId = CreateCompletedSession();
+        string orderId = $"ORDER_{Guid.NewGuid():N}";
+        _paymentRepo.Create(new Payment
+        {
+            Id = Guid.NewGuid().ToString(),
+            SessionId = sessionId,
+            OrderId = orderId,
+            Tariff = "report",
+            AmountKzt = 49990,
+            Currency = "KZT",
+            Provider = "bcc",
+            Environment = "test",
+            TerminalId = "88888881",
+            Status = PaymentStatuses.Created
+        });
+        _paymentRepo.UpdateStatus(orderId, PaymentStatuses.Paid, paidAt: DateTime.UtcNow.ToString("o"));
+
+        // Запоздалый неуспешный коллбэк (ACTION=1)
+        var form = new FormCollection(new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>
+        {
+            ["ORDER"] = orderId,
+            ["AMOUNT"] = "49990.00",
+            ["CURRENCY"] = "398",
+            ["TERMINAL"] = "88888881",
+            ["TRTYPE"] = "1",
+            ["ACTION"] = "1",
+            ["RC"] = "05"
+        });
+
+        var res = await notifyService.ProcessNotificationAsync(null, form);
+        Assert.Equal(200, res.StatusCode);
+
+        // Проверяем, что залогировано предупреждение о том, что переход был отклонён и статус не изменился
+        var statusWarnings = logger.Entries.Where(e =>
+            e.LogLevel == Microsoft.Extensions.Logging.LogLevel.Warning &&
+            (e.Message.Contains("был отклонён") || e.Message.Contains("остался paid"))).ToList();
+
+        Assert.NotEmpty(statusWarnings);
+    }
+
+    [Fact(DisplayName = "Logging never leaks sensitive data in messages, structured properties, or exceptions")]
+    public async Task Logging_NeverLeaks_SensitiveData()
+    {
+        var pLogger = new ListLogger<PaymentService>();
+        var gLogger = new ListLogger<BccPaymentGateway>();
+        var nLogger = new ListLogger<BccNotificationService>();
+        var cLogger = new ListLogger<BccCallbacksController>();
+
+        string secretMacKey = "6BB0AC02E47BDF73D98FEB777F3B5294";
+        string secretPassword = "SuperSecretPassword123!";
+        string secretUsername = "notifyUser";
+        string secretPhone = "+77019998877";
+        string secretAddress = "г. Алматы, ул. Секретная, д. 77, кв. 99";
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["BCC_ENVIRONMENT"] = "test",
+                ["BCC_TERMINAL_ID"] = "88888881",
+                ["BCC_GATEWAY_URL"] = "https://test3ds.bcc.kz:5445/cgi-bin/cgi_link",
+                ["BCC_NOTIFY_URL"] = "https://fenixlaw.org:443/api/payments/bcc/notify",
+                ["BCC_RETURN_URL"] = "https://fenixlaw.org:443/api/payments/bcc/return",
+                ["BCC_MERCHANT_ID"] = "00000001",
+                ["BCC_MERCHANT_NAME"] = "TOO MERCHANT",
+                ["BCC_MAC_KEY"] = secretMacKey,
+                ["BCC_NOTIFY_USERNAME"] = secretUsername,
+                ["BCC_NOTIFY_PASSWORD"] = secretPassword,
+                ["BCC_ALLOW_UNAUTHENTICATED_TEST_NOTIFICATIONS"] = "false"
+            })
+            .Build();
+
+        var gateway = new BccPaymentGateway(config, gLogger);
+        var paymentService = new PaymentService(_sessions, _settings, _paymentRepo, gateway, _userRepo, pLogger);
+
+        string sessionId = _sessions.CreateSession();
+        _sessions.CompleteSession(sessionId, "{}", new ScoreResult { Overall = 50 });
+        var user = _userRepo.CreateUser(
+            email: $"test_{Guid.NewGuid():N}@example.com",
+            password: "password123",
+            name: "Secret User",
+            company: "Secret Co",
+            position: "CEO",
+            phone: secretPhone);
+        _userRepo.AttachUserToSession(sessionId, user.Id);
+
+        // Запуск платежа
+        var startResult = await paymentService.StartAsync(
+            sessionId: sessionId,
+            requestedTariff: "report",
+            browserScreenHeight: 1080,
+            browserScreenWidth: 1920,
+            clientIp: "127.0.0.1",
+            billingAddress: secretAddress);
+
+        Assert.Equal(200, startResult.StatusCode);
+
+        string pSign = "";
+        string mInfo = "";
+        if (startResult.Value is not null)
+        {
+            var formFieldsProp = startResult.Value.GetType().GetProperty("formFields");
+            if (formFieldsProp?.GetValue(startResult.Value) is Dictionary<string, string> dict)
+            {
+                dict.TryGetValue("P_SIGN", out pSign!);
+                dict.TryGetValue("M_INFO", out mInfo!);
+            }
+        }
+        Assert.False(string.IsNullOrWhiteSpace(pSign));
+        Assert.False(string.IsNullOrWhiteSpace(mInfo));
+
+        // Вызов нотификации через контроллер
+        var notifyService = new BccNotificationService(_paymentRepo, config, null, nLogger);
+        var controller = new BccCallbacksController(notifyService, cLogger)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    TraceIdentifier = "trace-test-123",
+                    Connection = { RemoteIpAddress = System.Net.IPAddress.Parse("127.0.0.1") }
+                }
+            }
+        };
+
+        string authHeader = "Basic " + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{secretUsername}:{secretPassword}"));
+        controller.HttpContext.Request.Headers["Authorization"] = authHeader;
+
+        string startJson = JsonSerializer.Serialize(startResult.Value);
+        using var startDoc = JsonDocument.Parse(startJson);
+        string orderId = startDoc.RootElement.GetProperty("orderId").GetString()!;
+        var form = new FormCollection(new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>
+        {
+            ["ORDER"] = orderId,
+            ["AMOUNT"] = "49990.00",
+            ["CURRENCY"] = "398",
+            ["TERMINAL"] = "88888881",
+            ["TRTYPE"] = "1",
+            ["ACTION"] = "0",
+            ["RC"] = "00",
+            ["RRN"] = "123456789012",
+            ["INT_REF"] = "INT999",
+            ["TEXT"] = "BANK TRANSACTION APPROVED TEXT WITH SENSITIVE DATA"
+        });
+
+        await controller.Notify(form);
+
+        // Проверяем все логи всех компонентов
+        var allEntries = pLogger.Entries
+            .Concat(gLogger.Entries)
+            .Concat(nLogger.Entries)
+            .Concat(cLogger.Entries)
+            .ToList();
+
+        var sensitiveStrings = new[]
+        {
+            secretMacKey,
+            pSign,
+            secretPassword,
+            authHeader,
+            secretPhone,
+            "7019998877",
+            secretAddress,
+            "Секретная",
+            mInfo,
+            "BANK TRANSACTION APPROVED TEXT WITH SENSITIVE DATA"
+        };
+
+        foreach (var entry in allEntries)
+        {
+            string msg = entry.Message;
+            string exStr = entry.Exception?.ToString() ?? "";
+
+            foreach (var secret in sensitiveStrings)
+            {
+                // Проверка отформатированного сообщения
+                Assert.DoesNotContain(secret, msg, StringComparison.OrdinalIgnoreCase);
+
+                // Проверка Exception.ToString()
+                if (!string.IsNullOrEmpty(exStr))
+                {
+                    Assert.DoesNotContain(secret, exStr, StringComparison.OrdinalIgnoreCase);
+                }
+
+                // Проверка всех структурированных свойств из state
+                foreach (var kvp in entry.Properties)
+                {
+                    string propKey = kvp.Key;
+                    string propVal = kvp.Value?.ToString() ?? "";
+                    Assert.DoesNotContain(secret, propKey, StringComparison.OrdinalIgnoreCase);
+                    Assert.DoesNotContain(secret, propVal, StringComparison.OrdinalIgnoreCase);
+                }
+            }
+        }
+    }
+
     public void Dispose()
     {
         SqliteConnection.ClearAllPools();
@@ -2767,5 +3132,68 @@ public sealed class PaymentControllersTests : IDisposable
             string path = _databasePath + suffix;
             if (File.Exists(path)) File.Delete(path);
         }
+    }
+}
+
+public sealed class LogEntry
+{
+    public Microsoft.Extensions.Logging.LogLevel LogLevel { get; init; }
+    public Microsoft.Extensions.Logging.EventId EventId { get; init; }
+    public string Message { get; init; } = "";
+    public Exception? Exception { get; init; }
+    public IReadOnlyDictionary<string, object?> Properties { get; init; } = new Dictionary<string, object?>();
+}
+
+public sealed class ListLogger<T> : Microsoft.Extensions.Logging.ILogger<T>
+{
+    private readonly List<LogEntry> _entries = new();
+    public IReadOnlyList<LogEntry> Entries => _entries;
+
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull
+    {
+        return NullScope.Instance;
+    }
+
+    public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+    public void Log<TState>(
+        Microsoft.Extensions.Logging.LogLevel logLevel,
+        Microsoft.Extensions.Logging.EventId eventId,
+        TState state,
+        Exception? exception,
+        Func<TState, Exception?, string> formatter)
+    {
+        string message = formatter(state, exception);
+        var properties = new Dictionary<string, object?>();
+
+        if (state is IEnumerable<KeyValuePair<string, object?>> stateProperties)
+        {
+            foreach (var kvp in stateProperties)
+            {
+                properties[kvp.Key] = kvp.Value;
+            }
+        }
+        else if (state is IReadOnlyList<KeyValuePair<string, object?>> readOnlyList)
+        {
+            foreach (var kvp in readOnlyList)
+            {
+                properties[kvp.Key] = kvp.Value;
+            }
+        }
+
+        _entries.Add(new LogEntry
+        {
+            LogLevel = logLevel,
+            EventId = eventId,
+            Message = message,
+            Exception = exception,
+            Properties = properties
+        });
+    }
+
+    private sealed class NullScope : IDisposable
+    {
+        public static readonly NullScope Instance = new();
+        public void Dispose() { }
     }
 }

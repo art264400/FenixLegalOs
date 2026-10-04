@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using FenixLegalOs.Models.Payments;
 using FenixLegalOs.Options;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FenixLegalOs.Services;
 
@@ -15,9 +17,13 @@ namespace FenixLegalOs.Services;
 public sealed class BccPaymentGateway : IPaymentGateway
 {
     private readonly BccPaymentOptions _options;
+    private readonly ILogger<BccPaymentGateway> _logger;
 
-    public BccPaymentGateway(IConfiguration? configuration = null)
+    public BccPaymentGateway(
+        IConfiguration? configuration = null,
+        ILogger<BccPaymentGateway>? logger = null)
     {
+        _logger = logger ?? NullLogger<BccPaymentGateway>.Instance;
         _options = new BccPaymentOptions
         {
             Environment = configuration?["BCC_ENVIRONMENT"]?.Trim().ToLowerInvariant() ?? "",
@@ -86,8 +92,31 @@ public sealed class BccPaymentGateway : IPaymentGateway
 
     public Task<PaymentGatewayInitResult> CreatePaymentAsync(PaymentGatewayInitRequest request, CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation(
+            PaymentEvents.BccFormPreparing,
+            "Началось формирование формы BCC для сессии {SessionId}, тариф {Tariff}, сумма {AmountKzt} {Currency}",
+            request.SessionId,
+            request.Tariff,
+            request.AmountKzt,
+            request.Currency);
+
         if (!IsConfigured)
         {
+            var missingSettings = new List<string>();
+            if (string.IsNullOrWhiteSpace(_options.Environment)) missingSettings.Add(nameof(_options.Environment));
+            if (string.IsNullOrWhiteSpace(_options.TerminalId)) missingSettings.Add(nameof(_options.TerminalId));
+            if (string.IsNullOrWhiteSpace(_options.GatewayUrl)) missingSettings.Add(nameof(_options.GatewayUrl));
+            if (string.IsNullOrWhiteSpace(_options.NotifyUrl)) missingSettings.Add(nameof(_options.NotifyUrl));
+            if (string.IsNullOrWhiteSpace(_options.ReturnUrl)) missingSettings.Add(nameof(_options.ReturnUrl));
+            if (string.IsNullOrWhiteSpace(_options.MerchantId)) missingSettings.Add(nameof(_options.MerchantId));
+            if (string.IsNullOrWhiteSpace(_options.MerchantName)) missingSettings.Add(nameof(_options.MerchantName));
+            if (!IsValidHexKey(_options.MacKeyHex)) missingSettings.Add(nameof(_options.MacKeyHex));
+
+            _logger.LogWarning(
+                PaymentEvents.BccGatewayWarning,
+                "Платёжный шлюз BCC не настроен. Отсутствующие настройки: {MissingSettings}",
+                string.Join(", ", missingSettings));
+
             return Task.FromResult(new PaymentGatewayInitResult
             {
                 Success = false,
@@ -98,6 +127,11 @@ public sealed class BccPaymentGateway : IPaymentGateway
 
         if (string.IsNullOrWhiteSpace(request.ClientIp))
         {
+            _logger.LogWarning(
+                PaymentEvents.BccGatewayWarning,
+                "Отсутствует Client IP для сессии {SessionId}",
+                request.SessionId);
+
             return Task.FromResult(new PaymentGatewayInitResult
             {
                 Success = false,
@@ -108,6 +142,11 @@ public sealed class BccPaymentGateway : IPaymentGateway
 
         if (string.IsNullOrWhiteSpace(request.Phone))
         {
+            _logger.LogWarning(
+                PaymentEvents.BccGatewayWarning,
+                "Отсутствует телефон пользователя для сессии {SessionId}",
+                request.SessionId);
+
             return Task.FromResult(new PaymentGatewayInitResult
             {
                 Success = false,
@@ -118,6 +157,11 @@ public sealed class BccPaymentGateway : IPaymentGateway
 
         if (string.IsNullOrWhiteSpace(request.BillingAddress))
         {
+            _logger.LogWarning(
+                PaymentEvents.BccGatewayWarning,
+                "Отсутствует адрес плательщика для сессии {SessionId}",
+                request.SessionId);
+
             return Task.FromResult(new PaymentGatewayInitResult
             {
                 Success = false,
@@ -129,6 +173,12 @@ public sealed class BccPaymentGateway : IPaymentGateway
         string trimmedAddress = request.BillingAddress.Trim();
         if (trimmedAddress.Length > 50)
         {
+            _logger.LogWarning(
+                PaymentEvents.BccGatewayWarning,
+                "Адрес плательщика длиннее 50 символов (длина {AddressLength}) для сессии {SessionId}",
+                trimmedAddress.Length,
+                request.SessionId);
+
             return Task.FromResult(new PaymentGatewayInitResult
             {
                 Success = false,
@@ -143,8 +193,28 @@ public sealed class BccPaymentGateway : IPaymentGateway
         {
             mInfo = BuildMInfo(request.BrowserScreenHeight, request.BrowserScreenWidth, request.Phone, trimmedAddress);
         }
-        catch
+        catch (ArgumentException)
         {
+            _logger.LogWarning(
+                PaymentEvents.BccGatewayWarning,
+                "Некорректны параметры экрана или контекст платежа для сессии {SessionId}",
+                request.SessionId);
+
+            return Task.FromResult(new PaymentGatewayInitResult
+            {
+                Success = false,
+                ErrorCode = "invalid_payment_context",
+                ErrorMessage = "Не удалось подготовить данные для проведения платежа."
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                PaymentEvents.BccGatewayError,
+                ex,
+                "Ошибка создания M_INFO для сессии {SessionId}",
+                request.SessionId);
+
             return Task.FromResult(new PaymentGatewayInitResult
             {
                 Success = false,
@@ -157,6 +227,16 @@ public sealed class BccPaymentGateway : IPaymentGateway
         string orderId = !string.IsNullOrWhiteSpace(request.OrderId)
             ? request.OrderId
             : $"{DateTime.UtcNow:yyyyMMddHHmmss}{Random.Shared.Next(1000, 9999)}";
+
+        if (string.IsNullOrWhiteSpace(request.OrderId))
+        {
+            _logger.LogInformation(
+                PaymentEvents.BccFormPrepared,
+                "Сформирован новый OrderId {OrderId} для сессии {SessionId}",
+                orderId,
+                request.SessionId);
+        }
+
         string nonce = GenerateNonce();
         string timestamp = GenerateTimestamp();
         string merchRnId = GenerateMerchRnId();
@@ -173,7 +253,21 @@ public sealed class BccPaymentGateway : IPaymentGateway
         string macData = BuildMacDataString(amountStr, currencyCode, orderId, merchant, _options.TerminalId, merchGmt, timestamp, trType, nonce);
 
         // Вычисление цифровой подписи P_SIGN (HMAC-SHA1 с HEX-ключом)
-        string pSign = SignMac(macData);
+        string pSign;
+        try
+        {
+            pSign = SignMac(macData);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                PaymentEvents.BccGatewayError,
+                ex,
+                "Ошибка расчёта P_SIGN для заказа {OrderId}, сессия {SessionId}",
+                orderId,
+                request.SessionId);
+            throw;
+        }
 
         // Подготовка параметров формы для шлюза BCC (TRTYPE=1, шаг #1)
         var formFields = new Dictionary<string, string>
@@ -197,6 +291,17 @@ public sealed class BccPaymentGateway : IPaymentGateway
             ["M_INFO"] = mInfo,
             ["P_SIGN"] = pSign
         };
+
+        _logger.LogInformation(
+            PaymentEvents.BccFormPrepared,
+            "Форма BCC успешно подготовлена: заказ {OrderId}, сессия {SessionId}, терминал {TerminalId}, сумма {AmountKzt} {Currency}, тариф {Tariff}, окружение {Environment}",
+            orderId,
+            request.SessionId,
+            _options.TerminalId,
+            request.AmountKzt,
+            request.Currency,
+            request.Tariff,
+            _options.Environment);
 
         return Task.FromResult(new PaymentGatewayInitResult
         {

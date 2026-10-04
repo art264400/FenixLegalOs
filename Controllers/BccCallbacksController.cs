@@ -4,6 +4,8 @@ using System.Threading.Tasks;
 using FenixLegalOs.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FenixLegalOs.Controllers;
 
@@ -14,11 +16,35 @@ namespace FenixLegalOs.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/payments/bcc")]
-public sealed class BccCallbacksController(BccNotificationService notificationService) : ControllerBase
+public sealed class BccCallbacksController : ControllerBase
 {
+    private readonly BccNotificationService _notificationService;
+    private readonly ILogger<BccCallbacksController> _logger;
+
+    public BccCallbacksController(
+        BccNotificationService notificationService,
+        ILogger<BccCallbacksController>? logger = null)
+    {
+        _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
+        _logger = logger ?? NullLogger<BccCallbacksController>.Instance;
+    }
+
     [HttpPost("notify")]
     public async Task<IActionResult> Notify([FromForm] IFormCollection? form = null)
     {
+        string httpMethod = Request?.Method ?? "POST";
+        string contentType = Request?.ContentType ?? "";
+        string traceId = HttpContext?.TraceIdentifier ?? "";
+        bool authHeaderPresent = !string.IsNullOrWhiteSpace(Request?.Headers?.Authorization.ToString());
+
+        _logger.LogInformation(
+            PaymentEvents.BccNotifyRequestReceived,
+            "Получен запрос BCC Notify: метод {HttpMethod}, Content-Type {ContentType}, TraceIdentifier {TraceIdentifier}, AuthorizationPresent: {AuthorizationPresent}",
+            httpMethod,
+            contentType,
+            traceId,
+            authHeaderPresent);
+
         var authHeader = Request?.Headers?.Authorization.ToString();
         IFormCollection? formCollection = form;
         if (formCollection == null || formCollection.Count == 0)
@@ -34,14 +60,39 @@ public sealed class BccCallbacksController(BccNotificationService notificationSe
                     formCollection = Request.Form;
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogWarning(
+                    PaymentEvents.BccControllerWarning,
+                    ex,
+                    "Невозможно прочитать тело формы уведомления BCC, TraceIdentifier {TraceIdentifier}",
+                    traceId);
+
                 // Если Form не была передана в теле Request, используем переданный параметр или пустую коллекцию
                 formCollection = form ?? new FormCollection(new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>());
             }
         }
 
-        var result = await notificationService.ProcessNotificationAsync(authHeader, formCollection);
+        BccNotificationResult result;
+        try
+        {
+            result = await _notificationService.ProcessNotificationAsync(authHeader, formCollection, traceId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                PaymentEvents.BccControllerError,
+                ex,
+                "Неожиданная ошибка обработки уведомления BCC, TraceIdentifier {TraceIdentifier}",
+                traceId);
+            throw;
+        }
+
+        _logger.LogInformation(
+            PaymentEvents.BccNotifyRequestProcessed,
+            "Запрос BCC Notify обработан: HTTP status {HttpStatus}, TraceIdentifier {TraceIdentifier}",
+            result.StatusCode,
+            traceId);
 
         if (result.StatusCode == StatusCodes.Status401Unauthorized && !string.IsNullOrWhiteSpace(result.WwwAuthenticateHeader))
         {
@@ -59,13 +110,23 @@ public sealed class BccCallbacksController(BccNotificationService notificationSe
         return StatusCode(result.StatusCode, result.Value);
     }
 
-
     [HttpGet("return")]
     [HttpPost("return")]
     public IActionResult ReturnToMerchant()
     {
+        string httpMethod = Request?.Method ?? "GET";
+        string traceId = HttpContext?.TraceIdentifier ?? "";
+        const string redirectPath = "/#/results";
+
+        _logger.LogInformation(
+            PaymentEvents.BccReturnReceived,
+            "Браузер вернулся из BCC: метод {HttpMethod}, TraceIdentifier {TraceIdentifier}, целевой путь {RedirectPath}",
+            httpMethod,
+            traceId,
+            redirectPath);
+
         // Этот маршрут только возвращает браузер в приложение и намеренно
         // не отмечает диагностику как оплаченную.
-        return Redirect("/#/results");
+        return Redirect(redirectPath);
     }
 }

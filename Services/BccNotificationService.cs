@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -8,6 +9,8 @@ using FenixLegalOs.Options;
 using FenixLegalOs.Repositories;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FenixLegalOs.Services;
 
@@ -31,10 +34,16 @@ public sealed class BccNotificationService
 {
     private readonly PaymentRepository _paymentRepository;
     private readonly BccPaymentOptions _options;
+    private readonly ILogger<BccNotificationService> _logger;
 
-    public BccNotificationService(PaymentRepository paymentRepository, IConfiguration? configuration = null, BccPaymentOptions? options = null)
+    public BccNotificationService(
+        PaymentRepository paymentRepository,
+        IConfiguration? configuration = null,
+        BccPaymentOptions? options = null,
+        ILogger<BccNotificationService>? logger = null)
     {
         _paymentRepository = paymentRepository;
+        _logger = logger ?? NullLogger<BccNotificationService>.Instance;
         _options = options ?? new BccPaymentOptions
         {
             Environment = configuration?["BCC_ENVIRONMENT"]?.Trim().ToLowerInvariant() ?? Environment.GetEnvironmentVariable("BCC_ENVIRONMENT")?.Trim().ToLowerInvariant() ?? "",
@@ -54,8 +63,17 @@ public sealed class BccNotificationService
     private static bool ParseBool(string? value) =>
         bool.TryParse(value?.Trim(), out bool result) && result;
 
-    public Task<BccNotificationResult> ProcessNotificationAsync(string? authHeader, IFormCollection? form)
+    public Task<BccNotificationResult> ProcessNotificationAsync(string? authHeader, IFormCollection? form, string? traceIdentifier = null)
     {
+        bool authHeaderPresent = !string.IsNullOrWhiteSpace(authHeader);
+
+        _logger.LogInformation(
+            PaymentEvents.BccCallbackReceived,
+            "Callback BCC получен. AuthorizationPresent: {AuthorizationPresent}, Environment: {Environment}, TraceIdentifier: {TraceIdentifier}",
+            authHeaderPresent,
+            _options.Environment,
+            traceIdentifier);
+
         // 1. Проверка авторизации:
         // - production: Basic Auth всегда обязателен, неавторизованные уведомления строго запрещены;
         // - test + AllowUnauthenticatedTestNotifications=true: разрешить уведомление без Authorization;
@@ -67,12 +85,20 @@ public sealed class BccNotificationService
         if (allowUnauthenticated && string.IsNullOrWhiteSpace(authHeader))
         {
             // В тестовой среде с разрешённым флагом уведомление принимается без заголовка Authorization
+            _logger.LogWarning(
+                PaymentEvents.BccUnauthenticatedTestCallbackAccepted,
+                "В тестовом окружении принимается callback без авторизации (AllowUnauthenticatedTestNotifications=true)");
         }
         else
         {
             // Требуется настроенный HTTP Basic Auth
             if (string.IsNullOrWhiteSpace(_options.NotifyUsername) || string.IsNullOrWhiteSpace(_options.NotifyPassword))
             {
+                _logger.LogWarning(
+                    PaymentEvents.BccCallbackRejected,
+                    "Basic Auth не настроен для приёма уведомлений BCC в окружении {Environment}",
+                    _options.Environment);
+
                 return Task.FromResult(new BccNotificationResult
                 {
                     StatusCode = StatusCodes.Status503ServiceUnavailable,
@@ -86,6 +112,10 @@ public sealed class BccNotificationService
 
             if (!ValidateBasicAuth(authHeader))
             {
+                _logger.LogWarning(
+                    PaymentEvents.BccCallbackRejected,
+                    "Authorization отсутствует или неверен при обработке callback BCC");
+
                 return Task.FromResult(new BccNotificationResult
                 {
                     StatusCode = StatusCodes.Status401Unauthorized,
@@ -102,6 +132,10 @@ public sealed class BccNotificationService
         // 2. Извлечение полей BCC из application/x-www-form-urlencoded
         if (form == null)
         {
+            _logger.LogWarning(
+                PaymentEvents.BccCallbackRejected,
+                "Отсутствуют данные формы в callback BCC");
+
             return Task.FromResult(new BccNotificationResult
             {
                 StatusCode = StatusCodes.Status400BadRequest,
@@ -133,6 +167,10 @@ public sealed class BccNotificationService
         // 3. Поиск платежа по полю ORDER
         if (string.IsNullOrWhiteSpace(order))
         {
+            _logger.LogWarning(
+                PaymentEvents.BccCallbackRejected,
+                "В callback BCC отсутствует обязательное поле ORDER");
+
             return Task.FromResult(new BccNotificationResult
             {
                 StatusCode = StatusCodes.Status400BadRequest,
@@ -144,9 +182,33 @@ public sealed class BccNotificationService
             });
         }
 
-        var payment = _paymentRepository.GetByOrderId(order);
+        using var scope = _logger.BeginScope(new Dictionary<string, object?>
+        {
+            ["OrderId"] = order
+        });
+
+        Payment? payment;
+        try
+        {
+            payment = _paymentRepository.GetByOrderId(order);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                PaymentEvents.BccCallbackError,
+                ex,
+                "Неожиданное исключение поиска платежа {OrderId} при обработке callback",
+                order);
+            throw;
+        }
+
         if (payment == null)
         {
+            _logger.LogWarning(
+                PaymentEvents.BccCallbackRejected,
+                "Платёж с ORDER {OrderId} не найден в БД",
+                order);
+
             return Task.FromResult(new BccNotificationResult
             {
                 StatusCode = StatusCodes.Status400BadRequest,
@@ -158,10 +220,62 @@ public sealed class BccNotificationService
             });
         }
 
+        _logger.LogInformation(
+            PaymentEvents.BccCallbackReceived,
+            "Платёж найден для callback: заказ {OrderId}, текущий статус {CurrentStatus}",
+            payment.OrderId,
+            payment.Status);
+
+        // Проверка соответствия провайдера
+        if (!string.Equals(payment.Provider, "bcc", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning(
+                PaymentEvents.BccCallbackRejected,
+                "Провайдер платежа {OrderId} '{PaymentProvider}' не соответствует BCC",
+                payment.OrderId,
+                payment.Provider);
+
+            return Task.FromResult(new BccNotificationResult
+            {
+                StatusCode = StatusCodes.Status400BadRequest,
+                Value = new
+                {
+                    error = "provider_mismatch",
+                    message = "Провайдер платежа не соответствует BCC."
+                }
+            });
+        }
+
+        // Проверка соответствия окружения
+        if (!string.Equals(payment.Environment, _options.Environment, StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning(
+                PaymentEvents.BccCallbackRejected,
+                "Окружение платежа {OrderId} '{PaymentEnvironment}' не соответствует текущему окружению шлюза '{CurrentEnvironment}'",
+                payment.OrderId,
+                payment.Environment,
+                _options.Environment);
+
+            return Task.FromResult(new BccNotificationResult
+            {
+                StatusCode = StatusCodes.Status400BadRequest,
+                Value = new
+                {
+                    error = "environment_mismatch",
+                    message = "Окружение платежа не соответствует текущему окружению шлюза."
+                }
+            });
+        }
+
         // 4. Проверка обязательных полей ACTION и RC:
         // Неполное или некорректное уведомление отклоняется без изменения статуса платежа.
         if (string.IsNullOrWhiteSpace(action))
         {
+            _logger.LogWarning(
+                PaymentEvents.BccCallbackRejected,
+                "В callback для заказа {OrderId} отсутствует обязательное поле ACTION",
+                payment.OrderId);
+
             return Task.FromResult(new BccNotificationResult
             {
                 StatusCode = StatusCodes.Status400BadRequest,
@@ -175,6 +289,11 @@ public sealed class BccNotificationService
 
         if (string.IsNullOrWhiteSpace(rc))
         {
+            _logger.LogWarning(
+                PaymentEvents.BccCallbackRejected,
+                "В callback для заказа {OrderId} отсутствует обязательное поле RC",
+                payment.OrderId);
+
             return Task.FromResult(new BccNotificationResult
             {
                 StatusCode = StatusCodes.Status400BadRequest,
@@ -190,6 +309,13 @@ public sealed class BccNotificationService
         string expectedTerminal = !string.IsNullOrWhiteSpace(payment.TerminalId) ? payment.TerminalId : _options.TerminalId;
         if (string.IsNullOrWhiteSpace(terminal) || !string.Equals(terminal, expectedTerminal, StringComparison.OrdinalIgnoreCase))
         {
+            _logger.LogWarning(
+                PaymentEvents.BccCallbackRejected,
+                "Терминал {ReceivedTerminal} в callback не совпадает с ожидаемым {ExpectedTerminal} для заказа {OrderId}",
+                terminal,
+                expectedTerminal,
+                payment.OrderId);
+
             return Task.FromResult(new BccNotificationResult
             {
                 StatusCode = StatusCodes.Status400BadRequest,
@@ -204,6 +330,12 @@ public sealed class BccNotificationService
         // 6. Проверка суммы (точное сравнение decimal без округления)
         if (!decimal.TryParse(amountStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsedAmount))
         {
+            _logger.LogWarning(
+                PaymentEvents.BccCallbackRejected,
+                "AMOUNT имеет некорректный формат '{AmountStr}' для заказа {OrderId}",
+                amountStr,
+                payment.OrderId);
+
             return Task.FromResult(new BccNotificationResult
             {
                 StatusCode = StatusCodes.Status400BadRequest,
@@ -217,6 +349,13 @@ public sealed class BccNotificationService
 
         if (parsedAmount != payment.AmountKzt)
         {
+            _logger.LogWarning(
+                PaymentEvents.BccCallbackRejected,
+                "Сумма операции {ReceivedAmount} не совпадает с суммой заказа {ExpectedAmount} для заказа {OrderId}",
+                parsedAmount,
+                payment.AmountKzt,
+                payment.OrderId);
+
             return Task.FromResult(new BccNotificationResult
             {
                 StatusCode = StatusCodes.Status400BadRequest,
@@ -233,6 +372,13 @@ public sealed class BccNotificationService
             || (string.Equals(payment.Currency, "KZT", StringComparison.OrdinalIgnoreCase) && currency == "398");
         if (!currencyMatches)
         {
+            _logger.LogWarning(
+                PaymentEvents.BccCallbackRejected,
+                "Валюта {ReceivedCurrency} не совпадает с валютой заказа {ExpectedCurrency} для заказа {OrderId}",
+                currency,
+                payment.Currency,
+                payment.OrderId);
+
             return Task.FromResult(new BccNotificationResult
             {
                 StatusCode = StatusCodes.Status400BadRequest,
@@ -247,6 +393,12 @@ public sealed class BccNotificationService
         // 8. Проверка типа операции TRTYPE (TRTYPE=1: Покупка)
         if (trType != "1")
         {
+            _logger.LogWarning(
+                PaymentEvents.BccCallbackRejected,
+                "TRTYPE '{TrType}' не поддерживается для заказа {OrderId}",
+                trType,
+                payment.OrderId);
+
             return Task.FromResult(new BccNotificationResult
             {
                 StatusCode = StatusCodes.Status400BadRequest,
@@ -258,6 +410,17 @@ public sealed class BccNotificationService
             });
         }
 
+        _logger.LogInformation(
+            PaymentEvents.BccCallbackReceived,
+            "Банковский результат принят: заказ {OrderId}, TRTYPE {TrType}, ACTION {Action}, RC {ResponseCode}, MADV_CODE {MadvCode}, RRN {Rrn}, INT_REF {IntRef}",
+            payment.OrderId,
+            trType,
+            action,
+            rc,
+            madvCode,
+            rrn,
+            intRef);
+
         // 9. Определение статуса по спецификации BCC Way4:
         // Успех: ACTION == "0" и код ответа RC равен "00" или "0".
         // Любой иной ответ банка считается отклонением/ошибкой операции.
@@ -265,26 +428,84 @@ public sealed class BccNotificationService
         string targetStatus = isSuccess ? PaymentStatuses.Paid : PaymentStatuses.Failed;
         string notificationReceivedAt = DateTime.UtcNow.ToString("o");
 
+        _logger.LogInformation(
+            PaymentEvents.PaymentStatusChanged,
+            "Рассчитан целевой статус {TargetStatus} для заказа {OrderId}",
+            targetStatus,
+            payment.OrderId);
+
         // 10. Атомарное обновление через PaymentRepository.UpdateStatus:
         // Атомарно обновляет payment, session и lead.
         // Защищает от понижения статуса paid/refunded при запоздалом отказе.
         // При повторном успешном уведомлении (paid -> paid) дата paid_at не перезаписывается.
-        _paymentRepository.UpdateStatus(
-            orderId: payment.OrderId,
-            status: targetStatus,
-            rrn: string.IsNullOrWhiteSpace(rrn) ? null : rrn,
-            intRef: string.IsNullOrWhiteSpace(intRef) ? null : intRef,
-            approvalCode: string.IsNullOrWhiteSpace(approval) ? null : approval,
-            actionCode: string.IsNullOrWhiteSpace(action) ? null : action,
-            responseCode: string.IsNullOrWhiteSpace(rc) ? null : rc,
-            merchantAdviceCode: string.IsNullOrWhiteSpace(madvCode) ? null : madvCode,
-            bankMessage: string.IsNullOrWhiteSpace(bankMessage) ? null : bankMessage,
-            notificationReceivedAt: notificationReceivedAt
-        );
+        bool updated;
+        try
+        {
+            updated = _paymentRepository.UpdateStatus(
+                orderId: payment.OrderId,
+                status: targetStatus,
+                rrn: string.IsNullOrWhiteSpace(rrn) ? null : rrn,
+                intRef: string.IsNullOrWhiteSpace(intRef) ? null : intRef,
+                approvalCode: string.IsNullOrWhiteSpace(approval) ? null : approval,
+                actionCode: string.IsNullOrWhiteSpace(action) ? null : action,
+                responseCode: string.IsNullOrWhiteSpace(rc) ? null : rc,
+                merchantAdviceCode: string.IsNullOrWhiteSpace(madvCode) ? null : madvCode,
+                bankMessage: string.IsNullOrWhiteSpace(bankMessage) ? null : bankMessage,
+                notificationReceivedAt: notificationReceivedAt
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                PaymentEvents.BccCallbackError,
+                ex,
+                "Неожиданное исключение обновления статуса платежа {OrderId} в БД",
+                payment.OrderId);
+            throw;
+        }
+
+        if (updated)
+        {
+            _logger.LogInformation(
+                PaymentEvents.PaymentStatusChanged,
+                "Запись платежа {OrderId} успешно обновлена в БД на статус {TargetStatus}",
+                payment.OrderId,
+                targetStatus);
+        }
+        else
+        {
+            _logger.LogWarning(
+                PaymentEvents.PaymentStatusChanged,
+                "Переход статуса в {TargetStatus} для платежа {OrderId} был отклонён или не изменил запись в БД",
+                targetStatus,
+                payment.OrderId);
+        }
 
         // 11. Перечитываем платёж из БД для возврата фактического статуса:
         // Запоздалое уведомление не должно возвращать paid, если запись фактически осталась refunded.
         var actualPayment = _paymentRepository.GetByOrderId(payment.OrderId) ?? payment;
+
+        _logger.LogInformation(
+            PaymentEvents.PaymentStatusChanged,
+            "Фактический статус платежа {OrderId} после перечитывания из БД: {ActualStatus}",
+            payment.OrderId,
+            actualPayment.Status);
+
+        if (!updated)
+        {
+            _logger.LogWarning(
+                PaymentEvents.PaymentStatusChanged,
+                "Фактический статус платежа {OrderId} остался {ActualStatus}, целевой статус был {TargetStatus}",
+                payment.OrderId,
+                actualPayment.Status,
+                targetStatus);
+        }
+
+        _logger.LogInformation(
+            PaymentEvents.BccCallbackCompleted,
+            "Callback BCC успешно обработан: заказ {OrderId}, итоговый статус {FinalStatus}",
+            payment.OrderId,
+            actualPayment.Status);
 
         return Task.FromResult(new BccNotificationResult
         {

@@ -1,8 +1,11 @@
 using System;
+using System.Collections.Generic;
 using FenixLegalOs.Models;
 using FenixLegalOs.Models.Payments;
 using FenixLegalOs.Repositories;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FenixLegalOs.Services;
 
@@ -17,19 +20,22 @@ public sealed class PaymentService
     private readonly PaymentRepository _payments;
     private readonly IPaymentGateway _gateway;
     private readonly UserRepository _users;
+    private readonly ILogger<PaymentService> _logger;
 
     public PaymentService(
         SessionRepository sessions,
         SettingsRepository settings,
         PaymentRepository payments,
         IPaymentGateway gateway,
-        UserRepository users)
+        UserRepository users,
+        ILogger<PaymentService>? logger = null)
     {
         _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _payments = payments ?? throw new ArgumentNullException(nameof(payments));
         _gateway = gateway ?? throw new ArgumentNullException(nameof(gateway));
         _users = users ?? throw new ArgumentNullException(nameof(users));
+        _logger = logger ?? NullLogger<PaymentService>.Instance;
     }
 
     /// <summary>
@@ -57,14 +63,37 @@ public sealed class PaymentService
         DiagnosticSession? cachedSession = null,
         System.Threading.CancellationToken cancellationToken = default)
     {
+        using var scope = _logger.BeginScope(new Dictionary<string, object?>
+        {
+            ["SessionId"] = sessionId
+        });
+
+        _logger.LogInformation(
+            PaymentEvents.PaymentStartRequested,
+            "Поступил запрос на запуск оплаты: сессия {SessionId}, тариф {Tariff}, провайдер {Provider}, окружение {Environment}",
+            sessionId,
+            requestedTariff,
+            _gateway.Provider,
+            _gateway.Environment);
+
         // 1. Найти диагностическую сессию
         var session = cachedSession ?? _sessions.GetSession(sessionId);
         if (session == null)
+        {
+            _logger.LogWarning(
+                PaymentEvents.PaymentRejected,
+                "Сессия не найдена: {SessionId}",
+                sessionId);
             return PaymentServiceResult.NotFound("session_not_found");
+        }
 
         // 2. Проверить завершение диагностики
         if (string.IsNullOrWhiteSpace(session.CompletedAt) || string.IsNullOrWhiteSpace(session.ResultJson))
         {
+            _logger.LogWarning(
+                PaymentEvents.PaymentRejected,
+                "Диагностика ещё не завершена для сессии {SessionId}",
+                sessionId);
             return PaymentServiceResult.Conflict(new
             {
                 error = "diagnostic_not_completed",
@@ -78,6 +107,10 @@ public sealed class PaymentService
 
         if (paidPayment != null || session.Paid)
         {
+            _logger.LogWarning(
+                PaymentEvents.PaymentRejected,
+                "Сессия {SessionId} уже оплачена",
+                sessionId);
             return PaymentServiceResult.Conflict(new
             {
                 error = "already_paid",
@@ -87,6 +120,10 @@ public sealed class PaymentService
 
         if (refundedPayment != null)
         {
+            _logger.LogWarning(
+                PaymentEvents.PaymentRejected,
+                "По сессии {SessionId} ранее был возврат средств",
+                sessionId);
             return PaymentServiceResult.Conflict(new
             {
                 error = "payment_refunded",
@@ -98,6 +135,11 @@ public sealed class PaymentService
         string tariff = requestedTariff?.Trim().ToLowerInvariant() ?? "";
         if (tariff is not ("report" or "consultation"))
         {
+            _logger.LogWarning(
+                PaymentEvents.PaymentRejected,
+                "Передан неизвестный тариф '{Tariff}' для сессии {SessionId}",
+                requestedTariff,
+                sessionId);
             return PaymentServiceResult.BadRequest("invalid_tariff", "Неизвестный тариф оплаты.");
         }
 
@@ -108,6 +150,12 @@ public sealed class PaymentService
         {
             if (!string.Equals(latestPayment!.Tariff, tariff, StringComparison.OrdinalIgnoreCase))
             {
+                _logger.LogWarning(
+                    PaymentEvents.PaymentRejected,
+                    "Активная попытка оплаты уже существует для другого тарифа '{ActiveTariff}', запрошен '{RequestedTariff}', OrderId {OrderId}",
+                    latestPayment.Tariff,
+                    tariff,
+                    latestPayment.OrderId);
                 return PaymentServiceResult.Conflict(new
                 {
                     error = "payment_in_progress",
@@ -126,20 +174,33 @@ public sealed class PaymentService
             user = _users.GetUserById(session.UserId);
         }
 
-        // 7. Проверить users.phone
+        // 7. Проверить users.phone (не логировать номер телефона!)
         if (user == null || string.IsNullOrWhiteSpace(user.Phone) || !Infrastructure.PhoneHelper.TryNormalizePhone(user.Phone, out string normalizedPhone))
         {
+            _logger.LogWarning(
+                PaymentEvents.PaymentRejected,
+                "Телефон пользователя отсутствует или некорректен для сессии {SessionId}",
+                sessionId);
             return PaymentServiceResult.BadRequest("phone_required", "Для оплаты необходимо указать корректный номер телефона.");
         }
 
-        // 8. Проверить адрес плательщика
+        // 8. Проверить адрес плательщика (не логировать адрес!)
         string trimmedBillingAddress = billingAddress?.Trim() ?? "";
         if (string.IsNullOrWhiteSpace(trimmedBillingAddress))
         {
+            _logger.LogWarning(
+                PaymentEvents.PaymentRejected,
+                "Адрес плательщика отсутствует для сессии {SessionId}",
+                sessionId);
             return PaymentServiceResult.BadRequest("billing_address_required", "Для перехода к оплате необходимо указать адрес плательщика.");
         }
         if (trimmedBillingAddress.Length > 50)
         {
+            _logger.LogWarning(
+                PaymentEvents.PaymentRejected,
+                "Адрес плательщика слишком длинный (длина {AddressLength} > 50) для сессии {SessionId}",
+                trimmedBillingAddress.Length,
+                sessionId);
             return PaymentServiceResult.BadRequest("billing_address_too_long", "Адрес плательщика не должен превышать 50 символов.");
         }
 
@@ -147,6 +208,12 @@ public sealed class PaymentService
         if (browserScreenHeight < 1 || browserScreenHeight > 999999 ||
             browserScreenWidth < 1 || browserScreenWidth > 999999)
         {
+            _logger.LogWarning(
+                PaymentEvents.PaymentRejected,
+                "Размеры экрана некорректны ({ScreenWidth}x{ScreenHeight}) для сессии {SessionId}",
+                browserScreenWidth,
+                browserScreenHeight,
+                sessionId);
             return PaymentServiceResult.BadRequest("invalid_browser_dimensions", "Некорректные параметры экрана браузера.");
         }
 
@@ -182,6 +249,13 @@ public sealed class PaymentService
         var initResult = await _gateway.CreatePaymentAsync(initRequest, cancellationToken);
         if (!initResult.Success)
         {
+            _logger.LogWarning(
+                PaymentEvents.PaymentRejected,
+                "Шлюз {_GatewayProvider} вернул ожидаемую ошибку {ErrorCode} для сессии {SessionId}",
+                _gateway.Provider,
+                initResult.ErrorCode,
+                sessionId);
+
             if (initResult.ErrorCode == "payment_gateway_not_configured")
             {
                 return PaymentServiceResult.ServiceUnavailable(new
@@ -202,6 +276,13 @@ public sealed class PaymentService
                 initResult.ErrorMessage ?? "Не удалось создать платёж в платёжном шлюзе.");
         }
 
+        _logger.LogInformation(
+            PaymentEvents.PaymentStartRequested,
+            "Шлюз {_GatewayProvider} успешно сформировал параметры оплаты для заказа {OrderId}, сессия {SessionId}",
+            _gateway.Provider,
+            initResult.OrderId,
+            sessionId);
+
         // Формируем метаданные шлюза (MERCH_RN_ID должен быть идентичен возвращённому в formFields)
         string? providerMetadataJson = null;
         if (!string.IsNullOrWhiteSpace(initResult.MerchRnId))
@@ -214,6 +295,12 @@ public sealed class PaymentService
 
         if (hasActivePayment)
         {
+            _logger.LogInformation(
+                PaymentEvents.PaymentActiveAttemptReopened,
+                "Повторно открывается существующая активная попытка {OrderId} для сессии {SessionId}",
+                latestPayment!.OrderId,
+                sessionId);
+
             // Атомарно обновляем параметры активной попытки в БД. Разрешено только для статусов created и pending.
             bool updated = _payments.UpdateAttempt(
                 latestPayment!.OrderId,
@@ -225,6 +312,13 @@ public sealed class PaymentService
             {
                 // Запись уже изменила статус параллельно (например, стала paid, refunded или failed)
                 var current = _payments.GetByOrderId(latestPayment.OrderId);
+                _logger.LogWarning(
+                    PaymentEvents.PaymentRejected,
+                    "Произошёл конфликт обновления попытки оплаты {OrderId}, текущий статус {PaymentStatus}, сессия {SessionId}",
+                    latestPayment.OrderId,
+                    current?.Status,
+                    sessionId);
+
                 if (current != null && current.Status == PaymentStatuses.Paid)
                 {
                     return PaymentServiceResult.Conflict(new
@@ -253,6 +347,12 @@ public sealed class PaymentService
                     status = current?.Status
                 });
             }
+
+            _logger.LogInformation(
+                PaymentEvents.PaymentStartCompleted,
+                "Запуск оплаты успешно завершён для существующего заказа {OrderId}, сессия {SessionId}",
+                latestPayment.OrderId,
+                sessionId);
 
             return PaymentServiceResult.Ok(new
             {
@@ -301,10 +401,24 @@ public sealed class PaymentService
         try
         {
             _payments.Create(paymentRecord);
+            _logger.LogInformation(
+                PaymentEvents.PaymentCreated,
+                "Новая запись создана в payments: заказ {OrderId}, тариф {Tariff}, сумма {AmountKzt} {Currency}, провайдер {Provider}, окружение {Environment}",
+                paymentRecord.OrderId,
+                paymentRecord.Tariff,
+                paymentRecord.AmountKzt,
+                paymentRecord.Currency,
+                paymentRecord.Provider,
+                paymentRecord.Environment);
         }
         catch (SqliteException ex) when (ex.SqliteErrorCode == 19)
         {
             // Перехват конфликта параллельного создания активного платежа (частичный уникальный индекс uq_payments_active_session)
+            _logger.LogWarning(
+                PaymentEvents.PaymentRejected,
+                "Произошёл конфликт параллельного создания платежа для сессии {SessionId}",
+                sessionId);
+
             var existing = _payments.GetLatestBySessionId(sessionId);
             return PaymentServiceResult.Conflict(new
             {
@@ -315,6 +429,22 @@ public sealed class PaymentService
                 requestedTariff = tariff
             });
         }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                PaymentEvents.PaymentError,
+                ex,
+                "Неожиданное исключение при создании платежа {OrderId} для сессии {SessionId}",
+                paymentRecord.OrderId,
+                sessionId);
+            throw;
+        }
+
+        _logger.LogInformation(
+            PaymentEvents.PaymentStartCompleted,
+            "Запуск оплаты успешно завершён для нового заказа {OrderId}, сессия {SessionId}",
+            initResult.OrderId,
+            sessionId);
 
         return PaymentServiceResult.Ok(new
         {
