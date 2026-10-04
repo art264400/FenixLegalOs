@@ -1128,21 +1128,21 @@
       const query = paymentsFilterStatus ? '?status=' + encodeURIComponent(paymentsFilterStatus) : '';
       const payments = await api('GET', '/api/admin/payments' + query);
 
-      let html = '<div class="admin-section-header">' +
+      let html = '<section class="payments-view"><div class="admin-section-header">' +
         '<div>' +
           '<h2 class="admin-section-title">История и статус платежей</h2>' +
-          '<p class="admin-section-sub">Просмотр оплат и управление возвратами денежных средств (BCC TRTYPE=14)</p>' +
+          '<p class="admin-section-sub">Оплаты клиентов и возвраты через BCC</p>' +
         '</div>' +
-        '<div style="display:flex;gap:8px;align-items:center;">' +
-          '<label style="font-size:13px;color:var(--text-muted);">Фильтр статуса:</label>' +
-          '<select id="payments-status-filter" class="admin-select" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);">' +
+        '<div class="payments-toolbar">' +
+          '<label for="payments-status-filter">Статус</label>' +
+          '<select id="payments-status-filter" class="admin-select">' +
             '<option value=""' + (paymentsFilterStatus === '' ? ' selected' : '') + '>Все статусы</option>' +
             '<option value="paid"' + (paymentsFilterStatus === 'paid' ? ' selected' : '') + '>Успешно оплачен (paid)</option>' +
             '<option value="refunded"' + (paymentsFilterStatus === 'refunded' ? ' selected' : '') + '>Возвращен (refunded)</option>' +
             '<option value="pending"' + (paymentsFilterStatus === 'pending' ? ' selected' : '') + '>В обработке (pending)</option>' +
             '<option value="failed"' + (paymentsFilterStatus === 'failed' ? ' selected' : '') + '>Ошибка (failed)</option>' +
           '</select>' +
-          '<button id="payments-refresh-btn" class="btn-ghost" style="padding:4px 10px;">Обновить</button>' +
+          '<button id="payments-refresh-btn" class="btn-ghost payments-refresh-btn">Обновить</button>' +
         '</div>' +
       '</div>';
 
@@ -1171,60 +1171,60 @@
           const env = esc(p.environment || 'test');
           const isProd = env.toLowerCase() === 'production';
           const envBadge = isProd
-            ? '<span class="admin-badge admin-badge-danger" style="background:#fee2e2;color:#991b1b;font-weight:600;">PROD</span>'
+            ? '<span class="admin-badge admin-badge-danger">PROD</span>'
             : '<span class="admin-badge admin-badge-muted">TEST</span>';
 
           let statusBadge = '<span class="admin-badge">' + esc(p.status) + '</span>';
           if (p.status === 'paid') {
-            statusBadge = '<span class="admin-badge admin-badge-success" style="background:#dcfce7;color:#166534;font-weight:600;">Оплачен</span>';
+            statusBadge = '<span class="admin-badge admin-badge-success">Оплачен</span>';
           } else if (p.status === 'refunded') {
-            statusBadge = '<span class="admin-badge admin-badge-warning" style="background:#fef3c7;color:#92400e;font-weight:600;">Возвращен</span>';
+            statusBadge = '<span class="admin-badge admin-badge-warning">Возвращен</span>';
           } else if (p.status === 'pending') {
-            statusBadge = '<span class="admin-badge admin-badge-info" style="background:#e0f2fe;color:#075985;">Ожидает</span>';
+            statusBadge = '<span class="admin-badge admin-badge-info">Ожидает</span>';
           } else if (p.status === 'failed') {
-            statusBadge = '<span class="admin-badge admin-badge-danger" style="background:#fee2e2;color:#991b1b;">Ошибка</span>';
+            statusBadge = '<span class="admin-badge admin-badge-danger">Ошибка</span>';
           }
 
           const paidAt = p.paidAt ? formatDate(p.paidAt) : (p.createdAt ? formatDate(p.createdAt) : '-');
 
-          let refundInfo = '<span style="color:var(--text-muted);font-size:12px;">-</span>';
+          let refundInfo = '<span class="payment-empty">—</span>';
           if (p.hasRefund) {
             let refStatusText = p.refundStatus || '';
-            let refColor = '#475569';
+            let refStatusClass = 'admin-badge-muted';
             if (p.refundStatus === 'succeeded') {
               refStatusText = 'Возвращено';
-              refColor = '#166534';
+              refStatusClass = 'admin-badge-success';
             } else if (p.refundStatus === 'pending') {
               refStatusText = 'В обработке...';
-              refColor = '#d97706';
+              refStatusClass = 'admin-badge-warning';
             } else if (p.refundStatus === 'failed') {
               refStatusText = 'Отклонен';
-              refColor = '#dc2626';
+              refStatusClass = 'admin-badge-danger';
             }
 
-            refundInfo = '<div>' +
-              '<span class="admin-badge" style="color:' + refColor + ';font-weight:600;">' + esc(refStatusText) + '</span>' +
-              (p.refundAmountKzt ? '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">' + formatKzt(p.refundAmountKzt) + '</div>' : '') +
-              (p.refundCompletedAt ? '<div style="font-size:11px;color:var(--text-muted);">' + formatDate(p.refundCompletedAt) + '</div>' : '') +
+            refundInfo = '<div class="payment-refund-info">' +
+              '<span class="admin-badge ' + refStatusClass + '">' + esc(refStatusText) + '</span>' +
+              (p.refundAmountKzt ? '<div class="payment-meta">' + formatKzt(p.refundAmountKzt) + '</div>' : '') +
+              (p.refundCompletedAt ? '<div class="payment-meta">' + formatDate(p.refundCompletedAt) + '</div>' : '') +
             '</div>';
           }
 
-          let actionBtn = '<span style="color:var(--text-muted);font-size:12px;">-</span>';
+          let actionBtn = '<span class="payment-empty">—</span>';
           if (p.canRefund) {
-            actionBtn = '<button class="btn-ghost refund-trigger-btn" data-order="' + orderId + '" style="color:#b91c1c;border-color:#fca5a5;padding:4px 8px;font-size:12px;">Вернуть деньги</button>';
+            actionBtn = '<button class="btn-ghost payment-action payment-action-danger refund-trigger-btn" data-order="' + orderId + '">Вернуть деньги</button>';
           } else if (p.refundStatus === 'pending') {
-            actionBtn = '<button class="btn-ghost check-refund-status-btn" data-order="' + orderId + '" style="color:#d97706;border-color:#fcd34d;padding:4px 8px;font-size:12px;">Проверить статус</button>';
+            actionBtn = '<button class="btn-ghost payment-action payment-action-warning check-refund-status-btn" data-order="' + orderId + '">Проверить статус</button>';
           } else if (p.status === 'refunded') {
-            actionBtn = '<span style="color:#166534;font-size:12px;">Средства возвращены</span>';
+            actionBtn = '<span class="payment-complete">Средства возвращены</span>';
           }
 
           html += '<tr>' +
-            '<td><div style="font-weight:500;">' + clientName + '</div><div style="font-size:12px;color:var(--text-muted);">' + clientContact + '</div></td>' +
-            '<td><div style="font-family:monospace;font-size:12px;">' + orderId + '</div><div style="font-size:12px;color:var(--text-muted);">' + tariff + '</div></td>' +
-            '<td><strong>' + amount + '</strong></td>' +
-            '<td><div>' + provider + '</div><div>' + envBadge + '</div></td>' +
+            '<td><div class="payment-client-name">' + clientName + '</div><div class="payment-client-contact">' + clientContact + '</div></td>' +
+            '<td><div class="payment-order">' + orderId + '</div><div class="payment-meta">' + tariff + '</div></td>' +
+            '<td><strong class="payment-amount">' + amount + '</strong></td>' +
+            '<td><div class="payment-gateway">' + provider + '</div><div>' + envBadge + '</div></td>' +
             '<td>' + statusBadge + '</td>' +
-            '<td style="font-size:12px;">' + paidAt + '</td>' +
+            '<td class="payment-date">' + paidAt + '</td>' +
             '<td>' + refundInfo + '</td>' +
             '<td>' + actionBtn + '</td>' +
           '</tr>';
@@ -1233,7 +1233,7 @@
         html += '</tbody></table></div>';
       }
 
-      html += '<div id="refund-modal-container"></div>';
+      html += '<div id="refund-modal-container"></div></section>';
       el.innerHTML = html;
 
       const filterSelect = document.getElementById('payments-status-filter');
