@@ -1305,7 +1305,6 @@ code { color: var(--accent); }
 
 /* Admin CRM Dashboard ----------------------------------------------------- */
 
-.admin-page .wrap { max-width: 1440px; }
 .admin-page #app { padding-bottom: 64px; }
 
 .admin-nav { display: flex; gap: 8px; margin: 24px 0; flex-wrap: wrap; }
