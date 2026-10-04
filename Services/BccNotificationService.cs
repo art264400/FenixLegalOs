@@ -34,17 +34,19 @@ public sealed class BccNotificationResult
 public sealed class BccNotificationService
 {
     private readonly PaymentRepository _paymentRepository;
+    private readonly PaymentRefundRepository? _refundRepository;
     private readonly BccPaymentOptions _options;
     private readonly ILogger<BccNotificationService> _logger;
-    private int _testAuthorizationHeaderLogged;
 
     public BccNotificationService(
         PaymentRepository paymentRepository,
         IConfiguration? configuration = null,
         BccPaymentOptions? options = null,
-        ILogger<BccNotificationService>? logger = null)
+        ILogger<BccNotificationService>? logger = null,
+        PaymentRefundRepository? refundRepository = null)
     {
         _paymentRepository = paymentRepository;
+        _refundRepository = refundRepository;
         _logger = logger ?? NullLogger<BccNotificationService>.Instance;
         _options = options ?? new BccPaymentOptions
         {
@@ -58,8 +60,7 @@ public sealed class BccNotificationService
             MacKeyHex = configuration?["BCC_MAC_KEY"]?.Trim() ?? Environment.GetEnvironmentVariable("BCC_MAC_KEY")?.Trim() ?? "",
             NotifyUsername = configuration?["BCC_NOTIFY_USERNAME"]?.Trim() ?? Environment.GetEnvironmentVariable("BCC_NOTIFY_USERNAME")?.Trim() ?? "",
             NotifyPassword = configuration?["BCC_NOTIFY_PASSWORD"]?.Trim() ?? Environment.GetEnvironmentVariable("BCC_NOTIFY_PASSWORD")?.Trim() ?? "",
-            AllowUnauthenticatedTestNotifications = ParseBool(configuration?["BCC_ALLOW_UNAUTHENTICATED_TEST_NOTIFICATIONS"] ?? Environment.GetEnvironmentVariable("BCC_ALLOW_UNAUTHENTICATED_TEST_NOTIFICATIONS")),
-            LogTestAuthorizationHeader = ParseBool(configuration?["BCC_LOG_TEST_AUTHORIZATION"] ?? Environment.GetEnvironmentVariable("BCC_LOG_TEST_AUTHORIZATION"))
+            AllowUnauthenticatedTestNotifications = ParseBool(configuration?["BCC_ALLOW_UNAUTHENTICATED_TEST_NOTIFICATIONS"] ?? Environment.GetEnvironmentVariable("BCC_ALLOW_UNAUTHENTICATED_TEST_NOTIFICATIONS"))
         };
     }
 
@@ -82,22 +83,9 @@ public sealed class BccNotificationService
         // - test + AllowUnauthenticatedTestNotifications=true: разрешить уведомление без Authorization;
         // - test + флаг false: требовать настроенные логин/пароль либо возвращать 503;
         // - никогда не разрешать callback без авторизации в production.
+        // Логин, пароль, заголовок Authorization и MAC-ключ ни при каких условиях не логируются.
         bool isTest = string.Equals(_options.Environment, "test", StringComparison.OrdinalIgnoreCase);
         bool allowUnauthenticated = isTest && _options.AllowUnauthenticatedTestNotifications;
-
-        // Временная диагностика тестового контура. Полный заголовок может содержать
-        // учётные данные Basic Auth, поэтому он пишется не более одного раза за запуск
-        // процесса и только при явно включённом тестовом флаге.
-        if (isTest &&
-            _options.LogTestAuthorizationHeader &&
-            authHeaderPresent &&
-            Interlocked.CompareExchange(ref _testAuthorizationHeaderLogged, 1, 0) == 0)
-        {
-            _logger.LogWarning(
-                PaymentEvents.BccTestAuthorizationCaptured,
-                "ВРЕМЕННАЯ ДИАГНОСТИКА: получен тестовый Authorization от BCC: {AuthorizationHeader}. После проверки отключите BCC_LOG_TEST_AUTHORIZATION",
-                authHeader);
-        }
 
         if (allowUnauthenticated && string.IsNullOrWhiteSpace(authHeader))
         {
@@ -169,6 +157,7 @@ public sealed class BccNotificationService
         string currency = form["CURRENCY"].ToString()?.Trim() ?? "";
         string terminal = form["TERMINAL"].ToString()?.Trim() ?? "";
         string trType = form["TRTYPE"].ToString()?.Trim() ?? "";
+        string tranTrType = form["TRAN_TRTYPE"].ToString()?.Trim() ?? "";
         string action = form["ACTION"].ToString()?.Trim() ?? "";
         string rc = form["RC"].ToString()?.Trim() ?? "";
         string rrn = form["RRN"].ToString()?.Trim() ?? "";
@@ -285,41 +274,45 @@ public sealed class BccNotificationService
         }
 
         // 4. Проверка обязательных полей ACTION и RC:
-        // Неполное или некорректное уведомление отклоняется без изменения статуса платежа.
-        if (string.IsNullOrWhiteSpace(action))
+        // Для TRTYPE=1 и TRTYPE=14 поля ACTION и RC обязательны.
+        // Для TRTYPE=90 неполные ACTION/RC обрабатываются в секции TRTYPE=90 (остаются pending).
+        if (trType != "90")
         {
-            _logger.LogWarning(
-                PaymentEvents.BccCallbackRejected,
-                "В callback для заказа {OrderId} отсутствует обязательное поле ACTION",
-                payment.OrderId);
-
-            return Task.FromResult(new BccNotificationResult
+            if (string.IsNullOrWhiteSpace(action))
             {
-                StatusCode = StatusCodes.Status400BadRequest,
-                Value = new
+                _logger.LogWarning(
+                    PaymentEvents.BccCallbackRejected,
+                    "В callback для заказа {OrderId} отсутствует обязательное поле ACTION",
+                    payment.OrderId);
+
+                return Task.FromResult(new BccNotificationResult
                 {
-                    error = "missing_action",
-                    message = "В уведомлении отсутствует обязательное поле ACTION."
-                }
-            });
-        }
+                    StatusCode = StatusCodes.Status400BadRequest,
+                    Value = new
+                    {
+                        error = "missing_action",
+                        message = "В уведомлении отсутствует обязательное поле ACTION."
+                    }
+                });
+            }
 
-        if (string.IsNullOrWhiteSpace(rc))
-        {
-            _logger.LogWarning(
-                PaymentEvents.BccCallbackRejected,
-                "В callback для заказа {OrderId} отсутствует обязательное поле RC",
-                payment.OrderId);
-
-            return Task.FromResult(new BccNotificationResult
+            if (string.IsNullOrWhiteSpace(rc))
             {
-                StatusCode = StatusCodes.Status400BadRequest,
-                Value = new
+                _logger.LogWarning(
+                    PaymentEvents.BccCallbackRejected,
+                    "В callback для заказа {OrderId} отсутствует обязательное поле RC",
+                    payment.OrderId);
+
+                return Task.FromResult(new BccNotificationResult
                 {
-                    error = "missing_rc",
-                    message = "В уведомлении отсутствует обязательное поле RC."
-                }
-            });
+                    StatusCode = StatusCodes.Status400BadRequest,
+                    Value = new
+                    {
+                        error = "missing_rc",
+                        message = "В уведомлении отсутствует обязательное поле RC."
+                    }
+                });
+            }
         }
 
         // 5. Проверка терминала
@@ -345,70 +338,73 @@ public sealed class BccNotificationService
         }
 
         // 6. Проверка суммы (точное сравнение decimal без округления)
-        if (!decimal.TryParse(amountStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsedAmount))
+        if (trType != "90")
         {
-            _logger.LogWarning(
-                PaymentEvents.BccCallbackRejected,
-                "AMOUNT имеет некорректный формат '{AmountStr}' для заказа {OrderId}",
-                amountStr,
-                payment.OrderId);
-
-            return Task.FromResult(new BccNotificationResult
+            if (!decimal.TryParse(amountStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsedAmount))
             {
-                StatusCode = StatusCodes.Status400BadRequest,
-                Value = new
+                _logger.LogWarning(
+                    PaymentEvents.BccCallbackRejected,
+                    "AMOUNT имеет некорректный формат '{AmountStr}' для заказа {OrderId}",
+                    amountStr,
+                    payment.OrderId);
+
+                return Task.FromResult(new BccNotificationResult
                 {
-                    error = "invalid_amount",
-                    message = "Некорректный формат суммы AMOUNT."
-                }
-            });
+                    StatusCode = StatusCodes.Status400BadRequest,
+                    Value = new
+                    {
+                        error = "invalid_amount",
+                        message = "Некорректный формат суммы AMOUNT."
+                    }
+                });
+            }
+
+            if (parsedAmount != payment.AmountKzt)
+            {
+                _logger.LogWarning(
+                    PaymentEvents.BccCallbackRejected,
+                    "Сумма операции {ReceivedAmount} не совпадает с суммой заказа {ExpectedAmount} для заказа {OrderId}",
+                    parsedAmount,
+                    payment.AmountKzt,
+                    payment.OrderId);
+
+                return Task.FromResult(new BccNotificationResult
+                {
+                    StatusCode = StatusCodes.Status400BadRequest,
+                    Value = new
+                    {
+                        error = "amount_mismatch",
+                        message = "Сумма операции не совпадает с суммой заказа."
+                    }
+                });
+            }
+
+            // 7. Проверка валюты (398 - код KZT в BCC согласно ISO 4217, либо буквенный код KZT)
+            bool currencyMatches = string.Equals(currency, payment.Currency, StringComparison.OrdinalIgnoreCase)
+                || (string.Equals(payment.Currency, "KZT", StringComparison.OrdinalIgnoreCase) && currency == "398");
+            if (!currencyMatches)
+            {
+                _logger.LogWarning(
+                    PaymentEvents.BccCallbackRejected,
+                    "Валюта {ReceivedCurrency} не совпадает с валютой заказа {ExpectedCurrency} для заказа {OrderId}",
+                    currency,
+                    payment.Currency,
+                    payment.OrderId);
+
+                return Task.FromResult(new BccNotificationResult
+                {
+                    StatusCode = StatusCodes.Status400BadRequest,
+                    Value = new
+                    {
+                        error = "currency_mismatch",
+                        message = "Валюта операции не совпадает с валютой заказа."
+                    }
+                });
+            }
         }
 
-        if (parsedAmount != payment.AmountKzt)
-        {
-            _logger.LogWarning(
-                PaymentEvents.BccCallbackRejected,
-                "Сумма операции {ReceivedAmount} не совпадает с суммой заказа {ExpectedAmount} для заказа {OrderId}",
-                parsedAmount,
-                payment.AmountKzt,
-                payment.OrderId);
-
-            return Task.FromResult(new BccNotificationResult
-            {
-                StatusCode = StatusCodes.Status400BadRequest,
-                Value = new
-                {
-                    error = "amount_mismatch",
-                    message = "Сумма операции не совпадает с суммой заказа."
-                }
-            });
-        }
-
-        // 7. Проверка валюты (398 - код KZT в BCC согласно ISO 4217, либо буквенный код KZT)
-        bool currencyMatches = string.Equals(currency, payment.Currency, StringComparison.OrdinalIgnoreCase)
-            || (string.Equals(payment.Currency, "KZT", StringComparison.OrdinalIgnoreCase) && currency == "398");
-        if (!currencyMatches)
-        {
-            _logger.LogWarning(
-                PaymentEvents.BccCallbackRejected,
-                "Валюта {ReceivedCurrency} не совпадает с валютой заказа {ExpectedCurrency} для заказа {OrderId}",
-                currency,
-                payment.Currency,
-                payment.OrderId);
-
-            return Task.FromResult(new BccNotificationResult
-            {
-                StatusCode = StatusCodes.Status400BadRequest,
-                Value = new
-                {
-                    error = "currency_mismatch",
-                    message = "Валюта операции не совпадает с валютой заказа."
-                }
-            });
-        }
-
-        // 8. Проверка типа операции TRTYPE (TRTYPE=1: Покупка)
-        if (trType != "1")
+        // 8. Проверка типа операции TRTYPE (TRTYPE=1: Покупка, TRTYPE=14: Возврат, TRTYPE=90: Сверка статуса)
+        if (trType != "1" && trType != "14" && trType != "90")
         {
             _logger.LogWarning(
                 PaymentEvents.BccCallbackRejected,
@@ -429,9 +425,10 @@ public sealed class BccNotificationService
 
         _logger.LogInformation(
             PaymentEvents.BccCallbackReceived,
-            "Банковский результат принят: заказ {OrderId}, TRTYPE {TrType}, ACTION {Action}, RC {ResponseCode}, MADV_CODE {MadvCode}, RRN {Rrn}, INT_REF {IntRef}",
+            "Банковский результат принят: заказ {OrderId}, TRTYPE {TrType}, TRAN_TRTYPE {TranTrType}, ACTION {Action}, RC {ResponseCode}, MADV_CODE {MadvCode}, RRN {Rrn}, INT_REF {IntRef}",
             payment.OrderId,
             trType,
+            tranTrType,
             action,
             rc,
             madvCode,
@@ -442,43 +439,412 @@ public sealed class BccNotificationService
         // Успех: ACTION == "0" и код ответа RC равен "00" или "0".
         // Любой иной ответ банка считается отклонением/ошибкой операции.
         bool isSuccess = action == "0" && (rc == "00" || rc == "0");
-        string targetStatus = isSuccess ? PaymentStatuses.Paid : PaymentStatuses.Failed;
         string notificationReceivedAt = DateTime.UtcNow.ToString("o");
 
-        _logger.LogInformation(
-            PaymentEvents.PaymentStatusChanged,
-            "Рассчитан целевой статус {TargetStatus} для заказа {OrderId}",
-            targetStatus,
-            payment.OrderId);
+        bool updated = false;
+        string targetStatus;
 
-        // 10. Атомарное обновление через PaymentRepository.UpdateStatus:
-        // Атомарно обновляет payment, session и lead.
-        // Защищает от понижения статуса paid/refunded при запоздалом отказе.
-        // При повторном успешном уведомлении (paid -> paid) дата paid_at не перезаписывается.
-        bool updated;
-        try
+        if (trType == "90")
         {
-            updated = _paymentRepository.UpdateStatus(
-                orderId: payment.OrderId,
-                status: targetStatus,
-                rrn: string.IsNullOrWhiteSpace(rrn) ? null : rrn,
-                intRef: string.IsNullOrWhiteSpace(intRef) ? null : intRef,
-                approvalCode: string.IsNullOrWhiteSpace(approval) ? null : approval,
-                actionCode: string.IsNullOrWhiteSpace(action) ? null : action,
-                responseCode: string.IsNullOrWhiteSpace(rc) ? null : rc,
-                merchantAdviceCode: string.IsNullOrWhiteSpace(madvCode) ? null : madvCode,
-                bankMessage: string.IsNullOrWhiteSpace(bankMessage) ? null : bankMessage,
-                notificationReceivedAt: notificationReceivedAt
-            );
+            // Требование: обрабатывать возврат только при TRTYPE=90 и TRAN_TRTYPE=14;
+            // другие TRAN_TRTYPE не изменяют возврат.
+            if (tranTrType != "14")
+            {
+                _logger.LogInformation(
+                    PaymentEvents.BccCallbackCompleted,
+                    "Callback TRTYPE=90 для заказа {OrderId} имеет TRAN_TRTYPE='{TranTrType}' (не 14). Возврат не изменяется.",
+                    payment.OrderId,
+                    tranTrType);
+
+                return Task.FromResult(new BccNotificationResult
+                {
+                    StatusCode = StatusCodes.Status200OK,
+                    Value = new
+                    {
+                        status = "ok",
+                        orderId = payment.OrderId,
+                        paymentStatus = payment.Status,
+                        message = "Уведомление TRTYPE=90 не относится к возврату (TRAN_TRTYPE != 14). Статус не изменён."
+                    }
+                });
+            }
+
+            // TRAN_TRTYPE == "14": проверяем локальную запись возврата
+            var existingRefund = _refundRepository?.GetLatestByOrderId(payment.OrderId);
+            if (existingRefund == null)
+            {
+                _logger.LogWarning(
+                    PaymentEvents.BccCallbackRejected,
+                    "Получен callback возврата TRTYPE=90 (TRAN_TRTYPE=14) для заказа {OrderId}, но локальная запись возврата в payment_refunds не найдена. Операция отклонена без изменения платежа.",
+                    payment.OrderId);
+
+                return Task.FromResult(new BccNotificationResult
+                {
+                    StatusCode = StatusCodes.Status409Conflict,
+                    Value = new
+                    {
+                        error = "refund_record_not_found",
+                        message = "Локальная операция возврата не найдена для данного заказа."
+                    }
+                });
+            }
+
+            // Проверяем соответствие параметров возврата и платежа
+            if (!string.Equals(existingRefund.OrderId, payment.OrderId, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(existingRefund.PaymentId, payment.Id, StringComparison.Ordinal))
+            {
+                _logger.LogWarning(
+                    PaymentEvents.BccCallbackRejected,
+                    "Параметры локального возврата {RefundId} не соответствуют платежу {PaymentId} для заказа {OrderId}.",
+                    existingRefund.Id,
+                    payment.Id,
+                    payment.OrderId);
+
+                return Task.FromResult(new BccNotificationResult
+                {
+                    StatusCode = StatusCodes.Status400BadRequest,
+                    Value = new
+                    {
+                        error = "refund_parameters_mismatch",
+                        message = "Параметры локального возврата не совпадают с платежом."
+                    }
+                });
+            }
+
+            if (!string.IsNullOrWhiteSpace(amountStr) &&
+                decimal.TryParse(amountStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsedRefAmt) &&
+                parsedRefAmt != existingRefund.AmountKzt)
+            {
+                _logger.LogWarning(
+                    PaymentEvents.BccCallbackRejected,
+                    "Сумма {ReceivedAmount} в callback TRTYPE=90 не совпадает с суммой возврата {ExpectedAmount} для заказа {OrderId}",
+                    parsedRefAmt,
+                    existingRefund.AmountKzt,
+                    payment.OrderId);
+
+                return Task.FromResult(new BccNotificationResult
+                {
+                    StatusCode = StatusCodes.Status400BadRequest,
+                    Value = new
+                    {
+                        error = "amount_mismatch",
+                        message = "Сумма в уведомлении не совпадает с суммой возврата."
+                    }
+                });
+            }
+
+            // Неполный или неоднозначный ответ банка — оставить pending
+            if (string.IsNullOrWhiteSpace(action) || string.IsNullOrWhiteSpace(rc))
+            {
+                _logger.LogWarning(
+                    PaymentEvents.BccCallbackReceived,
+                    "Callback TRTYPE=90 для заказа {OrderId} не содержит полных кодов ACTION/RC. Возврат оставлен pending.",
+                    payment.OrderId);
+
+                return Task.FromResult(new BccNotificationResult
+                {
+                    StatusCode = StatusCodes.Status200OK,
+                    Value = new
+                    {
+                        status = "pending",
+                        orderId = payment.OrderId,
+                        refundId = existingRefund.Id,
+                        paymentStatus = payment.Status,
+                        message = "Ответ банка на проверку статуса неполный или неоднозначный. Статус возврата оставлен pending."
+                    }
+                });
+            }
+
+            // ACTION=0 и RC=00/0 — атомарно завершить возврат
+            bool isRefundSuccess = action == "0" && (rc == "00" || rc == "0");
+
+            if (isRefundSuccess)
+            {
+                // Идемпотентность: если уже succeeded, не повторяем транзакцию, возвращаем успех
+                if (existingRefund.Status == PaymentRefundStatuses.Succeeded)
+                {
+                    _logger.LogInformation(
+                        PaymentEvents.PaymentRefundDuplicateCallback,
+                        "Повторный callback TRTYPE=90 для заказа {OrderId}: возврат {RefundId} уже находится в статусе succeeded (идемпотентно).",
+                        payment.OrderId,
+                        existingRefund.Id);
+
+                    return Task.FromResult(new BccNotificationResult
+                    {
+                        StatusCode = StatusCodes.Status200OK,
+                        Value = new
+                        {
+                            status = "ok",
+                            orderId = payment.OrderId,
+                            refundId = existingRefund.Id,
+                            paymentStatus = PaymentStatuses.Refunded
+                        }
+                    });
+                }
+
+                var completeResult = _refundRepository != null
+                    ? _refundRepository.CompleteRefundTransaction(
+                        refundId: existingRefund.Id,
+                        orderId: payment.OrderId,
+                        actionCode: action,
+                        responseCode: rc,
+                        rrn: string.IsNullOrWhiteSpace(rrn) ? null : rrn,
+                        intRef: string.IsNullOrWhiteSpace(intRef) ? null : intRef,
+                        bankMessage: string.IsNullOrWhiteSpace(bankMessage) ? null : bankMessage,
+                        completedAt: notificationReceivedAt)
+                    : CompleteRefundTransactionResult.Fail("no_repository", "Репозиторий возвратов не инициализирован.");
+
+                if (!completeResult.Success)
+                {
+                    _logger.LogError(
+                        PaymentEvents.PaymentRefundFailed,
+                        "Не удалось завершить возврат для заказа {OrderId} по callback TRTYPE=90: {ErrorCode} - {ErrorMessage}",
+                        payment.OrderId,
+                        completeResult.ErrorCode,
+                        completeResult.ErrorMessage);
+
+                    return Task.FromResult(new BccNotificationResult
+                    {
+                        StatusCode = StatusCodes.Status500InternalServerError,
+                        Value = new
+                        {
+                            error = "refund_completion_failed",
+                            message = completeResult.ErrorMessage ?? "Не удалось завершить операцию возврата в базе данных."
+                        }
+                    });
+                }
+
+                _logger.LogInformation(
+                    PaymentEvents.PaymentRefundSucceeded,
+                    "Возврат {RefundId} для заказа {OrderId} успешно завершён по callback TRTYPE=90 (TRAN_TRTYPE=14)",
+                    existingRefund.Id,
+                    payment.OrderId);
+
+                return Task.FromResult(new BccNotificationResult
+                {
+                    StatusCode = StatusCodes.Status200OK,
+                    Value = new
+                    {
+                        status = "ok",
+                        orderId = payment.OrderId,
+                        refundId = existingRefund.Id,
+                        paymentStatus = PaymentStatuses.Refunded
+                    }
+                });
+            }
+            else
+            {
+                // Однозначный отказ банка: перевести pending в failed.
+                // Идемпотентность: не понижать succeeded в failed при запоздалом/повторном отказе.
+                if (existingRefund.Status == PaymentRefundStatuses.Succeeded)
+                {
+                    _logger.LogWarning(
+                        PaymentEvents.PaymentRefundDuplicateCallback,
+                        "Получен отказной callback TRTYPE=90 для заказа {OrderId}, но локальный возврат {RefundId} уже завершён со статусом succeeded. Статус не понижается.",
+                        payment.OrderId,
+                        existingRefund.Id);
+                }
+                else if (existingRefund.Status == PaymentRefundStatuses.Pending)
+                {
+                    _refundRepository?.UpdateStatus(
+                        refundId: existingRefund.Id,
+                        status: PaymentRefundStatuses.Failed,
+                        actionCode: action,
+                        responseCode: rc,
+                        rrn: string.IsNullOrWhiteSpace(rrn) ? null : rrn,
+                        intRef: string.IsNullOrWhiteSpace(intRef) ? null : intRef,
+                        bankMessage: string.IsNullOrWhiteSpace(bankMessage) ? null : bankMessage,
+                        completedAt: notificationReceivedAt);
+
+                    _logger.LogWarning(
+                        PaymentEvents.PaymentRefundFailed,
+                        "Возврат {RefundId} для заказа {OrderId} переведён в failed по callback TRTYPE=90 (ACTION {Action}, RC {ResponseCode})",
+                        existingRefund.Id,
+                        payment.OrderId,
+                        action,
+                        rc);
+                }
+
+                return Task.FromResult(new BccNotificationResult
+                {
+                    StatusCode = StatusCodes.Status200OK,
+                    Value = new
+                    {
+                        status = "failed",
+                        orderId = payment.OrderId,
+                        refundId = existingRefund.Id,
+                        paymentStatus = payment.Status,
+                        actionCode = action,
+                        responseCode = rc
+                    }
+                });
+            }
         }
-        catch (Exception ex)
+        else if (trType == "14")
         {
-            _logger.LogError(
-                PaymentEvents.BccCallbackError,
-                ex,
-                "Неожиданное исключение обновления статуса платежа {OrderId} в БД",
+            // Обработка уведомления возврата TRTYPE=14
+            var existingRefund = _refundRepository?.GetLatestByOrderId(payment.OrderId);
+
+            // Требование 5: Успешный callback не должен переводить payment в refunded, если в payment_refunds
+            // нет соответствующей локальной операции возврата.
+            if (existingRefund == null)
+            {
+                _logger.LogWarning(
+                    PaymentEvents.BccCallbackRejected,
+                    "Получен callback возврата TRTYPE=14 для заказа {OrderId}, но локальная запись возврата в payment_refunds не найдена. Операция отклонена без изменения платежа.",
+                    payment.OrderId);
+
+                return Task.FromResult(new BccNotificationResult
+                {
+                    StatusCode = StatusCodes.Status409Conflict,
+                    Value = new
+                    {
+                        error = "refund_record_not_found",
+                        message = "Локальная операция возврата не найдена для данного заказа."
+                    }
+                });
+            }
+
+            if (isSuccess)
+            {
+                targetStatus = PaymentStatuses.Refunded;
+
+                // Если возврат уже был отмечен как succeeded — идемпотентно подтверждаем
+                if (existingRefund.Status == PaymentRefundStatuses.Succeeded)
+                {
+                    _logger.LogInformation(
+                        PaymentEvents.PaymentRefundDuplicateCallback,
+                        "Получена повторная успешная нотификация возврата TRTYPE=14 для заказа {OrderId}",
+                        payment.OrderId);
+                }
+                else
+                {
+                    _logger.LogInformation(
+                        PaymentEvents.PaymentRefundSucceeded,
+                        "Возврат {RefundId} для заказа {OrderId} подтверждён по callback BCC",
+                        existingRefund.Id,
+                        payment.OrderId);
+                }
+
+                // Атомарно и идемпотентно завершаем возврат в БД (payment_refunds, payments, sessions, leads)
+                CompleteRefundTransactionResult completeResult;
+                try
+                {
+                    completeResult = _refundRepository != null
+                        ? _refundRepository.CompleteRefundTransaction(
+                            refundId: existingRefund.Id,
+                            orderId: payment.OrderId,
+                            actionCode: action,
+                            responseCode: rc,
+                            rrn: string.IsNullOrWhiteSpace(rrn) ? null : rrn,
+                            intRef: string.IsNullOrWhiteSpace(intRef) ? null : intRef,
+                            bankMessage: string.IsNullOrWhiteSpace(bankMessage) ? null : bankMessage,
+                            completedAt: notificationReceivedAt)
+                        : CompleteRefundTransactionResult.Fail("no_repository", "Репозиторий возвратов не инициализирован.");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(
+                        PaymentEvents.BccCallbackError,
+                        ex,
+                        "Неожиданное исключение атомарного обновления статуса возврата {OrderId} в БД",
+                        payment.OrderId);
+                    throw;
+                }
+
+                updated = completeResult.Success;
+
+                if (!completeResult.Success)
+                {
+                    _logger.LogError(
+                        PaymentEvents.PaymentRefundFailed,
+                        "Не удалось завершить возврат для заказа {OrderId} по callback BCC: {ErrorCode} - {ErrorMessage}",
+                        payment.OrderId,
+                        completeResult.ErrorCode,
+                        completeResult.ErrorMessage);
+
+                    return Task.FromResult(new BccNotificationResult
+                    {
+                        StatusCode = StatusCodes.Status500InternalServerError,
+                        Value = new
+                        {
+                            error = "refund_completion_failed",
+                            message = completeResult.ErrorMessage ?? "Не удалось завершить операцию возврата в базе данных."
+                        }
+                    });
+                }
+            }
+            else
+            {
+                // Неуспешный возврат: платёж остаётся paid, а запись возврата переводится в failed
+                // Требование: не позволять неуспешному callback понизить succeeded в failed
+                targetStatus = payment.Status;
+
+                if (existingRefund.Status == PaymentRefundStatuses.Succeeded)
+                {
+                    _logger.LogWarning(
+                        PaymentEvents.PaymentRefundDuplicateCallback,
+                        "Получен отказной callback для заказа {OrderId}, но локальный возврат {RefundId} уже завершён со статусом succeeded. Статус не понижается.",
+                        payment.OrderId,
+                        existingRefund.Id);
+                }
+                else if (existingRefund.Status == PaymentRefundStatuses.Pending)
+                {
+                    _refundRepository?.UpdateStatus(
+                        refundId: existingRefund.Id,
+                        status: PaymentRefundStatuses.Failed,
+                        actionCode: action,
+                        responseCode: rc,
+                        rrn: string.IsNullOrWhiteSpace(rrn) ? null : rrn,
+                        intRef: string.IsNullOrWhiteSpace(intRef) ? null : intRef,
+                        bankMessage: string.IsNullOrWhiteSpace(bankMessage) ? null : bankMessage,
+                        completedAt: notificationReceivedAt);
+
+                    _logger.LogWarning(
+                        PaymentEvents.PaymentRefundFailed,
+                        "Возврат {RefundId} для заказа {OrderId} отклонён по callback BCC (ACTION {Action}, RC {ResponseCode})",
+                        existingRefund.Id,
+                        payment.OrderId,
+                        action,
+                        rc);
+                }
+            }
+        }
+        else
+        {
+            // Стандартная обработка покупки TRTYPE=1
+            targetStatus = isSuccess ? PaymentStatuses.Paid : PaymentStatuses.Failed;
+
+            _logger.LogInformation(
+                PaymentEvents.PaymentStatusChanged,
+                "Рассчитан целевой статус {TargetStatus} для заказа {OrderId}",
+                targetStatus,
                 payment.OrderId);
-            throw;
+
+            try
+            {
+                updated = _paymentRepository.UpdateStatus(
+                    orderId: payment.OrderId,
+                    status: targetStatus,
+                    rrn: string.IsNullOrWhiteSpace(rrn) ? null : rrn,
+                    intRef: string.IsNullOrWhiteSpace(intRef) ? null : intRef,
+                    approvalCode: string.IsNullOrWhiteSpace(approval) ? null : approval,
+                    actionCode: string.IsNullOrWhiteSpace(action) ? null : action,
+                    responseCode: string.IsNullOrWhiteSpace(rc) ? null : rc,
+                    merchantAdviceCode: string.IsNullOrWhiteSpace(madvCode) ? null : madvCode,
+                    bankMessage: string.IsNullOrWhiteSpace(bankMessage) ? null : bankMessage,
+                    notificationReceivedAt: notificationReceivedAt
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    PaymentEvents.BccCallbackError,
+                    ex,
+                    "Неожиданное исключение обновления статуса платежа {OrderId} в БД",
+                    payment.OrderId);
+                throw;
+            }
         }
 
         if (updated)

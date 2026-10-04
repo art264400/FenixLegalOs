@@ -19,9 +19,10 @@ public class AdminController : ControllerBase
     private readonly AiReportService _aiReportService;
     private readonly SettingsRepository _settings;
     private readonly TypstPdfService _pdfService;
-    private const string AdminTokenCookieName = "fenix_admin";
-    private static readonly HashSet<string> AdminTokens = new();
-    private static readonly string AdminPassword = Environment.GetEnvironmentVariable("FENIX_ADMIN_PASSWORD") ?? "fenix2026";
+    private readonly AdminSessionService _sessionService;
+
+    // Для обратной совместимости с существующими тестами, читающими AdminTokens через reflection
+    internal static HashSet<string> AdminTokens => new(AdminSessionService.ActiveTokens.Keys);
 
     public AdminController(
         LeadRepository leads,
@@ -30,7 +31,8 @@ public class AdminController : ControllerBase
         ScoringEngine scoringEngine,
         AiReportService aiReportService,
         SettingsRepository settings,
-        TypstPdfService pdfService)
+        TypstPdfService pdfService,
+        AdminSessionService? sessionService = null)
     {
         _leads = leads;
         _questionRepo = questionRepo;
@@ -39,28 +41,44 @@ public class AdminController : ControllerBase
         _aiReportService = aiReportService;
         _settings = settings;
         _pdfService = pdfService;
+        _sessionService = sessionService ?? new AdminSessionService();
     }
 
-    private bool IsAdmin()
-    {
-        if (Request.Cookies.TryGetValue(AdminTokenCookieName, out var token) && !string.IsNullOrEmpty(token))
-        {
-            return AdminTokens.Contains(token);
-        }
-        return false;
-    }
+    private bool IsAdmin() => _sessionService.IsAdmin(HttpContext);
 
     [HttpPost("login")]
     public IActionResult Login([FromBody] JsonElement body)
     {
         string pwd = body.TryGetProperty("password", out var pProp) ? pProp.GetString() ?? "" : "";
-        if (pwd != AdminPassword) return Unauthorized();
+        var (success, errorCode, errorMessage) = _sessionService.Login(pwd, HttpContext);
 
-        string token = Convert.ToHexString(RandomNumberGenerator.GetBytes(18));
-        AdminTokens.Add(token);
+        if (!success)
+        {
+            if (errorCode == "admin_not_configured")
+            {
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+                {
+                    error = errorCode,
+                    message = errorMessage
+                });
+            }
+
+            return Unauthorized(new
+            {
+                error = errorCode ?? "unauthorized",
+                message = errorMessage ?? "Неверный пароль администратора."
+            });
+        }
+
         _leads.AuditLog("admin", "login", null);
+        return Ok(new { ok = true });
+    }
 
-        Response?.Headers.Append("Set-Cookie", $"{AdminTokenCookieName}={token}; HttpOnly; Path=/; SameSite=Strict; Max-Age=86400");
+    [HttpPost("logout")]
+    public IActionResult Logout()
+    {
+        _sessionService.Logout(HttpContext);
+        _leads.AuditLog("admin", "logout", null);
         return Ok(new { ok = true });
     }
 

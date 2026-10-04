@@ -37,4 +37,14 @@ public static class PaymentEvents
     public static readonly EventId BccReturnReceived = new(1302, nameof(BccReturnReceived));
     public static readonly EventId BccControllerWarning = new(1303, nameof(BccControllerWarning));
     public static readonly EventId BccControllerError = new(1304, nameof(BccControllerError));
+
+    // PaymentRefundService & Admin Refunds (1400-1499)
+    public static readonly EventId PaymentRefundRequested = new(1400, nameof(PaymentRefundRequested));
+    public static readonly EventId PaymentRefundRejected = new(1401, nameof(PaymentRefundRejected));
+    public static readonly EventId PaymentRefundGatewaySent = new(1402, nameof(PaymentRefundGatewaySent));
+    public static readonly EventId PaymentRefundGatewayAccepted = new(1403, nameof(PaymentRefundGatewayAccepted));
+    public static readonly EventId PaymentRefundAwaitingCallback = new(1404, nameof(PaymentRefundAwaitingCallback));
+    public static readonly EventId PaymentRefundSucceeded = new(1405, nameof(PaymentRefundSucceeded));
+    public static readonly EventId PaymentRefundFailed = new(1406, nameof(PaymentRefundFailed));
+    public static readonly EventId PaymentRefundDuplicateCallback = new(1407, nameof(PaymentRefundDuplicateCallback));
 }

@@ -21,6 +21,11 @@ public interface IPaymentGateway
     string Environment { get; }
 
     /// <summary>
+    /// Идентификатор терминала по умолчанию для шлюза (если применим).
+    /// </summary>
+    string TerminalId { get; }
+
+    /// <summary>
     /// Признак готовности и валидности конфигурации шлюза (ключи, терминалы, адреса).
     /// </summary>
     bool IsConfigured { get; }
@@ -38,7 +43,20 @@ public interface IPaymentGateway
     /// <summary>
     /// Отмена или возврат платежа.
     /// </summary>
-    Task<PaymentGatewayRefundResult> RefundAsync(string orderId, int amountKzt, CancellationToken cancellationToken = default);
+    Task<PaymentGatewayRefundResult> RefundAsync(PaymentGatewayRefundRequest request, CancellationToken cancellationToken = default);
+}
+
+public sealed class PaymentGatewayRefundRequest
+{
+    public string OrderId { get; init; } = "";
+    public string MerchRnId { get; init; } = "";
+    public int OriginalAmountKzt { get; init; }
+    public int RefundAmountKzt { get; init; }
+    public string Currency { get; init; } = "KZT";
+    public string TerminalId { get; init; } = "";
+    public string Rrn { get; init; } = "";
+    public string IntRef { get; init; } = "";
+    public string? NotifyUrl { get; init; }
 }
 
 public sealed class PaymentGatewayInitRequest
@@ -125,10 +143,25 @@ public sealed class PaymentGatewayCheckResult
     public string? ApprovalCode { get; init; }
     public string? BankMessage { get; init; }
     public string? PaidAt { get; init; }
+    public bool Success { get; init; }
+    public bool IsFinal { get; init; }
+    public string? ActionCode { get; init; }
+    public string? ResponseCode { get; init; }
+    public string? TrType { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorMessage { get; init; }
 }
 
 public sealed class PaymentGatewayRefundResult
 {
+    public bool Accepted { get; init; }
+    public bool IsFinal { get; init; }
     public bool Success { get; init; }
+    public string? ActionCode { get; init; }
+    public string? ResponseCode { get; init; }
+    public string? Rrn { get; init; }
+    public string? IntRef { get; init; }
     public string? BankMessage { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorMessage { get; init; }
 }

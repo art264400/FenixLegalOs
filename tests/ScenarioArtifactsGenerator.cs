@@ -44,7 +44,7 @@ public class ScenarioArtifactsGenerator
         Directory.CreateDirectory(_outputDir);
     }
 
-    [Fact]
+    [Fact(Skip = "Служебная генерация файлов-артефактов отключена в обычном тестовом запуске.")]
     public async Task GenerateAllFourScenarios()
     {
         var scenarios = new Dictionary<string, (string Title, Dictionary<string, object> Answers)>

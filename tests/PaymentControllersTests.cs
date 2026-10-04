@@ -2233,8 +2233,8 @@ public sealed class PaymentControllersTests : IDisposable
         Assert.Equal(StatusCodes.Status400BadRequest, res3.StatusCode);
         Assert.Contains("terminal_mismatch", JsonSerializer.Serialize(res3.Value));
 
-        // 4. Несовпадение TRTYPE (например 90 вместо 1)
-        var badTrTypeForm = CreateBccNotifyForm(orderId: orderId, trType: "90");
+        // 4. Несовпадение TRTYPE (например 99 вместо 1)
+        var badTrTypeForm = CreateBccNotifyForm(orderId: orderId, trType: "99");
         var res4 = Assert.IsType<ObjectResult>(await controller.Notify(badTrTypeForm));
         Assert.Equal(StatusCodes.Status400BadRequest, res4.StatusCode);
         Assert.Contains("invalid_trtype", JsonSerializer.Serialize(res4.Value));
@@ -2401,16 +2401,15 @@ public sealed class PaymentControllersTests : IDisposable
         Assert.True(session.Paid);
     }
 
-    [Fact(DisplayName = "BCC Notify: временная диагностика один раз логирует Authorization только в test")]
-    public async Task Notify_TestAuthorizationDiagnostic_LogsHeaderOnlyOnceInTest()
+    [Fact(DisplayName = "BCC Notify: Authorization заголовок и секреты никогда не попадают в логи")]
+    public async Task Notify_AuthorizationHeader_IsNeverLoggedInAnyEnvironment()
     {
         const string authorization = "Basic dGVzdF91c2VyOnRlc3RfcGFzc3dvcmQ=";
         var logger = new ListLogger<BccNotificationService>();
         var options = new BccPaymentOptions
         {
             Environment = "test",
-            TerminalId = "TID999",
-            LogTestAuthorizationHeader = true
+            TerminalId = "TID999"
         };
         var service = new BccNotificationService(_paymentRepo, options: options, logger: logger);
         var emptyForm = new FormCollection(
@@ -2419,32 +2418,10 @@ public sealed class PaymentControllersTests : IDisposable
         await service.ProcessNotificationAsync(authorization, emptyForm, "trace-auth-1");
         await service.ProcessNotificationAsync(authorization, emptyForm, "trace-auth-2");
 
-        var entry = Assert.Single(logger.Entries.Where(e =>
-            e.EventId == PaymentEvents.BccTestAuthorizationCaptured));
-        Assert.Equal(authorization, entry.Properties["AuthorizationHeader"]?.ToString());
-    }
-
-    [Fact(DisplayName = "BCC Notify: временная диагностика Authorization запрещена в production")]
-    public async Task Notify_TestAuthorizationDiagnostic_DoesNotLogInProduction()
-    {
-        var logger = new ListLogger<BccNotificationService>();
-        var options = new BccPaymentOptions
-        {
-            Environment = "production",
-            TerminalId = "TID999",
-            LogTestAuthorizationHeader = true
-        };
-        var service = new BccNotificationService(_paymentRepo, options: options, logger: logger);
-        var emptyForm = new FormCollection(
-            new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>());
-
-        await service.ProcessNotificationAsync(
-            "Basic dGVzdF91c2VyOnRlc3RfcGFzc3dvcmQ=",
-            emptyForm,
-            "trace-auth-production");
-
+        // Ни одно событие не должно содержать сырой заголовок авторизации или пароль
         Assert.DoesNotContain(logger.Entries, e =>
-            e.EventId == PaymentEvents.BccTestAuthorizationCaptured);
+            e.Message.Contains(authorization) ||
+            (e.Properties != null && e.Properties.Values.Any(v => v?.ToString()?.Contains(authorization) == true)));
     }
 
     [Fact(DisplayName = "BCC Notify: production без Basic Auth возвращает 401 (при наличии настроек) или 503 (при отсутствии)")]

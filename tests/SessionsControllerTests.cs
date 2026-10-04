@@ -120,9 +120,11 @@ public class SessionsControllerTests
     public async Task AdminController_TestBench_GeneratePdf_Returns_Valid_Pdf()
     {
         var tempDb = Path.Combine(Path.GetTempPath(), $"test_fenix_admin_{Guid.NewGuid():N}.db");
+        const string testAdminPassword = "AdminTestPassword_Safe_2026!";
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["FENIX_DB_PATH"] = tempDb
+            ["FENIX_DB_PATH"] = tempDb,
+            ["FENIX_ADMIN_PASSWORD"] = testAdminPassword
         }).Build();
         var dbInit = new DbInitializer(config);
         dbInit.Initialize();
@@ -134,21 +136,22 @@ public class SessionsControllerTests
         var testEnv = new TestWebHostEnvironment();
         var aiReportService = new AiReportService(config);
         var pdfService = new TypstPdfService(testEnv, aiReportService, setRepo);
+        var sessionService = new AdminSessionService(config);
 
-        var adminCtrl = new AdminController(lRepo, qRepo, rRepo, scoringEngine, aiReportService, setRepo, pdfService);
+        var adminCtrl = new AdminController(lRepo, qRepo, rRepo, scoringEngine, aiReportService, setRepo, pdfService, sessionService);
         var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
         adminCtrl.ControllerContext = new ControllerContext { HttpContext = httpContext };
 
-        // Login as admin
-        var loginBody = JsonDocument.Parse("{\"password\":\"fenix2026\"}").RootElement;
+        // Login as admin using configured test password
+        var loginBody = JsonDocument.Parse($"{{\"password\":\"{testAdminPassword}\"}}").RootElement;
         var loginRes = adminCtrl.Login(loginBody) as OkObjectResult;
         Assert.NotNull(loginRes);
 
-        var tokensField = typeof(AdminController).GetField("AdminTokens", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-        var tokensSet = tokensField?.GetValue(null) as HashSet<string>;
-        var validToken = tokensSet?.FirstOrDefault() ?? "test_token";
-        if (tokensSet != null && !tokensSet.Contains(validToken)) tokensSet.Add(validToken);
-        httpContext.Request.Headers["Cookie"] = $"fenix_admin={validToken}";
+        // Retrieve token from response Set-Cookie header and set as request Cookie
+        string setCookie = httpContext.Response.Headers.SetCookie.ToString();
+        var match = System.Text.RegularExpressions.Regex.Match(setCookie, @"fenix_admin=([^;]+)");
+        string token = match.Success ? match.Groups[1].Value : "fallback_token";
+        httpContext.Request.Headers["Cookie"] = $"fenix_admin={token}";
 
         var fullAnswers = new Dictionary<string, object>
         {

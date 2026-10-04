@@ -68,6 +68,7 @@
   const TABS = [
     ['overview', 'Overview'],
     ['leads', 'Leads'],
+    ['payments', '💳 Платежи'],
     ['pricing', '💰 Тариф & Цены'],
     ['testbench', '🧪 QA Simulator & Test Bench'],
     ['questions', 'Question Bank'],
@@ -85,6 +86,7 @@
     const content = document.getElementById('tab-content');
     if (active === 'overview') loadOverview(content);
     if (active === 'leads') detailId ? loadLeadDetail(content, detailId) : loadLeads(content);
+    if (active === 'payments') loadPayments(content);
     if (active === 'pricing') loadPricingSettings(content);
     if (active === 'testbench') loadTestBench(content);
     if (active === 'questions') loadQuestions(content);
@@ -1094,6 +1096,284 @@
     } catch (err) {
       container.innerHTML = '<div class="admin-modal-backdrop"><div class="admin-modal-box"><p style="color:var(--critical)">Ошибка загрузки: ' + esc(err.message) + '</p><button class="btn-ghost" onclick="document.getElementById(\'risk-modal-container\').innerHTML=\'\'">Закрыть</button></div></div>';
     }
+  }
+
+
+  // -----------------------------------------------------------------------
+  // Payments tab & Refund modal
+  // -----------------------------------------------------------------------
+
+  let paymentsFilterStatus = '';
+
+  async function loadPayments(el) {
+    el.innerHTML = '<div class="admin-loading">Загрузка платежей...</div>';
+
+    try {
+      const query = paymentsFilterStatus ? '?status=' + encodeURIComponent(paymentsFilterStatus) : '';
+      const payments = await api('GET', '/api/admin/payments' + query);
+
+      let html = '<div class="admin-section-header">' +
+        '<div>' +
+          '<h2 class="admin-section-title">История и статус платежей</h2>' +
+          '<p class="admin-section-sub">Просмотр оплат и управление возвратами денежных средств (BCC TRTYPE=14)</p>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;align-items:center;">' +
+          '<label style="font-size:13px;color:var(--text-muted);">Фильтр статуса:</label>' +
+          '<select id="payments-status-filter" class="admin-select" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);">' +
+            '<option value=""' + (paymentsFilterStatus === '' ? ' selected' : '') + '>Все статусы</option>' +
+            '<option value="paid"' + (paymentsFilterStatus === 'paid' ? ' selected' : '') + '>Успешно оплачен (paid)</option>' +
+            '<option value="refunded"' + (paymentsFilterStatus === 'refunded' ? ' selected' : '') + '>Возвращен (refunded)</option>' +
+            '<option value="pending"' + (paymentsFilterStatus === 'pending' ? ' selected' : '') + '>В обработке (pending)</option>' +
+            '<option value="failed"' + (paymentsFilterStatus === 'failed' ? ' selected' : '') + '>Ошибка (failed)</option>' +
+          '</select>' +
+          '<button id="payments-refresh-btn" class="btn-ghost" style="padding:4px 10px;">Обновить</button>' +
+        '</div>' +
+      '</div>';
+
+      if (!payments || payments.length === 0) {
+        html += '<div class="admin-empty">Платежи не найдены</div>';
+      } else {
+        html += '<div class="admin-table-wrap"><table class="admin-table">' +
+          '<thead><tr>' +
+            '<th>Клиент</th>' +
+            '<th>Заказ / Тариф</th>' +
+            '<th>Сумма</th>' +
+            '<th>Шлюз / Среда</th>' +
+            '<th>Статус оплаты</th>' +
+            '<th>Дата оплаты</th>' +
+            '<th>Возврат</th>' +
+            '<th>Действия</th>' +
+          '</tr></thead><tbody>';
+
+        payments.forEach(function (p) {
+          const clientName = esc(p.clientName || 'Без имени');
+          const clientContact = esc(p.clientPhone || p.clientEmail || '-');
+          const orderId = esc(p.orderId || '');
+          const tariff = esc(p.tariff || '-');
+          const amount = formatKzt(p.amountKzt);
+          const provider = esc(p.provider || 'bcc');
+          const env = esc(p.environment || 'test');
+          const isProd = env.toLowerCase() === 'production';
+          const envBadge = isProd
+            ? '<span class="admin-badge admin-badge-danger" style="background:#fee2e2;color:#991b1b;font-weight:600;">PROD</span>'
+            : '<span class="admin-badge admin-badge-muted">TEST</span>';
+
+          let statusBadge = '<span class="admin-badge">' + esc(p.status) + '</span>';
+          if (p.status === 'paid') {
+            statusBadge = '<span class="admin-badge admin-badge-success" style="background:#dcfce7;color:#166534;font-weight:600;">Оплачен</span>';
+          } else if (p.status === 'refunded') {
+            statusBadge = '<span class="admin-badge admin-badge-warning" style="background:#fef3c7;color:#92400e;font-weight:600;">Возвращен</span>';
+          } else if (p.status === 'pending') {
+            statusBadge = '<span class="admin-badge admin-badge-info" style="background:#e0f2fe;color:#075985;">Ожидает</span>';
+          } else if (p.status === 'failed') {
+            statusBadge = '<span class="admin-badge admin-badge-danger" style="background:#fee2e2;color:#991b1b;">Ошибка</span>';
+          }
+
+          const paidAt = p.paidAt ? formatDate(p.paidAt) : (p.createdAt ? formatDate(p.createdAt) : '-');
+
+          let refundInfo = '<span style="color:var(--text-muted);font-size:12px;">-</span>';
+          if (p.hasRefund) {
+            let refStatusText = p.refundStatus || '';
+            let refColor = '#475569';
+            if (p.refundStatus === 'succeeded') {
+              refStatusText = 'Возвращено';
+              refColor = '#166534';
+            } else if (p.refundStatus === 'pending') {
+              refStatusText = 'В обработке...';
+              refColor = '#d97706';
+            } else if (p.refundStatus === 'failed') {
+              refStatusText = 'Отклонен';
+              refColor = '#dc2626';
+            }
+
+            refundInfo = '<div>' +
+              '<span class="admin-badge" style="color:' + refColor + ';font-weight:600;">' + esc(refStatusText) + '</span>' +
+              (p.refundAmountKzt ? '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">' + formatKzt(p.refundAmountKzt) + '</div>' : '') +
+              (p.refundCompletedAt ? '<div style="font-size:11px;color:var(--text-muted);">' + formatDate(p.refundCompletedAt) + '</div>' : '') +
+            '</div>';
+          }
+
+          let actionBtn = '<span style="color:var(--text-muted);font-size:12px;">-</span>';
+          if (p.canRefund) {
+            actionBtn = '<button class="btn-ghost refund-trigger-btn" data-order="' + orderId + '" style="color:#b91c1c;border-color:#fca5a5;padding:4px 8px;font-size:12px;">Вернуть деньги</button>';
+          } else if (p.refundStatus === 'pending') {
+            actionBtn = '<button class="btn-ghost check-refund-status-btn" data-order="' + orderId + '" style="color:#d97706;border-color:#fcd34d;padding:4px 8px;font-size:12px;">Проверить статус</button>';
+          } else if (p.status === 'refunded') {
+            actionBtn = '<span style="color:#166534;font-size:12px;">Средства возвращены</span>';
+          }
+
+          html += '<tr>' +
+            '<td><div style="font-weight:500;">' + clientName + '</div><div style="font-size:12px;color:var(--text-muted);">' + clientContact + '</div></td>' +
+            '<td><div style="font-family:monospace;font-size:12px;">' + orderId + '</div><div style="font-size:12px;color:var(--text-muted);">' + tariff + '</div></td>' +
+            '<td><strong>' + amount + '</strong></td>' +
+            '<td><div>' + provider + '</div><div>' + envBadge + '</div></td>' +
+            '<td>' + statusBadge + '</td>' +
+            '<td style="font-size:12px;">' + paidAt + '</td>' +
+            '<td>' + refundInfo + '</td>' +
+            '<td>' + actionBtn + '</td>' +
+          '</tr>';
+        });
+
+        html += '</tbody></table></div>';
+      }
+
+      html += '<div id="refund-modal-container"></div>';
+      el.innerHTML = html;
+
+      const filterSelect = document.getElementById('payments-status-filter');
+      if (filterSelect) {
+        filterSelect.addEventListener('change', function () {
+          paymentsFilterStatus = this.value;
+          loadPayments(el);
+        });
+      }
+
+      const refreshBtn = document.getElementById('payments-refresh-btn');
+      if (refreshBtn) {
+        refreshBtn.addEventListener('click', function () {
+          loadPayments(el);
+        });
+      }
+
+      el.querySelectorAll('.refund-trigger-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          const ordId = this.getAttribute('data-order');
+          const p = payments.find(function (item) { return item.orderId === ordId; });
+          if (p) {
+            openRefundModal(p, function () { loadPayments(el); });
+          }
+        });
+      });
+
+      el.querySelectorAll('.check-refund-status-btn').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+          const ordId = this.getAttribute('data-order');
+          if (!ordId) return;
+
+          this.disabled = true;
+          this.textContent = 'Сверка...';
+
+          try {
+            const resp = await api('POST', '/api/admin/payments/' + encodeURIComponent(ordId) + '/refund/status');
+            const msg = (resp && resp.message) ? resp.message : ('Статус возврата: ' + (resp ? resp.status : 'неизвестно'));
+            alert(msg);
+          } catch (err) {
+            alert('Ошибка сверки статуса возврата: ' + err.message);
+          } finally {
+            loadPayments(el);
+          }
+        });
+      });
+
+    } catch (err) {
+      el.innerHTML = '<div class="admin-empty" style="color:var(--critical);">Ошибка загрузки платежей: ' + esc(err.message) + '</div>';
+    }
+  }
+
+  function openRefundModal(payment, onDone) {
+    const modalContainer = document.getElementById('refund-modal-container');
+    if (!modalContainer) return;
+
+    const isProd = (payment.environment || '').toLowerCase() === 'production';
+    const amount = formatKzt(payment.amountKzt);
+    const clientDesc = (payment.clientName || 'Клиент') + ' (' + (payment.clientPhone || payment.clientEmail || 'без контакта') + ')';
+
+    modalContainer.innerHTML = '' +
+      '<div class="admin-modal-backdrop">' +
+        '<div class="admin-modal-box" style="max-width:520px;">' +
+          '<h3 style="margin-top:0;margin-bottom:12px;font-size:18px;">Подтверждение возврата платежа</h3>' +
+
+          (isProd ? '<div style="background:#fef2f2;border:1px solid #f87171;border-radius:6px;padding:10px 12px;margin-bottom:14px;color:#991b1b;font-size:13px;font-weight:600;">' +
+            'ВНИМАНИЕ! Платеж совершен в боевой среде (PRODUCTION). Подтверждение операции приведет к РЕАЛЬНОМУ списанию средств с торгового счета BCC и зачислению на карту клиента!' +
+          '</div>' : '<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:8px 12px;margin-bottom:14px;color:#166534;font-size:13px;">' +
+            'Тестовая среда (TEST). Реальное списание средств с банковской карты не происходит.' +
+          '</div>') +
+
+          '<div style="background:#fffbe6;border:1px solid #ffe58f;border-radius:6px;padding:10px 12px;margin-bottom:14px;color:#ad6800;font-size:12px;">' +
+            'Пользователь уже мог скачать готовый юридический документ PDF. Оформление возврата не удалит скачанный пользователем файл и закроет доступ к последующим скачиваниям в сессии.' +
+          '</div>' +
+
+          '<div style="font-size:13px;line-height:1.6;margin-bottom:16px;background:var(--surface);padding:10px;border-radius:6px;border:1px solid var(--border);">' +
+            '<div><strong>Заказ:</strong> <span style="font-family:monospace;">' + esc(payment.orderId) + '</span></div>' +
+            '<div><strong>Клиент:</strong> ' + esc(clientDesc) + '</div>' +
+            '<div><strong>Тариф:</strong> ' + esc(payment.tariff || '-') + '</div>' +
+            '<div><strong>Сумма полного возврата:</strong> <span style="font-size:15px;color:#b91c1c;font-weight:700;">' + amount + '</span></div>' +
+            (payment.merchRnId ? '<div><span style="color:var(--text-muted);font-size:11px;">MERCH_RN_ID: ' + esc(payment.merchRnId) + '</span></div>' : '') +
+          '</div>' +
+
+          '<div style="margin-bottom:14px;">' +
+            '<label style="display:block;font-size:13px;font-weight:500;margin-bottom:4px;">Причина возврата (обязательно, от 10 до 500 символов):</label>' +
+            '<textarea id="refund-reason-input" class="admin-input" rows="3" style="width:100%;box-sizing:border-box;resize:vertical;" placeholder="Укажите причину возврата для аудита и бухгалтерии..."></textarea>' +
+            '<div id="refund-reason-error" style="color:#dc2626;font-size:12px;margin-top:2px;display:none;"></div>' +
+          '</div>' +
+
+          '<div style="margin-bottom:18px;">' +
+            '<label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;cursor:pointer;">' +
+              '<input type="checkbox" id="refund-confirm-chk" style="margin-top:2px;">' +
+              '<span>Я подтверждаю полный возврат средств в размере ' + amount + ' и понимаю последствия операции.</span>' +
+            '</label>' +
+          '</div>' +
+
+          '<div style="display:flex;justify-content:flex-end;gap:10px;">' +
+            '<button type="button" id="refund-cancel-btn" class="btn-ghost">Отмена</button>' +
+            '<button type="button" id="refund-submit-btn" class="btn-primary" style="background:#dc2626;border-color:#dc2626;color:#fff;" disabled>Подтвердить возврат</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    const reasonInput = document.getElementById('refund-reason-input');
+    const confirmChk = document.getElementById('refund-confirm-chk');
+    const submitBtn = document.getElementById('refund-submit-btn');
+    const cancelBtn = document.getElementById('refund-cancel-btn');
+    const errorDiv = document.getElementById('refund-reason-error');
+
+    function updateSubmitState() {
+      const reasonLen = (reasonInput.value || '').trim().length;
+      submitBtn.disabled = !confirmChk.checked || reasonLen < 10 || reasonLen > 500;
+    }
+
+    reasonInput.addEventListener('input', updateSubmitState);
+    confirmChk.addEventListener('change', updateSubmitState);
+
+    cancelBtn.addEventListener('click', function () {
+      modalContainer.innerHTML = '';
+    });
+
+    submitBtn.addEventListener('click', async function () {
+      const reason = (reasonInput.value || '').trim();
+      if (reason.length < 10 || reason.length > 500) {
+        errorDiv.textContent = 'Длина причины возврата должна быть от 10 до 500 символов.';
+        errorDiv.style.display = 'block';
+        return;
+      }
+      errorDiv.style.display = 'none';
+
+      submitBtn.disabled = true;
+      cancelBtn.disabled = true;
+      reasonInput.disabled = true;
+      confirmChk.disabled = true;
+      submitBtn.textContent = 'Отправка в банк...';
+
+      try {
+        const resp = await api('POST', '/api/admin/payments/' + encodeURIComponent(payment.orderId) + '/refund', { reason: reason });
+        modalContainer.innerHTML = '';
+        if (resp && resp.status === 'succeeded') {
+          alert('Возврат успешно выполнен банком на сумму ' + amount + '!');
+        } else if (resp && resp.status === 'pending') {
+          alert('Запрос на возврат отправлен в банк и находится в обработке (pending). Ожидается подтверждение шлюза.');
+        } else {
+          alert('Операция завершена со статусом: ' + (resp ? resp.status : 'неизвестно'));
+        }
+        if (onDone) onDone();
+      } catch (err) {
+        alert('Ошибка при выполнении возврата: ' + err.message);
+        submitBtn.disabled = false;
+        cancelBtn.disabled = false;
+        reasonInput.disabled = false;
+        confirmChk.disabled = false;
+        submitBtn.textContent = 'Подтвердить возврат';
+      }
+    });
   }
 
   // -----------------------------------------------------------------------

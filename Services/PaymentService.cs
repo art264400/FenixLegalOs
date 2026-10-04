@@ -306,7 +306,8 @@ public sealed class PaymentService
                 latestPayment!.OrderId,
                 initResult.Nonce ?? "",
                 initResult.RequestTimestamp ?? "",
-                providerMetadataJson);
+                providerMetadataJson,
+                initResult.MerchRnId);
 
             if (!updated)
             {
@@ -393,6 +394,7 @@ public sealed class PaymentService
             Status = PaymentStatuses.Created,
             Nonce = initResult.Nonce,
             RequestTimestamp = initResult.RequestTimestamp,
+            MerchRnId = initResult.MerchRnId,
             ProviderMetadata = providerMetadataJson,
             CreatedAt = DateTime.UtcNow.ToString("o"),
             UpdatedAt = DateTime.UtcNow.ToString("o")

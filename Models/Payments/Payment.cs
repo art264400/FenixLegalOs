@@ -16,6 +16,7 @@ public sealed class Payment
     public string Status { get; set; } = PaymentStatuses.Created;
     public string? Nonce { get; set; }
     public string? RequestTimestamp { get; set; }
+    public string? MerchRnId { get; set; }
     public string? ProviderMetadata { get; set; }
     public string? Rrn { get; set; }
     public string? IntRef { get; set; }

@@ -31,7 +31,9 @@ public class VerificationPdfRunner
         public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 
-    [Fact(DisplayName = "Generate Full Official Review PDF Report for Verification")]
+    [Fact(
+        Skip = "Служебная генерация PDF-артефакта отключена в обычном тестовом запуске.",
+        DisplayName = "Generate Full Official Review PDF Report for Verification")]
     public async Task GenerateOfficialReviewPdfReport()
     {
         var facts = new SharedFactStore();

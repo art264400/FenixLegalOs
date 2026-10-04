@@ -18,12 +18,17 @@ public sealed class BccPaymentGateway : IPaymentGateway
 {
     private readonly BccPaymentOptions _options;
     private readonly ILogger<BccPaymentGateway> _logger;
+    private readonly System.Net.Http.IHttpClientFactory? _httpClientFactory;
+
+    public const string HttpClientName = "BccPaymentGatewayClient";
 
     public BccPaymentGateway(
         IConfiguration? configuration = null,
-        ILogger<BccPaymentGateway>? logger = null)
+        ILogger<BccPaymentGateway>? logger = null,
+        System.Net.Http.IHttpClientFactory? httpClientFactory = null)
     {
         _logger = logger ?? NullLogger<BccPaymentGateway>.Instance;
+        _httpClientFactory = httpClientFactory;
         _options = new BccPaymentOptions
         {
             Environment = configuration?["BCC_ENVIRONMENT"]?.Trim().ToLowerInvariant() ?? "",
@@ -453,20 +458,518 @@ public sealed class BccPaymentGateway : IPaymentGateway
         return Convert.ToBase64String(jsonUtf8Bytes);
     }
 
-    public Task<PaymentGatewayCheckResult> CheckStatusAsync(string orderId, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Собирает строку источника для макирования по протоколу BCC для проверки статуса (TRTYPE=90).
+    /// Строгий порядок полей по документации BCC:
+    /// 1. ORDER
+    /// 2. TERMINAL
+    /// 3. TIMESTAMP
+    /// 4. TRTYPE
+    /// 5. NONCE
+    /// </summary>
+    public static string BuildStatusCheckMacDataString(
+        string order,
+        string terminal,
+        string timestamp,
+        string trType,
+        string nonce)
     {
-        return Task.FromResult(new PaymentGatewayCheckResult
-        {
-            Status = PaymentStatuses.Unknown
-        });
+        var sb = new System.Text.StringBuilder();
+        AppendField(sb, order);
+        AppendField(sb, terminal);
+        AppendField(sb, timestamp);
+        AppendField(sb, trType);
+        AppendField(sb, nonce);
+        return sb.ToString();
     }
 
-    public Task<PaymentGatewayRefundResult> RefundAsync(string orderId, int amountKzt, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Выполняет запрос проверки статуса транзакции TRTYPE=90 со стороны мерчанта.
+    /// При проверке возврата передаётся TRAN_TRTYPE=14.
+    /// Если ответ банка содержит ACTION и RC с признаком возврата (TRTYPE=14), возвращается однозначный результат.
+    /// Если ответ относится к покупке (TRTYPE=1) или не содержит типа операции, статус остаётся неопределённым для ручной сверки.
+    /// </summary>
+    public async Task<PaymentGatewayCheckResult> CheckStatusAsync(string orderId, CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(new PaymentGatewayRefundResult
+        ArgumentException.ThrowIfNullOrWhiteSpace(orderId);
+
+        if (!IsConfigured)
         {
+            _logger.LogWarning(
+                PaymentEvents.BccGatewayWarning,
+                "Проверка статуса TRTYPE=90 не может быть выполнена: шлюз не настроен для заказа {OrderId}",
+                orderId);
+
+            return new PaymentGatewayCheckResult
+            {
+                Status = PaymentStatuses.Unknown,
+                Success = false,
+                IsFinal = false,
+                ErrorCode = "gateway_not_configured",
+                ErrorMessage = "Шлюз BCC не настроен."
+            };
+        }
+
+        string terminalId = _options.TerminalId;
+        string timestamp = GenerateTimestamp();
+        string nonce = GenerateNonce();
+        string trType = "90";
+
+        string macData = BuildStatusCheckMacDataString(orderId, terminalId, timestamp, trType, nonce);
+        string pSign = SignMac(macData);
+
+        var formData = new Dictionary<string, string>
+        {
+            ["ORDER"] = orderId,
+            ["TERMINAL"] = terminalId,
+            ["TRTYPE"] = trType,
+            ["TIMESTAMP"] = timestamp,
+            ["NONCE"] = nonce,
+            ["P_SIGN"] = pSign,
+            ["MERCH_GMT"] = "0",
+            ["TRAN_TRTYPE"] = "14",
+            ["NOTIFY_URL"] = _options.NotifyUrl
+        };
+
+        _logger.LogInformation(
+            PaymentEvents.PaymentRefundGatewaySent,
+            "Отправлен запрос проверки статуса TRTYPE=90 в BCC: заказ {OrderId}, терминал {TerminalId}",
+            orderId,
+            terminalId);
+
+        using var client = _httpClientFactory != null
+            ? _httpClientFactory.CreateClient(HttpClientName)
+            : new System.Net.Http.HttpClient();
+
+        System.Net.Http.HttpResponseMessage httpResponse;
+        try
+        {
+            using var content = new System.Net.Http.FormUrlEncodedContent(formData);
+            httpResponse = await client.PostAsync(_options.GatewayUrl, content, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                PaymentEvents.BccGatewayError,
+                ex,
+                "Сетевая ошибка при запросе проверки статуса TRTYPE=90 в BCC для заказа {OrderId}",
+                orderId);
+
+            return new PaymentGatewayCheckResult
+            {
+                Status = PaymentStatuses.Unknown,
+                Success = false,
+                IsFinal = false,
+                ErrorCode = "network_error",
+                ErrorMessage = $"Сетевая ошибка обращения к BCC: {ex.Message}"
+            };
+        }
+
+        string rawBody = string.Empty;
+        try
+        {
+            rawBody = await httpResponse.Content.ReadAsStringAsync(cancellationToken);
+        }
+        catch { }
+
+        int statusCode = (int)httpResponse.StatusCode;
+
+        // Синхронный ответ BCC на TRTYPE=90 может быть пустым.
+        // В этом случае запрос считается отправленным, но результат остаётся pending (IsFinal=false).
+        // Не помечаем возврат успешным или неуспешным только по HTTP-статусу.
+        if (string.IsNullOrWhiteSpace(rawBody))
+        {
+            _logger.LogInformation(
+                PaymentEvents.PaymentRefundGatewaySent,
+                "Синхронный ответ BCC на TRTYPE=90 для заказа {OrderId} пуст (HTTP {StatusCode}). Запрос отправлен, результат остаётся в ожидании (pending).",
+                orderId,
+                statusCode);
+
+            return new PaymentGatewayCheckResult
+            {
+                Status = PaymentStatuses.Unknown,
+                Success = false,
+                IsFinal = false,
+                ResponseCode = statusCode.ToString(),
+                BankMessage = "Синхронный ответ BCC на TRTYPE=90 пуст. Запрос отправлен, результат остаётся pending (ожидается callback или ручная сверка)."
+            };
+        }
+
+        var dict = ExtractFieldsFromBody(rawBody);
+
+        string? action = dict.GetValueOrDefault("ACTION");
+        string? rc = dict.GetValueOrDefault("RC");
+        string? respTrType = dict.GetValueOrDefault("TRTYPE");
+        string? respTranTrType = dict.GetValueOrDefault("TRAN_TRTYPE");
+        string? rrn = dict.GetValueOrDefault("RRN");
+        string? intRef = dict.GetValueOrDefault("INT_REF");
+        string? approvalCode = dict.GetValueOrDefault("APPROVAL_CODE") ?? dict.GetValueOrDefault("AUTH_CODE");
+        string? text = dict.GetValueOrDefault("TEXT") ?? dict.GetValueOrDefault("BANK_MESSAGE");
+
+        // Требование: считать ответ результатом проверки возврата только при точном сочетании:
+        // TRTYPE == "90" && TRAN_TRTYPE == "14".
+        // Любые другие сочетания оставлять pending с IsFinal=false.
+        bool isExplicitRefund = string.Equals(respTrType, "90", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(respTranTrType, "14", StringComparison.OrdinalIgnoreCase);
+
+        if (!string.IsNullOrWhiteSpace(action) && !string.IsNullOrWhiteSpace(rc))
+        {
+            if (isExplicitRefund)
+            {
+                bool isSuccess = action == "0" && (rc == "00" || rc == "0");
+                return new PaymentGatewayCheckResult
+                {
+                    Status = isSuccess ? PaymentStatuses.Refunded : PaymentStatuses.Failed,
+                    Success = isSuccess,
+                    IsFinal = true,
+                    ActionCode = action,
+                    ResponseCode = rc,
+                    Rrn = rrn,
+                    IntRef = intRef,
+                    ApprovalCode = approvalCode,
+                    BankMessage = text,
+                    TrType = "14"
+                };
+            }
+            else
+            {
+                _logger.LogWarning(
+                    PaymentEvents.BccGatewayWarning,
+                    "Ответ TRTYPE=90 для заказа {OrderId} относится к TRTYPE={TrType}, TRAN_TRTYPE={TranTrType} (не возврат TRTYPE=90/TRAN_TRTYPE=14). Возврат остаётся pending для ручной сверки.",
+                    orderId,
+                    respTrType ?? "null",
+                    respTranTrType ?? "null");
+
+                return new PaymentGatewayCheckResult
+                {
+                    Status = PaymentStatuses.Unknown,
+                    Success = false,
+                    IsFinal = false,
+                    ActionCode = action,
+                    ResponseCode = rc,
+                    Rrn = rrn,
+                    IntRef = intRef,
+                    ApprovalCode = approvalCode,
+                    BankMessage = "Ответ шлюза не содержит точного подтверждения возврата (требуется сочетание TRTYPE=90 и TRAN_TRTYPE=14). Требуется ручная сверка с выпиской банка.",
+                    TrType = respTrType
+                };
+            }
+        }
+
+        return new PaymentGatewayCheckResult
+        {
+            Status = PaymentStatuses.Unknown,
             Success = false,
-            BankMessage = "BCC refund not configured."
-        });
+            IsFinal = false,
+            ResponseCode = statusCode.ToString(),
+            BankMessage = !string.IsNullOrWhiteSpace(text)
+                ? text
+                : $"Шлюз вернул HTTP {statusCode} без однозначных банковских кодов ACTION/RC. Результат оставлен pending."
+        };
+    }
+
+    /// <summary>
+    /// Собирает строку источника для макирования по протоколу BCC для возврата (TRTYPE=14):
+    /// Порядок строго:
+    /// 1. ORDER
+    /// 2. ORG_AMOUNT
+    /// 3. AMOUNT
+    /// 4. CURRENCY
+    /// 5. RRN
+    /// 6. INT_REF
+    /// 7. TERMINAL
+    /// 8. TIMESTAMP
+    /// 9. TRTYPE
+    /// 10. NONCE
+    /// </summary>
+    public static string BuildRefundMacDataString(
+        string order,
+        string orgAmount,
+        string amount,
+        string currency,
+        string rrn,
+        string intRef,
+        string terminal,
+        string timestamp,
+        string trType,
+        string nonce)
+    {
+        var sb = new System.Text.StringBuilder();
+        AppendField(sb, order);
+        AppendField(sb, orgAmount);
+        AppendField(sb, amount);
+        AppendField(sb, currency);
+        AppendField(sb, rrn);
+        AppendField(sb, intRef);
+        AppendField(sb, terminal);
+        AppendField(sb, timestamp);
+        AppendField(sb, trType);
+        AppendField(sb, nonce);
+        return sb.ToString();
+    }
+
+    public async Task<PaymentGatewayRefundResult> RefundAsync(PaymentGatewayRefundRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (!IsConfigured)
+        {
+            _logger.LogWarning(
+                PaymentEvents.PaymentRefundRejected,
+                "Возврат BCC не может быть выполнен: шлюз не настроен для заказа {OrderId}",
+                request.OrderId);
+
+            return new PaymentGatewayRefundResult
+            {
+                Success = false,
+                Accepted = false,
+                IsFinal = true,
+                ErrorCode = "gateway_not_configured",
+                ErrorMessage = "Платёжный шлюз BCC не настроен."
+            };
+        }
+
+        string orderId = request.OrderId.Trim();
+        string merchRnId = request.MerchRnId.Trim();
+        string rrn = request.Rrn.Trim();
+        string intRef = request.IntRef.Trim();
+        string terminalId = !string.IsNullOrWhiteSpace(request.TerminalId) ? request.TerminalId.Trim() : _options.TerminalId;
+        string currencyCode = "398"; // Код тенге ISO 4217 в BCC
+        string trType = "14";
+        string timestamp = GenerateTimestamp();
+        string nonce = GenerateNonce();
+        string notifyUrl = !string.IsNullOrWhiteSpace(request.NotifyUrl) ? request.NotifyUrl : _options.NotifyUrl;
+
+        string orgAmountStr = request.OriginalAmountKzt.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+        string amountStr = request.RefundAmountKzt.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+
+        string macData = BuildRefundMacDataString(
+            order: orderId,
+            orgAmount: orgAmountStr,
+            amount: amountStr,
+            currency: currencyCode,
+            rrn: rrn,
+            intRef: intRef,
+            terminal: terminalId,
+            timestamp: timestamp,
+            trType: trType,
+            nonce: nonce);
+
+        string pSign = SignMac(macData);
+
+        var formData = new Dictionary<string, string>
+        {
+            ["ORG_AMOUNT"] = orgAmountStr,
+            ["AMOUNT"] = amountStr,
+            ["CURRENCY"] = currencyCode,
+            ["ORDER"] = orderId,
+            ["MERCH_RN_ID"] = merchRnId,
+            ["RRN"] = rrn,
+            ["INT_REF"] = intRef,
+            ["TERMINAL"] = terminalId,
+            ["TIMESTAMP"] = timestamp,
+            ["MERCH_GMT"] = "0",
+            ["TRTYPE"] = trType,
+            ["LANG"] = "ru",
+            ["NONCE"] = nonce,
+            ["P_SIGN"] = pSign,
+            ["NOTIFY_URL"] = notifyUrl
+        };
+
+        _logger.LogInformation(
+            PaymentEvents.PaymentRefundGatewaySent,
+            "Отправлен запрос возврата TRTYPE=14 в BCC: заказ {OrderId}, сумма {AmountKzt} KZT, терминал {TerminalId}",
+            orderId,
+            request.RefundAmountKzt,
+            terminalId);
+
+        using var client = _httpClientFactory != null
+            ? _httpClientFactory.CreateClient(HttpClientName)
+            : new System.Net.Http.HttpClient();
+
+        System.Net.Http.HttpResponseMessage httpResponse;
+        try
+        {
+            using var content = new System.Net.Http.FormUrlEncodedContent(formData);
+            httpResponse = await client.PostAsync(_options.GatewayUrl, content, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                PaymentEvents.BccGatewayError,
+                ex,
+                "Сетевая ошибка при отправке запроса возврата TRTYPE=14 в BCC для заказа {OrderId}",
+                orderId);
+
+            return new PaymentGatewayRefundResult
+            {
+                Accepted = false,
+                IsFinal = false,
+                Success = false,
+                ErrorCode = "network_error",
+                ErrorMessage = $"Сетевая ошибка обращения к BCC: {ex.Message}"
+            };
+        }
+
+        string rawBody = string.Empty;
+        try
+        {
+            rawBody = await httpResponse.Content.ReadAsStringAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Не удалось прочитать тело ответа шлюза BCC для заказа {OrderId}", orderId);
+        }
+
+        int statusCode = (int)httpResponse.StatusCode;
+
+        // Если получен HTTP 4xx или 5xx статус:
+        if (!httpResponse.IsSuccessStatusCode)
+        {
+            _logger.LogWarning(
+                PaymentEvents.BccGatewayWarning,
+                "BCC шлюз вернул HTTP статус {StatusCode} при возврате заказа {OrderId}",
+                statusCode,
+                orderId);
+
+            // Сначала пробуем извлечь банковский результат (ACTION и RC) из тела ответа даже при HTTP 4xx/5xx:
+            var parsedFromError = TryParseDefinitiveBankResult(rawBody, orderId);
+            if (parsedFromError != null)
+            {
+                return parsedFromError;
+            }
+
+            // Если ACTION/RC отсутствуют или тело невозможно проверить:
+            // Accepted = false, IsFinal = false, Success = false. Статус локального возврата остаётся pending.
+            return new PaymentGatewayRefundResult
+            {
+                Accepted = false,
+                IsFinal = false,
+                Success = false,
+                ResponseCode = statusCode.ToString(),
+                ErrorCode = "gateway_http_indeterminate",
+                ErrorMessage = $"Шлюз BCC вернул HTTP {statusCode} без однозначных банковских кодов подтверждения."
+            };
+        }
+
+        return ParseRefundResponse(rawBody, orderId);
+    }
+
+    /// <summary>
+    /// Проверяет тело ответа на наличие однозначных банковских кодов ACTION и RC.
+    /// </summary>
+    private PaymentGatewayRefundResult? TryParseDefinitiveBankResult(string body, string orderId)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+            return null;
+
+        // Если ответ содержит HTML без банковских кодов — это не подтверждение результата
+        if (body.Contains("<html", StringComparison.OrdinalIgnoreCase) &&
+            !body.Contains("ACTION=", StringComparison.OrdinalIgnoreCase) &&
+            !body.Contains("RC=", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var dict = ExtractFieldsFromBody(body);
+        string? action = dict.GetValueOrDefault("ACTION");
+        string? rc = dict.GetValueOrDefault("RC");
+        string? rrn = dict.GetValueOrDefault("RRN");
+        string? intRef = dict.GetValueOrDefault("INT_REF");
+        string? text = dict.GetValueOrDefault("TEXT") ?? dict.GetValueOrDefault("BANK_MESSAGE");
+
+        if (action != null && rc != null)
+        {
+            bool isSuccess = action == "0" && (rc == "00" || rc == "0");
+            _logger.LogInformation(
+                isSuccess ? PaymentEvents.PaymentRefundSucceeded : PaymentEvents.PaymentRefundFailed,
+                "Получен банковский результат возврата BCC: заказ {OrderId}, ACTION {Action}, RC {ResponseCode}, Success: {Success}",
+                orderId,
+                action,
+                rc,
+                isSuccess);
+
+            return new PaymentGatewayRefundResult
+            {
+                Accepted = isSuccess,
+                IsFinal = true,
+                Success = isSuccess,
+                ActionCode = action,
+                ResponseCode = rc,
+                Rrn = rrn,
+                IntRef = intRef,
+                BankMessage = text
+            };
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Парсит синхронный ответ BCC шлюза (form urlencoded, json или текстовый ответ cgi_link).
+    /// </summary>
+    private PaymentGatewayRefundResult ParseRefundResponse(string body, string orderId)
+    {
+        var definitive = TryParseDefinitiveBankResult(body, orderId);
+        if (definitive != null)
+        {
+            return definitive;
+        }
+
+        // Если тело пустое или HTML или не содержит ACTION/RC — возврат принят в обработку, ожидает callback
+        _logger.LogInformation(
+            PaymentEvents.PaymentRefundAwaitingCallback,
+            "Синхронный ответ BCC не содержит явных кодов ACTION/RC для заказа {OrderId}, ожидается callback",
+            orderId);
+
+        var dict = ExtractFieldsFromBody(body);
+        string? text = dict.GetValueOrDefault("TEXT") ?? dict.GetValueOrDefault("BANK_MESSAGE");
+
+        return new PaymentGatewayRefundResult
+        {
+            Accepted = true,
+            IsFinal = false,
+            Success = false,
+            BankMessage = text
+        };
+    }
+
+    /// <summary>
+    /// Безопасно извлекает поля формы / JSON из тела ответа.
+    /// </summary>
+    private static Dictionary<string, string> ExtractFieldsFromBody(string body)
+    {
+        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(body))
+            return dict;
+
+        // 1. Попытка распарсить как query string / form urlencoded / построчно
+        string[] pairs = body.Split(new[] { '&', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+        foreach (var pair in pairs)
+        {
+            int eqIdx = pair.IndexOf('=');
+            if (eqIdx > 0)
+            {
+                string key = pair[..eqIdx].Trim();
+                string val = pair[(eqIdx + 1)..].Trim();
+                dict[key] = val;
+            }
+        }
+
+        // 2. Попытка распарсить JSON, если пары не найдены
+        if (!dict.ContainsKey("ACTION") && !dict.ContainsKey("RC") && body.TrimStart().StartsWith("{"))
+        {
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(body);
+                foreach (var prop in doc.RootElement.EnumerateObject())
+                {
+                    dict[prop.Name] = prop.Value.ToString();
+                }
+            }
+            catch { }
+        }
+
+        return dict;
     }
 }

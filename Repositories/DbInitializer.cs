@@ -181,6 +181,7 @@ public class DbInitializer
                 status TEXT NOT NULL DEFAULT 'created',
                 nonce TEXT,
                 request_timestamp TEXT,
+                merch_rn_id TEXT,
                 provider_metadata TEXT,
                 rrn TEXT,
                 int_ref TEXT,
@@ -200,6 +201,36 @@ public class DbInitializer
             CREATE INDEX IF NOT EXISTS idx_payments_session_id ON payments(session_id);
             CREATE INDEX IF NOT EXISTS idx_payments_order_id ON payments(order_id);
             CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
+
+            CREATE TABLE IF NOT EXISTS payment_refunds (
+                id TEXT PRIMARY KEY,
+                payment_id TEXT NOT NULL,
+                order_id TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                environment TEXT NOT NULL,
+                amount_kzt INTEGER NOT NULL,
+                reason TEXT NOT NULL,
+                status TEXT NOT NULL,
+                request_timestamp TEXT,
+                nonce TEXT,
+                action_code TEXT,
+                response_code TEXT,
+                rrn TEXT,
+                int_ref TEXT,
+                bank_message TEXT,
+                created_by TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                completed_at TEXT,
+                FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE RESTRICT
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_payment_refunds_payment_id ON payment_refunds(payment_id);
+            CREATE INDEX IF NOT EXISTS idx_payment_refunds_order_id ON payment_refunds(order_id);
+            CREATE INDEX IF NOT EXISTS idx_payment_refunds_status ON payment_refunds(status);
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_refunds_active_or_succeeded
+            ON payment_refunds(payment_id)
+            WHERE status IN ('pending', 'succeeded');
 
             -- Question Bank Tables
             CREATE TABLE IF NOT EXISTS sections (
@@ -320,6 +351,7 @@ public class DbInitializer
         TryAddColumn(conn, "leads", "terms_accepted_at", "TEXT");
 
         TryAddColumn(conn, "payments", "provider_metadata", "TEXT");
+        TryAddColumn(conn, "payments", "merch_rn_id", "TEXT");
 
         // Проверка наличия дубликатов активных платежей перед созданием частичного уникального индекса
         var duplicateActiveSessions = conn.Query<string>(@"

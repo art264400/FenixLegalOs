@@ -47,3 +47,4 @@ publish/
 *.local_bak*
 tmp/
 scratch/
+outputs/

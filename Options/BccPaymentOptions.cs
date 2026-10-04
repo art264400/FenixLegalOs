@@ -17,5 +17,4 @@ public sealed class BccPaymentOptions
     public string NotifyUsername { get; set; } = "";
     public string NotifyPassword { get; set; } = "";
     public bool AllowUnauthenticatedTestNotifications { get; set; } = false;
-    public bool LogTestAuthorizationHeader { get; set; } = false;
 }

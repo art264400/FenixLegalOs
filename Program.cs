@@ -24,9 +24,13 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.ForwardLimit = 1;
 });
 
-// Register Controllers
+// Register Controllers & HttpClient
 builder.Services.AddControllers();
 builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient(BccPaymentGateway.HttpClientName, client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
 
 // Register Services & Repositories
 builder.Services.AddSingleton<DbInitializer>();
@@ -37,9 +41,12 @@ builder.Services.AddSingleton<UserRepository>();
 builder.Services.AddSingleton<LeadRepository>();
 builder.Services.AddSingleton<SettingsRepository>();
 builder.Services.AddSingleton<PaymentRepository>();
+builder.Services.AddSingleton<PaymentRefundRepository>();
+builder.Services.AddSingleton<AdminSessionService>();
 builder.Services.AddSingleton<IPaymentGateway, BccPaymentGateway>();
 builder.Services.AddSingleton<BccNotificationService>();
 builder.Services.AddSingleton<PaymentService>();
+builder.Services.AddSingleton<PaymentRefundService>();
 builder.Services.AddSingleton<ScoringEngine>();
 builder.Services.AddSingleton<TypstPdfService>();
 builder.Services.AddSingleton<AiReportService>();
