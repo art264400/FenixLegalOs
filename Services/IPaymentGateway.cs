@@ -72,6 +72,11 @@ public sealed class PaymentGatewayInitRequest
     /// Ширина экрана браузера (window.outerWidth).
     /// </summary>
     public int BrowserScreenWidth { get; init; }
+
+    /// <summary>
+    /// Адрес плательщика (billAddrLine1), обязателен для 3-D Secure.
+    /// </summary>
+    public string? BillingAddress { get; init; }
 }
 
 public sealed class PaymentGatewayInitResult

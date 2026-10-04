@@ -1958,7 +1958,149 @@
     );
   }
 
-  async function startCardPayment(sessionId) {
+  function openPaymentConfirmationModal(sessionId) {
+    const rawPhone = currentUser && currentUser.phone ? String(currentUser.phone).trim() : '';
+    if (!rawPhone) {
+      alert('Для оплаты необходимо указать корректный номер телефона в профиле.');
+      return;
+    }
+
+    const safePhone = esc(rawPhone);
+
+    modalRoot.innerHTML =
+      '<div class="auth-modal-overlay" id="payment-confirm-overlay">' +
+        '<div class="auth-modal fade-in" style="max-width:460px" role="dialog" aria-modal="true">' +
+          '<button class="auth-modal-close" id="payment-confirm-close" aria-label="Закрыть">×</button>' +
+          '<div class="auth-badge">FENIX SLS · Оплата картой</div>' +
+          '<h2 class="auth-modal-title" style="font-size:20px;margin-bottom:6px">Данные плательщика</h2>' +
+          '<p class="auth-modal-sub" style="margin-bottom:16px">' +
+            'Подтвердите данные для безопасного перехода в платёжный шлюз банка.' +
+          '</p>' +
+          '<div class="auth-error-msg" id="payment-confirm-error" hidden style="margin-bottom:14px;color:var(--critical,#F87171);font-size:13px;line-height:1.4"></div>' +
+          '<form class="auth-form" id="payment-confirm-form">' +
+            '<div class="auth-field">' +
+              '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+                '<label for="pay-phone" style="margin-bottom:0">Номер телефона</label>' +
+                '<span style="font-size:11.5px;color:var(--gold,#E5C07B);background:rgba(229,192,123,0.12);padding:2px 8px;border-radius:4px">Из профиля</span>' +
+              '</div>' +
+              '<input id="pay-phone" type="text" value="' + safePhone + '" readonly style="opacity:0.85;cursor:not-allowed;background:rgba(255,255,255,0.04)">' +
+            '</div>' +
+            '<div class="auth-field">' +
+              '<label for="pay-address">Адрес плательщика <span class="req">*</span></label>' +
+              '<input id="pay-address" type="text" required maxlength="50" placeholder="г. Астана, ул. Абая, д. 10, кв. 5" autocomplete="street-address">' +
+            '</div>' +
+            '<button type="submit" class="btn btn-primary auth-submit-btn" id="btn-submit-payment" style="margin-top:10px">Перейти к оплате</button>' +
+          '</form>' +
+        '</div>' +
+      '</div>';
+
+    const overlay = document.getElementById('payment-confirm-overlay');
+    const closeBtn = document.getElementById('payment-confirm-close');
+    const form = document.getElementById('payment-confirm-form');
+    const addressInput = document.getElementById('pay-address');
+    const errorEl = document.getElementById('payment-confirm-error');
+    const submitBtn = document.getElementById('btn-submit-payment');
+
+    function closeModal() {
+      modalRoot.innerHTML = '';
+    }
+
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    if (overlay) {
+      overlay.addEventListener('click', function (e) {
+        if (e.target === overlay) closeModal();
+      });
+    }
+
+    if (addressInput) addressInput.focus();
+
+    if (form) {
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const address = addressInput ? addressInput.value.trim() : '';
+
+        if (!address) {
+          if (errorEl) {
+            errorEl.textContent = 'Для перехода к оплате необходимо указать адрес плательщика.';
+            errorEl.hidden = false;
+          }
+          if (addressInput) addressInput.focus();
+          return;
+        }
+
+        if (address.length > 50) {
+          if (errorEl) {
+            errorEl.textContent = 'Адрес плательщика не должен превышать 50 символов.';
+            errorEl.hidden = false;
+          }
+          if (addressInput) addressInput.focus();
+          return;
+        }
+
+        if (errorEl) errorEl.hidden = true;
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Переход к оплате…';
+        }
+
+        try {
+          const payload = {
+            tariff: selectedTier || 'report',
+            browserScreenHeight: Math.min(Math.max(window.outerHeight || window.innerHeight || 800, 1), 999999),
+            browserScreenWidth: Math.min(Math.max(window.outerWidth || window.innerWidth || 1280, 1), 999999),
+            billingAddress: address
+          };
+
+          const res = await api('POST', '/api/payments/' + sessionId + '/start', payload);
+
+          if (!res || !res.actionUrl || !res.formFields) {
+            throw new Error((res && res.message) || 'Не удалось получить платёжную форму.');
+          }
+
+          // Создаём скрытую HTML-форму для безопасной POST-отправки в BCC
+          const bccForm = document.createElement('form');
+          bccForm.method = res.method || 'POST';
+          bccForm.action = res.actionUrl;
+          bccForm.style.display = 'none';
+
+          const fields = res.formFields || {};
+          for (const key in fields) {
+            if (Object.prototype.hasOwnProperty.call(fields, key)) {
+              const input = document.createElement('input');
+              input.type = 'hidden';
+              input.name = key;
+              input.value = fields[key];
+              bccForm.appendChild(input);
+            }
+          }
+
+          document.body.appendChild(bccForm);
+          bccForm.submit();
+        } catch (err) {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Перейти к оплате';
+          }
+          let msg = err && err.message ? err.message : 'Не удалось запустить оплату. Попробуйте ещё раз.';
+          if (err && err.code === 'phone_required') {
+            msg = 'Для оплаты необходимо указать корректный номер телефона в профиле.';
+          } else if (err && err.code === 'billing_address_required') {
+            msg = 'Для перехода к оплате необходимо указать адрес плательщика.';
+          } else if (err && err.code === 'billing_address_too_long') {
+            msg = 'Адрес плательщика не должен превышать 50 символов.';
+          }
+          if (errorEl) {
+            errorEl.textContent = msg;
+            errorEl.hidden = false;
+          } else {
+            alert(msg);
+          }
+        }
+      });
+    }
+  }
+
+  function startCardPayment(sessionId) {
     if (!currentUser || !currentUser.termsAccepted) {
       openAuthModal(function () {
         startCardPayment(sessionId);
@@ -1966,56 +2108,12 @@
       return;
     }
 
-    const cardBtn = document.getElementById('btn-pay-card');
-    const originalText = cardBtn ? cardBtn.textContent : '';
-    if (cardBtn) {
-      cardBtn.disabled = true;
-      cardBtn.textContent = 'Подготовка к оплате…';
+    if (!currentUser.phone || !currentUser.phone.trim()) {
+      alert('Для оплаты необходимо указать корректный номер телефона в профиле.');
+      return;
     }
 
-    try {
-      const payload = {
-        tariff: selectedTier || 'report',
-        browserScreenHeight: Math.min(Math.max(window.outerHeight || window.innerHeight || 800, 1), 999999),
-        browserScreenWidth: Math.min(Math.max(window.outerWidth || window.innerWidth || 1280, 1), 999999)
-      };
-
-      const res = await api('POST', '/api/payments/' + sessionId + '/start', payload);
-
-      if (!res || !res.actionUrl || !res.formFields) {
-        throw new Error((res && res.message) || 'Не удалось получить платёжную форму.');
-      }
-
-      // Создаём скрытую HTML-форму для безопасной POST-отправки в BCC
-      const form = document.createElement('form');
-      form.method = res.method || 'POST';
-      form.action = res.actionUrl;
-      form.style.display = 'none';
-
-      const fields = res.formFields || {};
-      for (const key in fields) {
-        if (Object.prototype.hasOwnProperty.call(fields, key)) {
-          const input = document.createElement('input');
-          input.type = 'hidden';
-          input.name = key;
-          input.value = fields[key];
-          form.appendChild(input);
-        }
-      }
-
-      document.body.appendChild(form);
-      form.submit();
-    } catch (err) {
-      if (cardBtn) {
-        cardBtn.disabled = false;
-        cardBtn.textContent = originalText;
-      }
-      let msg = err && err.message ? err.message : 'Не удалось запустить оплату. Попробуйте ещё раз.';
-      if (err && err.code === 'phone_required') {
-        msg = 'Для оплаты необходимо указать корректный номер телефона в профиле.';
-      }
-      alert(msg);
-    }
+    openPaymentConfirmationModal(sessionId);
   }
 
   async function screenResults() {

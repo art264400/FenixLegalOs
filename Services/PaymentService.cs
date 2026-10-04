@@ -42,9 +42,10 @@ public sealed class PaymentService
     /// 5. Проверить существующую активную попытку.
     /// 6. Получить пользователя через session.UserId.
     /// 7. Проверить users.phone.
-    /// 8. Проверить размеры экрана.
-    /// 9. Определить сумму на сервере.
-    /// 10. Вызвать IPaymentGateway.CreatePaymentAsync.
+    /// 8. Проверить адрес плательщика.
+    /// 9. Проверить размеры экрана.
+    /// 10. Определить сумму на сервере.
+    /// 11. Вызвать IPaymentGateway.CreatePaymentAsync.
     /// </summary>
     public async System.Threading.Tasks.Task<PaymentServiceResult> StartAsync(
         string sessionId,
@@ -52,6 +53,7 @@ public sealed class PaymentService
         int browserScreenHeight,
         int browserScreenWidth,
         string? clientIp,
+        string? billingAddress = null,
         DiagnosticSession? cachedSession = null,
         System.Threading.CancellationToken cancellationToken = default)
     {
@@ -130,14 +132,25 @@ public sealed class PaymentService
             return PaymentServiceResult.BadRequest("phone_required", "Для оплаты необходимо указать корректный номер телефона.");
         }
 
-        // 8. Проверить размеры экрана (от 1 до 999999)
+        // 8. Проверить адрес плательщика
+        string trimmedBillingAddress = billingAddress?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(trimmedBillingAddress))
+        {
+            return PaymentServiceResult.BadRequest("billing_address_required", "Для перехода к оплате необходимо указать адрес плательщика.");
+        }
+        if (trimmedBillingAddress.Length > 50)
+        {
+            return PaymentServiceResult.BadRequest("billing_address_too_long", "Адрес плательщика не должен превышать 50 символов.");
+        }
+
+        // 9. Проверить размеры экрана (от 1 до 999999)
         if (browserScreenHeight < 1 || browserScreenHeight > 999999 ||
             browserScreenWidth < 1 || browserScreenWidth > 999999)
         {
             return PaymentServiceResult.BadRequest("invalid_browser_dimensions", "Некорректные параметры экрана браузера.");
         }
 
-        // 9. Определить сумму на сервере
+        // 10. Определить сумму на сервере
         int amountKzt;
         if (hasActivePayment)
         {
@@ -151,7 +164,7 @@ public sealed class PaymentService
                 : pricing.PriceKzt;
         }
 
-        // 10. Вызвать IPaymentGateway.CreatePaymentAsync
+        // 11. Вызвать IPaymentGateway.CreatePaymentAsync
         var initRequest = new PaymentGatewayInitRequest
         {
             SessionId = sessionId,
@@ -161,6 +174,7 @@ public sealed class PaymentService
             OrderId = hasActivePayment ? latestPayment!.OrderId : null,
             ClientIp = clientIp,
             Phone = normalizedPhone,
+            BillingAddress = trimmedBillingAddress,
             BrowserScreenHeight = browserScreenHeight,
             BrowserScreenWidth = browserScreenWidth
         };

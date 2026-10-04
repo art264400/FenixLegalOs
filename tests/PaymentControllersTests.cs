@@ -4,6 +4,7 @@ using FenixLegalOs.Controllers;
 using FenixLegalOs.Data;
 using FenixLegalOs.Models;
 using FenixLegalOs.Models.Payments;
+using FenixLegalOs.Options;
 using FenixLegalOs.Repositories;
 using FenixLegalOs.Services;
 using Microsoft.AspNetCore.Http;
@@ -84,7 +85,8 @@ public sealed class PaymentControllersTests : IDisposable
         {
             Tariff = "report",
             BrowserScreenHeight = 1080,
-            BrowserScreenWidth = 1920
+            BrowserScreenWidth = 1920,
+            BillingAddress = "г. Астана, ул. Абая, 10"
         });
         var unavailable = Assert.IsType<ObjectResult>(action);
         string json = JsonSerializer.Serialize(unavailable.Value);
@@ -100,7 +102,8 @@ public sealed class PaymentControllersTests : IDisposable
         {
             Tariff = "consultation",
             BrowserScreenHeight = 1080,
-            BrowserScreenWidth = 1920
+            BrowserScreenWidth = 1920,
+            BillingAddress = "г. Астана, ул. Абая, 10"
         });
 
         var unavailable = Assert.IsType<ObjectResult>(action);
@@ -145,11 +148,12 @@ public sealed class PaymentControllersTests : IDisposable
     }
 
     [Fact(DisplayName = "Unconfigured BCC notification cannot mutate payment state")]
-    public void Notify_WhenNotConfigured_Returns503()
+    public async Task Notify_WhenNotConfigured_Returns503()
     {
-        var controller = new BccCallbacksController();
+        var service = new BccNotificationService(_paymentRepo);
+        var controller = new BccCallbacksController(service);
 
-        var action = controller.Notify();
+        var action = await controller.Notify();
 
         var unavailable = Assert.IsType<ObjectResult>(action);
         Assert.Equal(StatusCodes.Status503ServiceUnavailable, unavailable.StatusCode);
@@ -158,12 +162,14 @@ public sealed class PaymentControllersTests : IDisposable
     [Fact(DisplayName = "BCC browser return only redirects to results")]
     public void ReturnToMerchant_DoesNotConfirmPayment()
     {
-        var controller = new BccCallbacksController();
+        var service = new BccNotificationService(_paymentRepo);
+        var controller = new BccCallbacksController(service);
 
         var action = Assert.IsType<RedirectResult>(controller.ReturnToMerchant());
 
         Assert.Equal("/#/results", action.Url);
     }
+
 
     [Fact(DisplayName = "Payment repository can insert, retrieve and order payments")]
     public void PaymentRepository_CanInsertAndRetrievePayments()
@@ -652,7 +658,8 @@ public sealed class PaymentControllersTests : IDisposable
         {
             Tariff = "report",
             BrowserScreenHeight = 1080,
-            BrowserScreenWidth = 1920
+            BrowserScreenWidth = 1920,
+            BillingAddress = "г. Астана, ул. Абая, 10"
         });
         var ok = Assert.IsType<OkObjectResult>(result);
         var jsonOptions = new JsonSerializerOptions
@@ -707,7 +714,8 @@ public sealed class PaymentControllersTests : IDisposable
         {
             Tariff = "report",
             BrowserScreenHeight = 1080,
-            BrowserScreenWidth = 1920
+            BrowserScreenWidth = 1920,
+            BillingAddress = "г. Астана, ул. Абая, 10"
         });
         var unavailable = Assert.IsType<ObjectResult>(result);
         Assert.Equal(StatusCodes.Status503ServiceUnavailable, unavailable.StatusCode);
@@ -1053,6 +1061,7 @@ public sealed class PaymentControllersTests : IDisposable
             Currency = "KZT",
             ClientIp = "192.168.1.100",
             Phone = "+77001234567",
+            BillingAddress = "г. Астана, ул. Абая, 10",
             BrowserScreenHeight = 1080,
             BrowserScreenWidth = 1920
         });
@@ -1085,6 +1094,52 @@ public sealed class PaymentControllersTests : IDisposable
         Assert.Equal(merchRnId, result.MerchRnId);
     }
 
+    [Fact(DisplayName = "CreatePaymentAsync returns error if BillingAddress is missing")]
+    public async Task BccPaymentGateway_MissingBillingAddress_ReturnsValidationError()
+    {
+        var gateway = CreateFullyConfiguredGateway();
+        Assert.True(gateway.IsConfigured);
+
+        var result = await gateway.CreatePaymentAsync(new PaymentGatewayInitRequest
+        {
+            SessionId = "sess-1",
+            Tariff = "report",
+            AmountKzt = 49990,
+            Currency = "KZT",
+            ClientIp = "192.168.1.1",
+            Phone = "+77001234567",
+            BillingAddress = "   ",
+            BrowserScreenHeight = 1080,
+            BrowserScreenWidth = 1920
+        });
+
+        Assert.False(result.Success);
+        Assert.Equal("billing_address_required", result.ErrorCode);
+    }
+
+    [Fact(DisplayName = "CreatePaymentAsync returns error if BillingAddress is longer than 50 chars")]
+    public async Task BccPaymentGateway_BillingAddressTooLong_ReturnsValidationError()
+    {
+        var gateway = CreateFullyConfiguredGateway();
+        Assert.True(gateway.IsConfigured);
+
+        var result = await gateway.CreatePaymentAsync(new PaymentGatewayInitRequest
+        {
+            SessionId = "sess-1",
+            Tariff = "report",
+            AmountKzt = 49990,
+            Currency = "KZT",
+            ClientIp = "192.168.1.1",
+            Phone = "+77001234567",
+            BillingAddress = new string('A', 51),
+            BrowserScreenHeight = 1080,
+            BrowserScreenWidth = 1920
+        });
+
+        Assert.False(result.Success);
+        Assert.Equal("billing_address_too_long", result.ErrorCode);
+    }
+
     [Fact(DisplayName = "MERCH_RN_ID does not affect P_SIGN calculation for TRTYPE=1")]
     public async Task BccPaymentGateway_MerchRnId_DoesNotAffectPSignCalculation()
     {
@@ -1097,6 +1152,7 @@ public sealed class PaymentControllersTests : IDisposable
             Currency = "KZT",
             ClientIp = "192.168.1.100",
             Phone = "+77001234567",
+            BillingAddress = "г. Астана, ул. Абая, 10",
             BrowserScreenHeight = 1080,
             BrowserScreenWidth = 1920
         });
@@ -1269,7 +1325,8 @@ public sealed class PaymentControllersTests : IDisposable
         {
             Tariff = "report",
             BrowserScreenHeight = 1080,
-            BrowserScreenWidth = 1920
+            BrowserScreenWidth = 1920,
+            BillingAddress = "г. Астана, ул. Абая, 10"
         });
         var badNoPhone = Assert.IsType<BadRequestObjectResult>(resNoPhone);
         Assert.Contains("phone_required", JsonSerializer.Serialize(badNoPhone.Value));
@@ -1293,7 +1350,8 @@ public sealed class PaymentControllersTests : IDisposable
         {
             Tariff = "report",
             BrowserScreenHeight = 900,
-            BrowserScreenWidth = 1440
+            BrowserScreenWidth = 1440,
+            BillingAddress = "   г. Астана, ул. Абая, д. 10, кв. 5   "
         });
 
         var okStart = Assert.IsType<OkObjectResult>(startRes);
@@ -1308,70 +1366,195 @@ public sealed class PaymentControllersTests : IDisposable
         Assert.Contains("merch_rn_id", createdPayment.ProviderMetadata);
 
         // M_INFO является корректным Base64
-        var initRes = await fullyGateway.CreatePaymentAsync(new PaymentGatewayInitRequest
-        {
-            SessionId = sessionId,
-            Tariff = "report",
-            AmountKzt = 49990,
-            Currency = "KZT",
-            ClientIp = "203.0.113.195",
-            Phone = "+77001234567",
-            BrowserScreenHeight = 1080,
-            BrowserScreenWidth = 1920
-        });
-
-        Assert.True(initRes.Success);
-        string mInfoBase64 = initRes.FormFields["M_INFO"];
+        using var initDoc = JsonDocument.Parse(startJson);
+        string mInfoBase64 = initDoc.RootElement.GetProperty("formFields").GetProperty("M_INFO").GetString()!;
         byte[] mInfoBytes = Convert.FromBase64String(mInfoBase64);
 
         // Декодированный M_INFO разбираем через JsonDocument (чтобы корректно обрабатывать экранирование \uXXXX)
         using var doc = JsonDocument.Parse(mInfoBytes);
         var root = doc.RootElement;
 
-        Assert.Equal("1080", root.GetProperty("browserScreenHeight").GetString());
-        Assert.Equal("1920", root.GetProperty("browserScreenWidth").GetString());
+        Assert.Equal("900", root.GetProperty("browserScreenHeight").GetString());
+        Assert.Equal("1440", root.GetProperty("browserScreenWidth").GetString());
         Assert.True(root.TryGetProperty("mobilePhone", out var mobilePhone));
         Assert.False(root.TryGetProperty("phone", out _));
         Assert.Equal("7", mobilePhone.GetProperty("cc").GetString());
         Assert.Equal("7001234567", mobilePhone.GetProperty("subscriber").GetString());
-        Assert.Equal("Казахстан, Астана", root.GetProperty("billAddrLine1").GetString());
-
-        // Проверка переопределения BCC_BILL_ADDR_LINE1
-        var overrideConfig = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["BCC_ENVIRONMENT"] = "test",
-                ["BCC_TERMINAL_ID"] = "TID999",
-                ["BCC_GATEWAY_URL"] = "https://test-epay.bcc.kz/pay",
-                ["BCC_NOTIFY_URL"] = "https://example.com/api/payments/bcc/notify",
-                ["BCC_RETURN_URL"] = "https://example.com/api/payments/bcc/return",
-                ["BCC_MERCHANT_ID"] = "00000001",
-                ["BCC_MERCHANT_NAME"] = "FENIX LEGAL OS",
-                ["BCC_MAC_KEY"] = "6BB0AC02E47BDF73D98FEB777F3B5294",
-                ["BCC_BILL_ADDR_LINE1"] = "г. Алматы, пр. Достык, 100"
-            })
-            .Build();
-        var overrideGateway = new BccPaymentGateway(overrideConfig);
-        var overrideInit = await overrideGateway.CreatePaymentAsync(new PaymentGatewayInitRequest
-        {
-            SessionId = sessionId,
-            Tariff = "report",
-            AmountKzt = 49990,
-            Currency = "KZT",
-            ClientIp = "203.0.113.195",
-            Phone = "+77001234567",
-            BrowserScreenHeight = 1080,
-            BrowserScreenWidth = 1920
-        });
-
-        byte[] overrideBytes = Convert.FromBase64String(overrideInit.FormFields["M_INFO"]);
-        using var overrideDoc = JsonDocument.Parse(overrideBytes);
-        Assert.Equal("г. Алматы, пр. Достык, 100", overrideDoc.RootElement.GetProperty("billAddrLine1").GetString());
+        // Пробелы по краям удалены (Trim)
+        Assert.Equal("г. Астана, ул. Абая, д. 10, кв. 5", root.GetProperty("billAddrLine1").GetString());
 
         // До подтверждения оплаты PDF остаётся закрытым
         var session = _sessions.GetSession(sessionId);
         Assert.NotNull(session);
         Assert.False(session.Paid);
+    }
+
+    [Fact(DisplayName = "Billing address: empty address is rejected with billing_address_required and no payment created in DB")]
+    public async Task StartPayment_EmptyBillingAddress_ReturnsBadRequestAndDoesNotCreatePayment()
+    {
+        var fullyGateway = CreateFullyConfiguredGateway();
+        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo);
+        var fullyPayments = new PaymentsController(fullyService)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    Connection = { RemoteIpAddress = System.Net.IPAddress.Parse("203.0.113.195") }
+                }
+            }
+        };
+
+        string sessionId = CreateCompletedSession();
+
+        var jsonOptions = new JsonSerializerOptions
+        {
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        };
+
+        // Пустой адрес и адрес из одних пробелов
+        foreach (var emptyAddr in new[] { null, "", "   " })
+        {
+            var res = await fullyPayments.StartPayment(sessionId, new StartPaymentRequest
+            {
+                Tariff = "report",
+                BrowserScreenHeight = 1080,
+                BrowserScreenWidth = 1920,
+                BillingAddress = emptyAddr
+            });
+
+            var bad = Assert.IsType<BadRequestObjectResult>(res);
+            string json = JsonSerializer.Serialize(bad.Value, jsonOptions);
+            Assert.Contains("billing_address_required", json);
+            Assert.Contains("Для перехода к оплате необходимо указать адрес плательщика.", json);
+        }
+
+        // Платёж в БД не создаётся
+        var payments = _paymentRepo.GetBySessionId(sessionId);
+        Assert.Empty(payments);
+    }
+
+    [Fact(DisplayName = "Billing address: address longer than 50 chars is rejected with billing_address_too_long and no payment created in DB")]
+    public async Task StartPayment_BillingAddressTooLong_ReturnsBadRequestAndDoesNotCreatePayment()
+    {
+        var fullyGateway = CreateFullyConfiguredGateway();
+        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo);
+        var fullyPayments = new PaymentsController(fullyService)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    Connection = { RemoteIpAddress = System.Net.IPAddress.Parse("203.0.113.195") }
+                }
+            }
+        };
+
+        string sessionId = CreateCompletedSession();
+        string tooLongAddress = new string('А', 51); // 51 символ
+
+        var res = await fullyPayments.StartPayment(sessionId, new StartPaymentRequest
+        {
+            Tariff = "report",
+            BrowserScreenHeight = 1080,
+            BrowserScreenWidth = 1920,
+            BillingAddress = tooLongAddress
+        });
+
+        var bad = Assert.IsType<BadRequestObjectResult>(res);
+        var jsonOptions = new JsonSerializerOptions
+        {
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        };
+        string json = JsonSerializer.Serialize(bad.Value, jsonOptions);
+        Assert.Contains("billing_address_too_long", json);
+        Assert.Contains("Адрес плательщика не должен превышать 50 символов.", json);
+
+        // Платёж в БД не создаётся
+        var payments = _paymentRepo.GetBySessionId(sessionId);
+        Assert.Empty(payments);
+    }
+
+    [Fact(DisplayName = "Phone security: phone is strictly retrieved from users.phone and client cannot spoof it")]
+    public async Task StartPayment_PhoneStrictlyFromDatabase_ClientCannotSpoof()
+    {
+        var fullyGateway = CreateFullyConfiguredGateway();
+        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo);
+        var fullyPayments = new PaymentsController(fullyService)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    Connection = { RemoteIpAddress = System.Net.IPAddress.Parse("203.0.113.195") }
+                }
+            }
+        };
+
+        // Пользователь в БД имеет телефон +77001234567
+        string sessionId = CreateCompletedSession();
+
+        var res = await fullyPayments.StartPayment(sessionId, new StartPaymentRequest
+        {
+            Tariff = "report",
+            BrowserScreenHeight = 1080,
+            BrowserScreenWidth = 1920,
+            BillingAddress = "г. Астана, ул. Абая, 10"
+        });
+
+        var ok = Assert.IsType<OkObjectResult>(res);
+        string json = JsonSerializer.Serialize(ok.Value);
+        using var doc = JsonDocument.Parse(json);
+        string mInfoB64 = doc.RootElement.GetProperty("formFields").GetProperty("M_INFO").GetString()!;
+        using var mInfoDoc = JsonDocument.Parse(Convert.FromBase64String(mInfoB64));
+        var mobilePhone = mInfoDoc.RootElement.GetProperty("mobilePhone");
+
+        // Телефон взят строго из базы данных пользователя
+        Assert.Equal("7", mobilePhone.GetProperty("cc").GetString());
+        Assert.Equal("7001234567", mobilePhone.GetProperty("subscriber").GetString());
+    }
+
+    [Fact(DisplayName = "Configuration address is removed: gateway IsConfigured does not depend on configuration address")]
+    public async Task BccPaymentGateway_ConfigurationAddress_IsNoLongerUsed()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["BCC_ENVIRONMENT"] = "test",
+                ["BCC_TERMINAL_ID"] = "88888888",
+                ["BCC_GATEWAY_URL"] = "https://test3ds.bcc.kz:5445/cgi-bin/cgi_link",
+                ["BCC_NOTIFY_URL"] = "http://localhost:5050/api/payments/bcc/notify",
+                ["BCC_RETURN_URL"] = "http://localhost:5050/api/payments/bcc/return",
+                ["BCC_MERCHANT_ID"] = "6156812",
+                ["BCC_MERCHANT_NAME"] = "merchantname",
+                ["BCC_MAC_KEY"] = "6BB0AC02E47BDF73D98FEB777F3B5294"
+                // BCC_BILL_ADDR_LINE1 отсутствует
+            })
+            .Build();
+
+        var gateway = new BccPaymentGateway(config);
+        // Шлюз сконфигурирован без статического адреса в конфигурации
+        Assert.True(gateway.IsConfigured);
+
+        // Статический адрес из конфигурации не переопределяет адрес из запроса
+        var init = await gateway.CreatePaymentAsync(new PaymentGatewayInitRequest
+        {
+            SessionId = "sess-1",
+            Tariff = "report",
+            AmountKzt = 49990,
+            ClientIp = "127.0.0.1",
+            Phone = "+77001234567",
+            BillingAddress = "г. Караганда, пр. Бухар Жырау, 1",
+            BrowserScreenHeight = 1080,
+            BrowserScreenWidth = 1920
+        });
+
+        Assert.True(init.Success);
+        string mInfoB64 = init.FormFields["M_INFO"];
+        using var mInfoDoc = JsonDocument.Parse(Convert.FromBase64String(mInfoB64));
+        Assert.Equal("г. Караганда, пр. Бухар Жырау, 1", mInfoDoc.RootElement.GetProperty("billAddrLine1").GetString());
     }
 
     [Fact(DisplayName = "Client IP is read strictly from RemoteIpAddress and not directly from header")]
@@ -1393,7 +1576,8 @@ public sealed class PaymentControllersTests : IDisposable
         {
             Tariff = "report",
             BrowserScreenHeight = 1080,
-            BrowserScreenWidth = 1920
+            BrowserScreenWidth = 1920,
+            BillingAddress = "г. Астана, ул. Абая, 10"
         });
 
         var ok = Assert.IsType<OkObjectResult>(result);
@@ -1432,13 +1616,15 @@ public sealed class PaymentControllersTests : IDisposable
         {
             Tariff = "report",
             BrowserScreenHeight = 1080,
-            BrowserScreenWidth = 1920
+            BrowserScreenWidth = 1920,
+            BillingAddress = "г. Астана, ул. Абая, 10"
         });
         var task2 = fullyPayments.StartPayment(sessionId, new StartPaymentRequest
         {
             Tariff = "report",
             BrowserScreenHeight = 1080,
-            BrowserScreenWidth = 1920
+            BrowserScreenWidth = 1920,
+            BillingAddress = "г. Астана, ул. Абая, 10"
         });
 
         var results = await Task.WhenAll(task1, task2);
@@ -1511,7 +1697,8 @@ public sealed class PaymentControllersTests : IDisposable
         {
             Tariff = "report",
             BrowserScreenHeight = 1080,
-            BrowserScreenWidth = 1920
+            BrowserScreenWidth = 1920,
+            BillingAddress = "г. Астана, ул. Абая, 10"
         });
         var ok1 = Assert.IsType<OkObjectResult>(firstResult);
         string json1 = JsonSerializer.Serialize(ok1.Value);
@@ -1525,7 +1712,8 @@ public sealed class PaymentControllersTests : IDisposable
         {
             Tariff = "report",
             BrowserScreenHeight = 1080,
-            BrowserScreenWidth = 1920
+            BrowserScreenWidth = 1920,
+            BillingAddress = "г. Астана, ул. Абая, 10"
         });
         var ok2 = Assert.IsType<OkObjectResult>(secondResult);
         string json2 = JsonSerializer.Serialize(ok2.Value);
@@ -1559,7 +1747,8 @@ public sealed class PaymentControllersTests : IDisposable
         {
             Tariff = "report",
             BrowserScreenHeight = 1080,
-            BrowserScreenWidth = 1920
+            BrowserScreenWidth = 1920,
+            BillingAddress = "г. Астана, ул. Абая, 10"
         });
         var okInitial = Assert.IsType<OkObjectResult>(initialRes);
         string initialJson = JsonSerializer.Serialize(okInitial.Value);
@@ -1572,7 +1761,8 @@ public sealed class PaymentControllersTests : IDisposable
         {
             Tariff = "report",
             BrowserScreenHeight = 1080,
-            BrowserScreenWidth = 1920
+            BrowserScreenWidth = 1920,
+            BillingAddress = "г. Астана, ул. Абая, 10"
         });
         var okReopen = Assert.IsType<OkObjectResult>(reopenRes);
         string reopenJson = JsonSerializer.Serialize(okReopen.Value);
@@ -1626,7 +1816,8 @@ public sealed class PaymentControllersTests : IDisposable
         {
             Tariff = "report",
             BrowserScreenHeight = 1080,
-            BrowserScreenWidth = 1920
+            BrowserScreenWidth = 1920,
+            BillingAddress = "г. Астана, ул. Абая, 10"
         });
         var conflictPaid = Assert.IsType<ConflictObjectResult>(resPaid);
         Assert.Contains("already_paid", JsonSerializer.Serialize(conflictPaid.Value));
@@ -1651,7 +1842,8 @@ public sealed class PaymentControllersTests : IDisposable
         {
             Tariff = "report",
             BrowserScreenHeight = 1080,
-            BrowserScreenWidth = 1920
+            BrowserScreenWidth = 1920,
+            BillingAddress = "г. Астана, ул. Абая, 10"
         });
         var conflictRef = Assert.IsType<ConflictObjectResult>(resRef);
         Assert.Contains("payment_refunded", JsonSerializer.Serialize(conflictRef.Value));
@@ -1679,7 +1871,8 @@ public sealed class PaymentControllersTests : IDisposable
         {
             Tariff = "report",
             BrowserScreenHeight = 1080,
-            BrowserScreenWidth = 1920
+            BrowserScreenWidth = 1920,
+            BillingAddress = "г. Астана, ул. Абая, 10"
         });
 
         var unavailable = Assert.IsType<ObjectResult>(result);
@@ -1735,7 +1928,804 @@ public sealed class PaymentControllersTests : IDisposable
         }
     }
 
+    // =========================================================================
+    // Тесты безопасной и идемпотентной обработки уведомлений BCC (POST /api/payments/bcc/notify)
+    // =========================================================================
+
+    [Fact(DisplayName = "BCC Notify: успешное уведомление переводит платёж в paid и активирует сессию и лид")]
+    public async Task Notify_SuccessfulPurchase_TransitionsToPaidAndUnlocksSessionAndLead()
+    {
+        string sessionId = CreateCompletedSession();
+        using (var conn = new SqliteConnection($"Data Source={_databasePath}"))
+        {
+            conn.Open();
+            conn.Execute("INSERT INTO leads (id, session_id, type, name, email, paid, created_at) VALUES ('lead-1', @sessionId, 'report', 'Lead User', 'lead@example.com', 0, datetime('now'))", new { sessionId });
+        }
+
+
+        string orderId = "ORD-BCC-SUCCESS-001";
+        var payment = new Payment
+        {
+            Id = Guid.NewGuid().ToString(),
+            SessionId = sessionId,
+            OrderId = orderId,
+            Tariff = "report",
+            AmountKzt = 49990,
+            Currency = "KZT",
+            Provider = "bcc",
+            Environment = "test",
+            TerminalId = "TID999",
+            Status = PaymentStatuses.Created
+        };
+        _paymentRepo.Create(payment);
+
+        var (controller, _) = CreateBccCallbacksController();
+        controller.ControllerContext.HttpContext.Request.Headers.Authorization = CreateBasicAuthHeader("bcc_user", "bcc_secret_password");
+
+        var form = CreateBccNotifyForm(
+            orderId: orderId,
+            amount: "49990.00",
+            currency: "398",
+            terminal: "TID999",
+            trType: "1",
+            action: "0",
+            rc: "00",
+            rrn: "123456789012",
+            intRef: "INT99887766",
+            approval: "APP999",
+            madvCode: "0",
+            text: "Transaction approved");
+
+        var actionResult = await controller.Notify(form);
+        var ok = Assert.IsType<OkObjectResult>(actionResult);
+        Assert.Equal(StatusCodes.Status200OK, ok.StatusCode);
+
+        // Проверяем обновление платежа в БД
+        var updatedPayment = _paymentRepo.GetByOrderId(orderId);
+        Assert.NotNull(updatedPayment);
+        Assert.Equal(PaymentStatuses.Paid, updatedPayment.Status);
+        Assert.Equal("123456789012", updatedPayment.Rrn);
+        Assert.Equal("INT99887766", updatedPayment.IntRef);
+        Assert.Equal("APP999", updatedPayment.ApprovalCode);
+        Assert.Equal("0", updatedPayment.ActionCode);
+        Assert.Equal("00", updatedPayment.ResponseCode);
+        Assert.Equal("0", updatedPayment.MerchantAdviceCode);
+        Assert.Equal("Transaction approved", updatedPayment.BankMessage);
+        Assert.NotNull(updatedPayment.PaidAt);
+        Assert.NotNull(updatedPayment.NotificationReceivedAt);
+
+        // Проверяем активацию сессии
+        var session = _sessions.GetSession(sessionId);
+        Assert.NotNull(session);
+        Assert.True(session.Paid);
+        Assert.NotNull(session.PaidAt);
+
+        // Проверяем активацию лида
+        using (var conn = new SqliteConnection($"Data Source={_databasePath}"))
+        {
+            conn.Open();
+            int leadPaid = conn.ExecuteScalar<int>("SELECT paid FROM leads WHERE session_id = @sessionId", new { sessionId });
+            Assert.Equal(1, leadPaid);
+        }
+    }
+
+    [Fact(DisplayName = "BCC Notify: отказ банка переводит активный платёж в failed и не активирует сессию")]
+    public async Task Notify_BankRejection_TransitionsToFailedAndDoesNotUnlockSession()
+    {
+        string sessionId = CreateCompletedSession();
+        string orderId = "ORD-BCC-DECLINE-001";
+        var payment = new Payment
+        {
+            Id = Guid.NewGuid().ToString(),
+            SessionId = sessionId,
+            OrderId = orderId,
+            Tariff = "report",
+            AmountKzt = 49990,
+            Currency = "KZT",
+            Provider = "bcc",
+            Environment = "test",
+            TerminalId = "TID999",
+            Status = PaymentStatuses.Created
+        };
+        _paymentRepo.Create(payment);
+
+        var (controller, _) = CreateBccCallbacksController();
+        controller.ControllerContext.HttpContext.Request.Headers.Authorization = CreateBasicAuthHeader("bcc_user", "bcc_secret_password");
+
+        var form = CreateBccNotifyForm(
+            orderId: orderId,
+            action: "1",
+            rc: "05",
+            text: "Declined by issuer");
+
+        var actionResult = await controller.Notify(form);
+        var ok = Assert.IsType<OkObjectResult>(actionResult);
+        Assert.Equal(StatusCodes.Status200OK, ok.StatusCode);
+
+        var updatedPayment = _paymentRepo.GetByOrderId(orderId);
+        Assert.NotNull(updatedPayment);
+        Assert.Equal(PaymentStatuses.Failed, updatedPayment.Status);
+        Assert.Equal("1", updatedPayment.ActionCode);
+        Assert.Equal("05", updatedPayment.ResponseCode);
+        Assert.Equal("Declined by issuer", updatedPayment.BankMessage);
+        Assert.Null(updatedPayment.PaidAt);
+
+        var session = _sessions.GetSession(sessionId);
+        Assert.NotNull(session);
+        Assert.False(session.Paid);
+    }
+
+    [Fact(DisplayName = "BCC Notify: повторное одинаковое уведомление идемпотентно и не меняет paid_at")]
+    public async Task Notify_DuplicateSuccess_IsIdempotentAndPreservesOriginalPaidAt()
+    {
+        string sessionId = CreateCompletedSession();
+        string orderId = "ORD-BCC-DUP-001";
+        var payment = new Payment
+        {
+            Id = Guid.NewGuid().ToString(),
+            SessionId = sessionId,
+            OrderId = orderId,
+            Tariff = "report",
+            AmountKzt = 49990,
+            Currency = "KZT",
+            Provider = "bcc",
+            Environment = "test",
+            TerminalId = "TID999",
+            Status = PaymentStatuses.Created
+        };
+        _paymentRepo.Create(payment);
+
+        var (controller, _) = CreateBccCallbacksController();
+        controller.ControllerContext.HttpContext.Request.Headers.Authorization = CreateBasicAuthHeader("bcc_user", "bcc_secret_password");
+
+        var form = CreateBccNotifyForm(orderId: orderId, action: "0", rc: "00");
+
+        // Первое успешное уведомление
+        var firstResult = await controller.Notify(form);
+        Assert.IsType<OkObjectResult>(firstResult);
+
+        var paymentAfterFirst = _paymentRepo.GetByOrderId(orderId);
+        Assert.NotNull(paymentAfterFirst);
+        string? originalPaidAt = paymentAfterFirst.PaidAt;
+        Assert.NotNull(originalPaidAt);
+
+        // Второе идентичное уведомление
+        var secondResult = await controller.Notify(form);
+        Assert.IsType<OkObjectResult>(secondResult);
+
+        var paymentAfterSecond = _paymentRepo.GetByOrderId(orderId);
+        Assert.NotNull(paymentAfterSecond);
+        Assert.Equal(PaymentStatuses.Paid, paymentAfterSecond.Status);
+        Assert.Equal(originalPaidAt, paymentAfterSecond.PaidAt);
+
+        var session = _sessions.GetSession(sessionId);
+        Assert.NotNull(session);
+        Assert.True(session.Paid);
+    }
+
+    [Fact(DisplayName = "BCC Notify: неверный Basic Auth возвращает 401 и WWW-Authenticate и не меняет платёж")]
+    public async Task Notify_InvalidBasicAuth_Returns401WithWwwAuthenticateAndLeavesPaymentUntouched()
+    {
+        string sessionId = CreateCompletedSession();
+        string orderId = "ORD-BCC-AUTH-001";
+        var payment = new Payment
+        {
+            Id = Guid.NewGuid().ToString(),
+            SessionId = sessionId,
+            OrderId = orderId,
+            Tariff = "report",
+            AmountKzt = 49990,
+            Currency = "KZT",
+            Provider = "bcc",
+            Environment = "test",
+            TerminalId = "TID999",
+            Status = PaymentStatuses.Created
+        };
+        _paymentRepo.Create(payment);
+
+        var (controller, _) = CreateBccCallbacksController();
+        // Передаём неверный пароль
+        controller.ControllerContext.HttpContext.Request.Headers.Authorization = CreateBasicAuthHeader("bcc_user", "wrong_password");
+
+        var form = CreateBccNotifyForm(orderId: orderId, action: "0", rc: "00");
+
+        var actionResult = await controller.Notify(form);
+        var unauthorized = Assert.IsType<ObjectResult>(actionResult);
+        Assert.Equal(StatusCodes.Status401Unauthorized, unauthorized.StatusCode);
+        Assert.Equal("Basic realm=\"BCC Notify\"", controller.Response.Headers.WWWAuthenticate.ToString());
+
+        var unchangedPayment = _paymentRepo.GetByOrderId(orderId);
+        Assert.NotNull(unchangedPayment);
+        Assert.Equal(PaymentStatuses.Created, unchangedPayment.Status);
+        Assert.Null(unchangedPayment.PaidAt);
+
+        var session = _sessions.GetSession(sessionId);
+        Assert.NotNull(session);
+        Assert.False(session.Paid);
+    }
+
+    [Fact(DisplayName = "BCC Notify: неизвестный ORDER возвращает 400 и ничего не обновляет")]
+    public async Task Notify_UnknownOrder_Returns400AndLeavesDatabaseUntouched()
+    {
+        var (controller, _) = CreateBccCallbacksController();
+        controller.ControllerContext.HttpContext.Request.Headers.Authorization = CreateBasicAuthHeader("bcc_user", "bcc_secret_password");
+
+        var form = CreateBccNotifyForm(orderId: "NON_EXISTENT_ORDER_9999", action: "0", rc: "00");
+
+        var actionResult = await controller.Notify(form);
+        var badRequest = Assert.IsType<ObjectResult>(actionResult);
+        Assert.Equal(StatusCodes.Status400BadRequest, badRequest.StatusCode);
+
+        string json = JsonSerializer.Serialize(badRequest.Value);
+        Assert.Contains("order_not_found", json);
+    }
+
+    [Fact(DisplayName = "BCC Notify: несовпадение суммы, валюты, терминала или TRTYPE возвращает 400")]
+    public async Task Notify_MismatchOfAmountCurrencyTerminalOrTrType_Returns400WithoutModifications()
+    {
+        string sessionId = CreateCompletedSession();
+        string orderId = "ORD-BCC-MISMATCH-001";
+        var payment = new Payment
+        {
+            Id = Guid.NewGuid().ToString(),
+            SessionId = sessionId,
+            OrderId = orderId,
+            Tariff = "report",
+            AmountKzt = 49990,
+            Currency = "KZT",
+            Provider = "bcc",
+            Environment = "test",
+            TerminalId = "TID999",
+            Status = PaymentStatuses.Created
+        };
+        _paymentRepo.Create(payment);
+
+        var (controller, _) = CreateBccCallbacksController();
+        controller.ControllerContext.HttpContext.Request.Headers.Authorization = CreateBasicAuthHeader("bcc_user", "bcc_secret_password");
+
+        // 1. Несовпадение суммы
+        var badAmountForm = CreateBccNotifyForm(orderId: orderId, amount: "10000.00");
+        var res1 = Assert.IsType<ObjectResult>(await controller.Notify(badAmountForm));
+        Assert.Equal(StatusCodes.Status400BadRequest, res1.StatusCode);
+        Assert.Contains("amount_mismatch", JsonSerializer.Serialize(res1.Value));
+
+        // 2. Несовпадение валюты (например 840 = USD)
+        var badCurrencyForm = CreateBccNotifyForm(orderId: orderId, currency: "840");
+        var res2 = Assert.IsType<ObjectResult>(await controller.Notify(badCurrencyForm));
+        Assert.Equal(StatusCodes.Status400BadRequest, res2.StatusCode);
+        Assert.Contains("currency_mismatch", JsonSerializer.Serialize(res2.Value));
+
+        // 3. Несовпадение терминала
+        var badTerminalForm = CreateBccNotifyForm(orderId: orderId, terminal: "OTHER_TID");
+        var res3 = Assert.IsType<ObjectResult>(await controller.Notify(badTerminalForm));
+        Assert.Equal(StatusCodes.Status400BadRequest, res3.StatusCode);
+        Assert.Contains("terminal_mismatch", JsonSerializer.Serialize(res3.Value));
+
+        // 4. Несовпадение TRTYPE (например 90 вместо 1)
+        var badTrTypeForm = CreateBccNotifyForm(orderId: orderId, trType: "90");
+        var res4 = Assert.IsType<ObjectResult>(await controller.Notify(badTrTypeForm));
+        Assert.Equal(StatusCodes.Status400BadRequest, res4.StatusCode);
+        Assert.Contains("invalid_trtype", JsonSerializer.Serialize(res4.Value));
+
+        // Статус платежа в БД не должен измениться
+        var checkPayment = _paymentRepo.GetByOrderId(orderId);
+        Assert.NotNull(checkPayment);
+        Assert.Equal(PaymentStatuses.Created, checkPayment.Status);
+    }
+
+    [Fact(DisplayName = "BCC Notify: запоздалое уведомление не должно понизить paid или refunded")]
+    public async Task Notify_LateNotificationAfterPaidOrRefunded_DoesNotDowngradeStatus()
+    {
+        string sessionId = CreateCompletedSession();
+        string orderIdPaid = "ORD-BCC-ALREADY-PAID";
+        var paymentPaid = new Payment
+        {
+            Id = Guid.NewGuid().ToString(),
+            SessionId = sessionId,
+            OrderId = orderIdPaid,
+            Tariff = "report",
+            AmountKzt = 49990,
+            Currency = "KZT",
+            Provider = "bcc",
+            Environment = "test",
+            TerminalId = "TID999",
+            Status = PaymentStatuses.Created
+        };
+        _paymentRepo.Create(paymentPaid);
+        _paymentRepo.UpdateStatus(orderIdPaid, PaymentStatuses.Paid, paidAt: DateTime.UtcNow.ToString("o"));
+
+        var (controller, _) = CreateBccCallbacksController();
+        controller.ControllerContext.HttpContext.Request.Headers.Authorization = CreateBasicAuthHeader("bcc_user", "bcc_secret_password");
+
+        // Отправляем запоздалый отказ банка (ACTION=1, RC=05)
+        var lateDecline = CreateBccNotifyForm(orderId: orderIdPaid, action: "1", rc: "05", text: "Late decline");
+        var res1 = Assert.IsType<OkObjectResult>(await controller.Notify(lateDecline));
+        Assert.Equal(StatusCodes.Status200OK, res1.StatusCode);
+
+        // Платёж остаётся paid
+        var checkPaid = _paymentRepo.GetByOrderId(orderIdPaid);
+        Assert.NotNull(checkPaid);
+        Assert.Equal(PaymentStatuses.Paid, checkPaid.Status);
+        var sessionPaid = _sessions.GetSession(sessionId);
+        Assert.NotNull(sessionPaid);
+        Assert.True(sessionPaid.Paid);
+
+        // Теперь моделируем платёж в статусе refunded для отдельной сессии
+        string refundedSessionId = CreateCompletedSession();
+        string orderIdRefunded = "ORD-BCC-ALREADY-REFUNDED";
+        var paymentRefunded = new Payment
+        {
+            Id = Guid.NewGuid().ToString(),
+            SessionId = refundedSessionId,
+            OrderId = orderIdRefunded,
+            Tariff = "report",
+            AmountKzt = 49990,
+            Currency = "KZT",
+            Provider = "bcc",
+            Environment = "test",
+            TerminalId = "TID999",
+            Status = PaymentStatuses.Created
+        };
+        _paymentRepo.Create(paymentRefunded);
+        _paymentRepo.UpdateStatus(orderIdRefunded, PaymentStatuses.Paid);
+        _paymentRepo.UpdateStatus(orderIdRefunded, PaymentStatuses.Refunded);
+
+        // Отправляем уведомление об успехе (ACTION=0, RC=00)
+        var lateSuccess = CreateBccNotifyForm(orderId: orderIdRefunded, action: "0", rc: "00");
+        var res2 = Assert.IsType<OkObjectResult>(await controller.Notify(lateSuccess));
+        Assert.Equal(StatusCodes.Status200OK, res2.StatusCode);
+
+        // Платёж остаётся refunded
+        var checkRefunded = _paymentRepo.GetByOrderId(orderIdRefunded);
+        Assert.NotNull(checkRefunded);
+        Assert.Equal(PaymentStatuses.Refunded, checkRefunded.Status);
+        var sessionRefunded = _sessions.GetSession(refundedSessionId);
+        Assert.NotNull(sessionRefunded);
+        Assert.False(sessionRefunded.Paid);
+
+    }
+
+    [Fact(DisplayName = "BCC Notify: callback без настроек авторизации возвращает 503 и не меняет платёж")]
+    public async Task Notify_WhenAuthNotConfigured_Returns503WithoutDatabaseModifications()
+    {
+        string sessionId = CreateCompletedSession();
+        string orderId = "ORD-BCC-NO-AUTH-CONFIG";
+        var payment = new Payment
+        {
+            Id = Guid.NewGuid().ToString(),
+            SessionId = sessionId,
+            OrderId = orderId,
+            Tariff = "report",
+            AmountKzt = 49990,
+            Currency = "KZT",
+            Provider = "bcc",
+            Environment = "test",
+            TerminalId = "TID999",
+            Status = PaymentStatuses.Created
+        };
+        _paymentRepo.Create(payment);
+
+        // Сервис без NotifyUsername и NotifyPassword
+        var options = new BccPaymentOptions
+        {
+            Environment = "test",
+            TerminalId = "TID999",
+            NotifyUsername = "",
+            NotifyPassword = ""
+        };
+        var service = new BccNotificationService(_paymentRepo, options: options);
+        var controller = new BccCallbacksController(service)
+        {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+        };
+
+        var form = CreateBccNotifyForm(orderId: orderId, action: "0", rc: "00");
+        var actionResult = await controller.Notify(form);
+        var unavailable = Assert.IsType<ObjectResult>(actionResult);
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, unavailable.StatusCode);
+        Assert.Contains("bcc_notifications_not_configured", JsonSerializer.Serialize(unavailable.Value));
+
+        // Платёж остаётся created
+        var checkPayment = _paymentRepo.GetByOrderId(orderId);
+        Assert.NotNull(checkPayment);
+        Assert.Equal(PaymentStatuses.Created, checkPayment.Status);
+    }
+
+    [Fact(DisplayName = "BCC Notify: test + флаг true + без Basic Auth → уведомление принимается")]
+    public async Task Notify_TestEnvironment_WithFlagTrue_WithoutBasicAuth_AcceptsNotification()
+    {
+        string sessionId = CreateCompletedSession();
+        string orderId = "ORD-BCC-TEST-NOAUTH-001";
+        var payment = new Payment
+        {
+            Id = Guid.NewGuid().ToString(),
+            SessionId = sessionId,
+            OrderId = orderId,
+            Tariff = "report",
+            AmountKzt = 49990,
+            Currency = "KZT",
+            Provider = "bcc",
+            Environment = "test",
+            TerminalId = "TID999",
+            Status = PaymentStatuses.Created
+        };
+        _paymentRepo.Create(payment);
+
+        // Тестовое окружение с allowUnauthenticated = true
+        var (controller, _) = CreateBccCallbacksController(environment: "test", allowUnauthenticated: true);
+        // Заголовок Authorization намеренно не передаётся
+
+        var form = CreateBccNotifyForm(orderId: orderId, action: "0", rc: "00");
+        var actionResult = await controller.Notify(form);
+        var ok = Assert.IsType<OkObjectResult>(actionResult);
+        Assert.Equal(StatusCodes.Status200OK, ok.StatusCode);
+
+        // Платёж успешно переходит в paid
+        var updated = _paymentRepo.GetByOrderId(orderId);
+        Assert.NotNull(updated);
+        Assert.Equal(PaymentStatuses.Paid, updated.Status);
+        var session = _sessions.GetSession(sessionId);
+        Assert.NotNull(session);
+        Assert.True(session.Paid);
+    }
+
+    [Fact(DisplayName = "BCC Notify: production без Basic Auth возвращает 401 (при наличии настроек) или 503 (при отсутствии)")]
+    public async Task Notify_Production_WithoutBasicAuth_Returns401Or503()
+    {
+        string sessionId = CreateCompletedSession();
+        string orderId1 = "ORD-BCC-PROD-NOAUTH-401";
+        var payment1 = new Payment
+        {
+            Id = Guid.NewGuid().ToString(),
+            SessionId = sessionId,
+            OrderId = orderId1,
+            Tariff = "report",
+            AmountKzt = 49990,
+            Currency = "KZT",
+            Provider = "bcc",
+            Environment = "production",
+            TerminalId = "TID999",
+            Status = PaymentStatuses.Created
+        };
+        _paymentRepo.Create(payment1);
+
+        // 1. Production с настроенными учетными данными, но без заголовка Authorization -> 401
+        var (controllerConfigured, _) = CreateBccCallbacksController(
+            username: "prod_user",
+            password: "prod_password",
+            environment: "production",
+            allowUnauthenticated: false);
+
+        var form1 = CreateBccNotifyForm(orderId: orderId1, action: "0", rc: "00");
+        var res1 = Assert.IsType<ObjectResult>(await controllerConfigured.Notify(form1));
+        Assert.Equal(StatusCodes.Status401Unauthorized, res1.StatusCode);
+        Assert.Equal("Basic realm=\"BCC Notify\"", controllerConfigured.Response.Headers.WWWAuthenticate.ToString());
+
+        // 2. Production без настроенных учетных данных -> 503
+        string sessionId2 = CreateCompletedSession();
+        string orderId2 = "ORD-BCC-PROD-NOAUTH-503";
+        var payment2 = new Payment
+        {
+            Id = Guid.NewGuid().ToString(),
+            SessionId = sessionId2,
+            OrderId = orderId2,
+            Tariff = "report",
+            AmountKzt = 49990,
+            Currency = "KZT",
+            Provider = "bcc",
+            Environment = "production",
+            TerminalId = "TID999",
+            Status = PaymentStatuses.Created
+        };
+        _paymentRepo.Create(payment2);
+
+        var (controllerUnconfigured, _) = CreateBccCallbacksController(
+            username: "",
+            password: "",
+            environment: "production",
+            allowUnauthenticated: false);
+
+        var form2 = CreateBccNotifyForm(orderId: orderId2, action: "0", rc: "00");
+        var res2 = Assert.IsType<ObjectResult>(await controllerUnconfigured.Notify(form2));
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, res2.StatusCode);
+        Assert.Contains("bcc_notifications_not_configured", JsonSerializer.Serialize(res2.Value));
+    }
+
+    [Fact(DisplayName = "BCC Notify: production никогда не принимает unauthenticated callback, даже если флаг true")]
+    public async Task Notify_Production_NeverAcceptsUnauthenticatedCallback_EvenIfFlagTrue()
+    {
+        string sessionId = CreateCompletedSession();
+        string orderId = "ORD-BCC-PROD-FLAG-TRUE";
+        var payment = new Payment
+        {
+            Id = Guid.NewGuid().ToString(),
+            SessionId = sessionId,
+            OrderId = orderId,
+            Tariff = "report",
+            AmountKzt = 49990,
+            Currency = "KZT",
+            Provider = "bcc",
+            Environment = "production",
+            TerminalId = "TID999",
+            Status = PaymentStatuses.Created
+        };
+        _paymentRepo.Create(payment);
+
+        // Флаг allowUnauthenticated выставлен в true, но environment = "production"
+        var (controller, _) = CreateBccCallbacksController(
+            username: "prod_user",
+            password: "prod_password",
+            environment: "production",
+            allowUnauthenticated: true);
+
+        // Без Basic Auth
+        var form = CreateBccNotifyForm(orderId: orderId, action: "0", rc: "00");
+        var res = Assert.IsType<ObjectResult>(await controller.Notify(form));
+        Assert.Equal(StatusCodes.Status401Unauthorized, res.StatusCode);
+
+        // Платёж остался created
+        var check = _paymentRepo.GetByOrderId(orderId);
+        Assert.NotNull(check);
+        Assert.Equal(PaymentStatuses.Created, check.Status);
+    }
+
+    [Fact(DisplayName = "BCC Notify: test + флаг false не принимает callback без защиты")]
+    public async Task Notify_TestEnvironment_WithFlagFalse_RejectsUnauthenticatedCallback()
+    {
+        string sessionId = CreateCompletedSession();
+        string orderId = "ORD-BCC-TEST-FLAG-FALSE";
+        var payment = new Payment
+        {
+            Id = Guid.NewGuid().ToString(),
+            SessionId = sessionId,
+            OrderId = orderId,
+            Tariff = "report",
+            AmountKzt = 49990,
+            Currency = "KZT",
+            Provider = "bcc",
+            Environment = "test",
+            TerminalId = "TID999",
+            Status = PaymentStatuses.Created
+        };
+        _paymentRepo.Create(payment);
+
+        // Тестовое окружение с allowUnauthenticated = false
+        var (controller, _) = CreateBccCallbacksController(
+            username: "test_user",
+            password: "test_password",
+            environment: "test",
+            allowUnauthenticated: false);
+
+        // Без Basic Auth
+        var form = CreateBccNotifyForm(orderId: orderId, action: "0", rc: "00");
+        var res = Assert.IsType<ObjectResult>(await controller.Notify(form));
+        Assert.Equal(StatusCodes.Status401Unauthorized, res.StatusCode);
+
+        var check = _paymentRepo.GetByOrderId(orderId);
+        Assert.NotNull(check);
+        Assert.Equal(PaymentStatuses.Created, check.Status);
+    }
+
+    [Fact(DisplayName = "BCC Notify: дробное несовпадение суммы отклоняется точно без округления")]
+    public async Task Notify_FractionalAmountMismatch_Rejected()
+    {
+        string sessionId = CreateCompletedSession();
+        string orderId = "ORD-BCC-EXACT-AMOUNT";
+        var payment = new Payment
+        {
+            Id = Guid.NewGuid().ToString(),
+            SessionId = sessionId,
+            OrderId = orderId,
+            Tariff = "report",
+            AmountKzt = 49990,
+            Currency = "KZT",
+            Provider = "bcc",
+            Environment = "test",
+            TerminalId = "TID999",
+            Status = PaymentStatuses.Created
+        };
+        _paymentRepo.Create(payment);
+
+        var (controller, _) = CreateBccCallbacksController();
+        controller.ControllerContext.HttpContext.Request.Headers.Authorization = CreateBasicAuthHeader("bcc_user", "bcc_secret_password");
+
+        // 1. 49990.01 отклоняется
+        var form01 = CreateBccNotifyForm(orderId: orderId, amount: "49990.01");
+        var res01 = Assert.IsType<ObjectResult>(await controller.Notify(form01));
+        Assert.Equal(StatusCodes.Status400BadRequest, res01.StatusCode);
+        Assert.Contains("amount_mismatch", JsonSerializer.Serialize(res01.Value));
+
+        // 2. 49990.49 отклоняется (не должно округляться в 49990)
+        var form49 = CreateBccNotifyForm(orderId: orderId, amount: "49990.49");
+        var res49 = Assert.IsType<ObjectResult>(await controller.Notify(form49));
+        Assert.Equal(StatusCodes.Status400BadRequest, res49.StatusCode);
+        Assert.Contains("amount_mismatch", JsonSerializer.Serialize(res49.Value));
+
+        // Статус платежа не изменился
+        var check = _paymentRepo.GetByOrderId(orderId);
+        Assert.NotNull(check);
+        Assert.Equal(PaymentStatuses.Created, check.Status);
+
+        // 3. 49990.00 успешно принимается
+        var form00 = CreateBccNotifyForm(orderId: orderId, amount: "49990.00");
+        var res00 = Assert.IsType<OkObjectResult>(await controller.Notify(form00));
+        Assert.Equal(StatusCodes.Status200OK, res00.StatusCode);
+        var checkPaid = _paymentRepo.GetByOrderId(orderId);
+        Assert.NotNull(checkPaid);
+        Assert.Equal(PaymentStatuses.Paid, checkPaid.Status);
+    }
+
+    [Fact(DisplayName = "BCC Notify: отсутствующий ACTION или RC возвращает 400 и не меняет статус")]
+    public async Task Notify_MissingActionOrRc_Returns400AndDoesNotChangeStatus()
+    {
+        string sessionId = CreateCompletedSession();
+        string orderId = "ORD-BCC-MISSING-ACTION-RC";
+        var payment = new Payment
+        {
+            Id = Guid.NewGuid().ToString(),
+            SessionId = sessionId,
+            OrderId = orderId,
+            Tariff = "report",
+            AmountKzt = 49990,
+            Currency = "KZT",
+            Provider = "bcc",
+            Environment = "test",
+            TerminalId = "TID999",
+            Status = PaymentStatuses.Created
+        };
+        _paymentRepo.Create(payment);
+
+        var (controller, _) = CreateBccCallbacksController();
+        controller.ControllerContext.HttpContext.Request.Headers.Authorization = CreateBasicAuthHeader("bcc_user", "bcc_secret_password");
+
+        // 1. ACTION пустой
+        var noActionForm = CreateBccNotifyForm(orderId: orderId, action: "", rc: "00");
+        var resAction = Assert.IsType<ObjectResult>(await controller.Notify(noActionForm));
+        Assert.Equal(StatusCodes.Status400BadRequest, resAction.StatusCode);
+        Assert.Contains("missing_action", JsonSerializer.Serialize(resAction.Value));
+
+        // 2. RC пустой
+        var noRcForm = CreateBccNotifyForm(orderId: orderId, action: "0", rc: "");
+        var resRc = Assert.IsType<ObjectResult>(await controller.Notify(noRcForm));
+        Assert.Equal(StatusCodes.Status400BadRequest, resRc.StatusCode);
+        Assert.Contains("missing_rc", JsonSerializer.Serialize(resRc.Value));
+
+        // Статус в БД остаётся created
+        var check = _paymentRepo.GetByOrderId(orderId);
+        Assert.NotNull(check);
+        Assert.Equal(PaymentStatuses.Created, check.Status);
+    }
+
+    [Fact(DisplayName = "BCC Notify: ответ содержит фактический статус из БД после защищённого paid и refunded")]
+    public async Task Notify_ResponseContainsActualDatabaseStatus_AfterProtectedPaidOrRefunded()
+    {
+        string sessionId = CreateCompletedSession();
+
+        // 1. Проверяем paid платёж: при запоздалом отказе в ответе должен быть "paid", а не "failed"
+        string orderIdPaid = "ORD-BCC-ACTUAL-PAID";
+        var paymentPaid = new Payment
+        {
+            Id = Guid.NewGuid().ToString(),
+            SessionId = sessionId,
+            OrderId = orderIdPaid,
+            Tariff = "report",
+            AmountKzt = 49990,
+            Currency = "KZT",
+            Provider = "bcc",
+            Environment = "test",
+            TerminalId = "TID999",
+            Status = PaymentStatuses.Created
+        };
+        _paymentRepo.Create(paymentPaid);
+        _paymentRepo.UpdateStatus(orderIdPaid, PaymentStatuses.Paid, paidAt: DateTime.UtcNow.ToString("o"));
+
+        var (controller, _) = CreateBccCallbacksController();
+        controller.ControllerContext.HttpContext.Request.Headers.Authorization = CreateBasicAuthHeader("bcc_user", "bcc_secret_password");
+
+        var lateDecline = CreateBccNotifyForm(orderId: orderIdPaid, action: "1", rc: "05", text: "Late decline");
+        var res1 = Assert.IsType<OkObjectResult>(await controller.Notify(lateDecline));
+        string json1 = JsonSerializer.Serialize(res1.Value);
+        Assert.Contains("\"paymentStatus\":\"paid\"", json1);
+
+        // 2. Проверяем refunded платёж: при запоздалом одобрении в ответе должен быть "refunded", а не "paid"
+        string refundedSessionId = CreateCompletedSession();
+        string orderIdRefunded = "ORD-BCC-ACTUAL-REFUNDED";
+        var paymentRefunded = new Payment
+        {
+            Id = Guid.NewGuid().ToString(),
+            SessionId = refundedSessionId,
+            OrderId = orderIdRefunded,
+            Tariff = "report",
+            AmountKzt = 49990,
+            Currency = "KZT",
+            Provider = "bcc",
+            Environment = "test",
+            TerminalId = "TID999",
+            Status = PaymentStatuses.Created
+        };
+        _paymentRepo.Create(paymentRefunded);
+        _paymentRepo.UpdateStatus(orderIdRefunded, PaymentStatuses.Paid);
+        _paymentRepo.UpdateStatus(orderIdRefunded, PaymentStatuses.Refunded);
+
+        var lateSuccess = CreateBccNotifyForm(orderId: orderIdRefunded, action: "0", rc: "00");
+        var res2 = Assert.IsType<OkObjectResult>(await controller.Notify(lateSuccess));
+        string json2 = JsonSerializer.Serialize(res2.Value);
+        Assert.Contains("\"paymentStatus\":\"refunded\"", json2);
+    }
+
+    private (BccCallbacksController Controller, BccNotificationService Service) CreateBccCallbacksController(
+        string username = "bcc_user",
+        string password = "bcc_secret_password",
+        string terminalId = "TID999",
+        string environment = "test",
+        bool allowUnauthenticated = false)
+    {
+        var options = new BccPaymentOptions
+        {
+            Environment = environment,
+            TerminalId = terminalId,
+            GatewayUrl = "https://test-epay.bcc.kz/pay",
+            NotifyUrl = "https://example.com/api/payments/bcc/notify",
+            ReturnUrl = "https://example.com/api/payments/bcc/return",
+            MerchantId = "00000001",
+            MerchantName = "FENIX LEGAL OS",
+            MacKeyHex = "6BB0AC02E47BDF73D98FEB777F3B5294",
+            NotifyUsername = username,
+            NotifyPassword = password,
+            AllowUnauthenticatedTestNotifications = allowUnauthenticated
+        };
+        var service = new BccNotificationService(_paymentRepo, options: options);
+        var controller = new BccCallbacksController(service)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext()
+            }
+        };
+        return (controller, service);
+    }
+
+
+    private static string CreateBasicAuthHeader(string username, string password)
+    {
+        string raw = $"{username}:{password}";
+        return "Basic " + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(raw));
+    }
+
+    private static IFormCollection CreateBccNotifyForm(
+        string orderId,
+        string amount = "49990.00",
+        string currency = "398",
+        string terminal = "TID999",
+        string trType = "1",
+        string action = "0",
+        string rc = "00",
+        string rrn = "123456789012",
+        string intRef = "INT12345678",
+        string approval = "APP123",
+        string madvCode = "0",
+        string text = "Transaction approved")
+    {
+        var dict = new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>
+        {
+            ["ORDER"] = orderId,
+            ["AMOUNT"] = amount,
+            ["CURRENCY"] = currency,
+            ["TERMINAL"] = terminal,
+            ["TRTYPE"] = trType,
+            ["ACTION"] = action,
+            ["RC"] = rc,
+            ["RRN"] = rrn,
+            ["INT_REF"] = intRef,
+            ["APPROVAL"] = approval,
+            ["MADV_CODE"] = madvCode,
+            ["TEXT"] = text
+        };
+        return new FormCollection(dict);
+    }
+
     private static BccPaymentGateway CreateFullyConfiguredGateway()
+
     {
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>

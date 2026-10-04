@@ -30,6 +30,7 @@ public sealed class PaymentsController(PaymentService paymentService) : Controll
             height,
             width,
             clientIp,
+            request?.BillingAddress,
             cachedSession,
             HttpContext?.RequestAborted ?? default);
 

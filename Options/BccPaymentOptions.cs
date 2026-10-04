@@ -14,7 +14,7 @@ public sealed class BccPaymentOptions
     public string MerchantId { get; set; } = "";
     public string MerchantName { get; set; } = "";
     public string MacKeyHex { get; set; } = "";
-
-    // TODO: Уточнить у BCC требования к billAddrLine1 и заменить временное значение при необходимости.
-    public string BillingAddressLine1 { get; set; } = "Казахстан, Астана";
+    public string NotifyUsername { get; set; } = "";
+    public string NotifyPassword { get; set; } = "";
+    public bool AllowUnauthenticatedTestNotifications { get; set; } = false;
 }

@@ -18,12 +18,6 @@ public sealed class BccPaymentGateway : IPaymentGateway
 
     public BccPaymentGateway(IConfiguration? configuration = null)
     {
-        string billAddr = configuration?["BCC_BILL_ADDR_LINE1"]?.Trim() ?? "";
-        if (string.IsNullOrWhiteSpace(billAddr))
-        {
-            billAddr = "Казахстан, Астана";
-        }
-
         _options = new BccPaymentOptions
         {
             Environment = configuration?["BCC_ENVIRONMENT"]?.Trim().ToLowerInvariant() ?? "",
@@ -34,21 +28,22 @@ public sealed class BccPaymentGateway : IPaymentGateway
             MerchantId = configuration?["BCC_MERCHANT_ID"]?.Trim() ?? "",
             MerchantName = configuration?["BCC_MERCHANT_NAME"]?.Trim() ?? "",
             MacKeyHex = configuration?["BCC_MAC_KEY"]?.Trim() ?? "",
-            BillingAddressLine1 = billAddr
+            NotifyUsername = configuration?["BCC_NOTIFY_USERNAME"]?.Trim() ?? "",
+            NotifyPassword = configuration?["BCC_NOTIFY_PASSWORD"]?.Trim() ?? "",
+            AllowUnauthenticatedTestNotifications = bool.TryParse(configuration?["BCC_ALLOW_UNAUTHENTICATED_TEST_NOTIFICATIONS"]?.Trim(), out bool allowUnauth) && allowUnauth
         };
     }
 
     public string Provider => "bcc";
+
     public string Environment => _options.Environment;
     public string TerminalId => _options.TerminalId;
-    public string BillingAddressLine1 => _options.BillingAddressLine1;
 
     /// <summary>
     /// Шлюз считается настроенным только тогда, когда заданы все обязательные параметры
     /// (Environment, TerminalId, GatewayUrl, NotifyUrl, ReturnUrl, MerchantId, MerchantName)
-    /// и MacKeyHex является корректной HEX-строкой, декодируемой через Convert.FromHexString,
-    /// а BillingAddressLine1 не пустое и не длиннее 50 символов.
-    /// При невалидном ключе или адресе шлюз считается ненастроенным.
+    /// и MacKeyHex является корректной HEX-строкой, декодируемой через Convert.FromHexString.
+    /// При невалидном ключе шлюз считается ненастроенным.
     /// </summary>
     public bool IsConfigured =>
         !string.IsNullOrWhiteSpace(_options.Environment) &&
@@ -58,8 +53,6 @@ public sealed class BccPaymentGateway : IPaymentGateway
         !string.IsNullOrWhiteSpace(_options.ReturnUrl) &&
         !string.IsNullOrWhiteSpace(_options.MerchantId) &&
         !string.IsNullOrWhiteSpace(_options.MerchantName) &&
-        !string.IsNullOrWhiteSpace(_options.BillingAddressLine1) &&
-        _options.BillingAddressLine1.Length <= 50 &&
         IsValidHexKey(_options.MacKeyHex);
 
     private static bool IsValidHexKey(string? hexKey)
@@ -123,11 +116,32 @@ public sealed class BccPaymentGateway : IPaymentGateway
             });
         }
 
+        if (string.IsNullOrWhiteSpace(request.BillingAddress))
+        {
+            return Task.FromResult(new PaymentGatewayInitResult
+            {
+                Success = false,
+                ErrorCode = "billing_address_required",
+                ErrorMessage = "Для проведения платежа BCC требуется указать адрес плательщика."
+            });
+        }
+
+        string trimmedAddress = request.BillingAddress.Trim();
+        if (trimmedAddress.Length > 50)
+        {
+            return Task.FromResult(new PaymentGatewayInitResult
+            {
+                Success = false,
+                ErrorCode = "billing_address_too_long",
+                ErrorMessage = "Адрес плательщика не должен превышать 50 символов."
+            });
+        }
+
         // Формирование M_INFO для 3-D Secure: строго mobilePhone, строковые размеры экрана, billAddrLine1
         string mInfo;
         try
         {
-            mInfo = BuildMInfo(request.BrowserScreenHeight, request.BrowserScreenWidth, request.Phone, _options.BillingAddressLine1);
+            mInfo = BuildMInfo(request.BrowserScreenHeight, request.BrowserScreenWidth, request.Phone, trimmedAddress);
         }
         catch
         {
@@ -282,7 +296,7 @@ public sealed class BccPaymentGateway : IPaymentGateway
     ///     "cc": "7",
     ///     "subscriber": "7001234567"
     ///   },
-    ///   "billAddrLine1": "Казахстан, Астана"
+    ///   "billAddrLine1": "г. Астана, ул. Абая, д. 10, кв. 5"
     /// }
     /// </summary>
     public static string BuildMInfo(int browserScreenHeight, int browserScreenWidth, string phone, string billAddrLine1)

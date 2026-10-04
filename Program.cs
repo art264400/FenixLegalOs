@@ -38,6 +38,7 @@ builder.Services.AddSingleton<LeadRepository>();
 builder.Services.AddSingleton<SettingsRepository>();
 builder.Services.AddSingleton<PaymentRepository>();
 builder.Services.AddSingleton<IPaymentGateway, BccPaymentGateway>();
+builder.Services.AddSingleton<BccNotificationService>();
 builder.Services.AddSingleton<PaymentService>();
 builder.Services.AddSingleton<ScoringEngine>();
 builder.Services.AddSingleton<TypstPdfService>();
