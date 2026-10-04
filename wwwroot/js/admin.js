@@ -1103,6 +1103,22 @@
   // Payments tab & Refund modal
   // -----------------------------------------------------------------------
 
+  function formatKzt(val) {
+    if (val == null || val === '') return '0 ₸';
+    const n = Number(val);
+    return isNaN(n) ? String(val) : n.toLocaleString('ru') + ' ₸';
+  }
+
+  function formatDate(val) {
+    if (!val) return '-';
+    try {
+      const d = new Date(val);
+      return isNaN(d.getTime()) ? String(val) : d.toLocaleString('ru');
+    } catch (e) {
+      return String(val);
+    }
+  }
+
   let paymentsFilterStatus = '';
 
   async function loadPayments(el) {
