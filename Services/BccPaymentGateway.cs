@@ -38,6 +38,8 @@ public sealed class BccPaymentGateway : IPaymentGateway
             NotifyPassword = configuration?["BCC_NOTIFY_PASSWORD"]?.Trim() ?? "",
             AllowUnauthenticatedTestNotifications = bool.TryParse(configuration?["BCC_ALLOW_UNAUTHENTICATED_TEST_NOTIFICATIONS"]?.Trim(), out bool allowUnauth) && allowUnauth
         };
+
+        LogTestMacKeyFingerprint();
     }
 
     public string Provider => "bcc";
@@ -75,6 +77,33 @@ public sealed class BccPaymentGateway : IPaymentGateway
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Записывает безопасный отпечаток MAC-ключа только в тестовом окружении.
+    /// Сам ключ в журнал не попадает; отпечаток позволяет подтвердить, какой ключ загрузил процесс.
+    /// </summary>
+    private void LogTestMacKeyFingerprint()
+    {
+        if (!string.Equals(_options.Environment, "test", StringComparison.OrdinalIgnoreCase) ||
+            !IsValidHexKey(_options.MacKeyHex))
+        {
+            return;
+        }
+
+        byte[] keyBytes = Convert.FromHexString(_options.MacKeyHex);
+        byte[] fingerprintBytes = System.Security.Cryptography.SHA256.HashData(keyBytes);
+        string fingerprint = Convert.ToHexString(fingerprintBytes)[..16];
+
+        System.Security.Cryptography.CryptographicOperations.ZeroMemory(keyBytes);
+        System.Security.Cryptography.CryptographicOperations.ZeroMemory(fingerprintBytes);
+
+        _logger.LogInformation(
+            PaymentEvents.BccTestConfigurationLoaded,
+            "Загружена тестовая конфигурация BCC: окружение {Environment}, терминал {TerminalId}, fingerprint MAC-ключа {MacKeyFingerprint}",
+            _options.Environment,
+            _options.TerminalId,
+            fingerprint);
     }
 
     public string GenerateNonce() => Guid.NewGuid().ToString("N").ToUpperInvariant();

@@ -20,6 +20,7 @@ public static class PaymentEvents
     public static readonly EventId BccFormPrepared = new(1101, nameof(BccFormPrepared));
     public static readonly EventId BccGatewayWarning = new(1102, nameof(BccGatewayWarning));
     public static readonly EventId BccGatewayError = new(1103, nameof(BccGatewayError));
+    public static readonly EventId BccTestConfigurationLoaded = new(1104, nameof(BccTestConfigurationLoaded));
 
     // BccNotificationService & Callback (1200-1299)
     public static readonly EventId BccCallbackReceived = new(1200, nameof(BccCallbackReceived));
@@ -28,6 +29,7 @@ public static class PaymentEvents
     public static readonly EventId BccCallbackCompleted = new(1203, nameof(BccCallbackCompleted));
     public static readonly EventId BccCallbackError = new(1204, nameof(BccCallbackError));
     public static readonly EventId BccUnauthenticatedTestCallbackAccepted = new(1205, nameof(BccUnauthenticatedTestCallbackAccepted));
+    public static readonly EventId BccTestAuthorizationCaptured = new(1206, nameof(BccTestAuthorizationCaptured));
 
     // BccCallbacksController (1300-1399)
     public static readonly EventId BccNotifyRequestReceived = new(1300, nameof(BccNotifyRequestReceived));

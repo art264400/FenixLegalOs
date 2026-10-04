@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using FenixLegalOs.Models.Payments;
 using FenixLegalOs.Options;
@@ -35,6 +36,7 @@ public sealed class BccNotificationService
     private readonly PaymentRepository _paymentRepository;
     private readonly BccPaymentOptions _options;
     private readonly ILogger<BccNotificationService> _logger;
+    private int _testAuthorizationHeaderLogged;
 
     public BccNotificationService(
         PaymentRepository paymentRepository,
@@ -56,7 +58,8 @@ public sealed class BccNotificationService
             MacKeyHex = configuration?["BCC_MAC_KEY"]?.Trim() ?? Environment.GetEnvironmentVariable("BCC_MAC_KEY")?.Trim() ?? "",
             NotifyUsername = configuration?["BCC_NOTIFY_USERNAME"]?.Trim() ?? Environment.GetEnvironmentVariable("BCC_NOTIFY_USERNAME")?.Trim() ?? "",
             NotifyPassword = configuration?["BCC_NOTIFY_PASSWORD"]?.Trim() ?? Environment.GetEnvironmentVariable("BCC_NOTIFY_PASSWORD")?.Trim() ?? "",
-            AllowUnauthenticatedTestNotifications = ParseBool(configuration?["BCC_ALLOW_UNAUTHENTICATED_TEST_NOTIFICATIONS"] ?? Environment.GetEnvironmentVariable("BCC_ALLOW_UNAUTHENTICATED_TEST_NOTIFICATIONS"))
+            AllowUnauthenticatedTestNotifications = ParseBool(configuration?["BCC_ALLOW_UNAUTHENTICATED_TEST_NOTIFICATIONS"] ?? Environment.GetEnvironmentVariable("BCC_ALLOW_UNAUTHENTICATED_TEST_NOTIFICATIONS")),
+            LogTestAuthorizationHeader = ParseBool(configuration?["BCC_LOG_TEST_AUTHORIZATION"] ?? Environment.GetEnvironmentVariable("BCC_LOG_TEST_AUTHORIZATION"))
         };
     }
 
@@ -81,6 +84,20 @@ public sealed class BccNotificationService
         // - никогда не разрешать callback без авторизации в production.
         bool isTest = string.Equals(_options.Environment, "test", StringComparison.OrdinalIgnoreCase);
         bool allowUnauthenticated = isTest && _options.AllowUnauthenticatedTestNotifications;
+
+        // Временная диагностика тестового контура. Полный заголовок может содержать
+        // учётные данные Basic Auth, поэтому он пишется не более одного раза за запуск
+        // процесса и только при явно включённом тестовом флаге.
+        if (isTest &&
+            _options.LogTestAuthorizationHeader &&
+            authHeaderPresent &&
+            Interlocked.CompareExchange(ref _testAuthorizationHeaderLogged, 1, 0) == 0)
+        {
+            _logger.LogWarning(
+                PaymentEvents.BccTestAuthorizationCaptured,
+                "ВРЕМЕННАЯ ДИАГНОСТИКА: получен тестовый Authorization от BCC: {AuthorizationHeader}. После проверки отключите BCC_LOG_TEST_AUTHORIZATION",
+                authHeader);
+        }
 
         if (allowUnauthenticated && string.IsNullOrWhiteSpace(authHeader))
         {

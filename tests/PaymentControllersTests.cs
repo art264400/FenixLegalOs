@@ -981,6 +981,38 @@ public sealed class PaymentControllersTests : IDisposable
         Assert.Contains("HEX", ex.Message);
     }
 
+    [Fact(DisplayName = "BCC logs only a safe MAC key fingerprint in test environment")]
+    public void BccPaymentGateway_TestEnvironment_LogsMacKeyFingerprintWithoutKey()
+    {
+        const string macKey = "6BB0AC02E47BDF73D98FEB777F3B5294";
+        var logger = new ListLogger<BccPaymentGateway>();
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["BCC_ENVIRONMENT"] = "test",
+                ["BCC_TERMINAL_ID"] = "88888881",
+                ["BCC_GATEWAY_URL"] = "https://test3ds.bcc.kz:5445/cgi-bin/cgi_link",
+                ["BCC_NOTIFY_URL"] = "https://example.com/api/payments/bcc/notify",
+                ["BCC_RETURN_URL"] = "https://example.com/api/payments/bcc/return",
+                ["BCC_MERCHANT_ID"] = "00000001",
+                ["BCC_MERCHANT_NAME"] = "FENIX LEGAL OS",
+                ["BCC_MAC_KEY"] = macKey
+            })
+            .Build();
+
+        _ = new BccPaymentGateway(config, logger);
+
+        var entry = Assert.Single(logger.Entries.Where(e =>
+            e.EventId == PaymentEvents.BccTestConfigurationLoaded));
+        byte[] keyBytes = Convert.FromHexString(macKey);
+        string expectedFingerprint = Convert.ToHexString(
+            System.Security.Cryptography.SHA256.HashData(keyBytes))[..16];
+
+        Assert.Equal(expectedFingerprint, entry.Properties["MacKeyFingerprint"]?.ToString());
+        Assert.DoesNotContain(macKey, entry.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(macKey, entry.Properties.Values.Select(v => v?.ToString() ?? ""));
+    }
+
     [Fact(DisplayName = "CreatePaymentAsync returns error if gateway is not configured")]
     public async Task BccPaymentGateway_NotConfigured_ReturnsPaymentGatewayNotConfiguredError()
     {
@@ -2367,6 +2399,52 @@ public sealed class PaymentControllersTests : IDisposable
         var session = _sessions.GetSession(sessionId);
         Assert.NotNull(session);
         Assert.True(session.Paid);
+    }
+
+    [Fact(DisplayName = "BCC Notify: временная диагностика один раз логирует Authorization только в test")]
+    public async Task Notify_TestAuthorizationDiagnostic_LogsHeaderOnlyOnceInTest()
+    {
+        const string authorization = "Basic dGVzdF91c2VyOnRlc3RfcGFzc3dvcmQ=";
+        var logger = new ListLogger<BccNotificationService>();
+        var options = new BccPaymentOptions
+        {
+            Environment = "test",
+            TerminalId = "TID999",
+            LogTestAuthorizationHeader = true
+        };
+        var service = new BccNotificationService(_paymentRepo, options: options, logger: logger);
+        var emptyForm = new FormCollection(
+            new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>());
+
+        await service.ProcessNotificationAsync(authorization, emptyForm, "trace-auth-1");
+        await service.ProcessNotificationAsync(authorization, emptyForm, "trace-auth-2");
+
+        var entry = Assert.Single(logger.Entries.Where(e =>
+            e.EventId == PaymentEvents.BccTestAuthorizationCaptured));
+        Assert.Equal(authorization, entry.Properties["AuthorizationHeader"]?.ToString());
+    }
+
+    [Fact(DisplayName = "BCC Notify: временная диагностика Authorization запрещена в production")]
+    public async Task Notify_TestAuthorizationDiagnostic_DoesNotLogInProduction()
+    {
+        var logger = new ListLogger<BccNotificationService>();
+        var options = new BccPaymentOptions
+        {
+            Environment = "production",
+            TerminalId = "TID999",
+            LogTestAuthorizationHeader = true
+        };
+        var service = new BccNotificationService(_paymentRepo, options: options, logger: logger);
+        var emptyForm = new FormCollection(
+            new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>());
+
+        await service.ProcessNotificationAsync(
+            "Basic dGVzdF91c2VyOnRlc3RfcGFzc3dvcmQ=",
+            emptyForm,
+            "trace-auth-production");
+
+        Assert.DoesNotContain(logger.Entries, e =>
+            e.EventId == PaymentEvents.BccTestAuthorizationCaptured);
     }
 
     [Fact(DisplayName = "BCC Notify: production без Basic Auth возвращает 401 (при наличии настроек) или 503 (при отсутствии)")]
