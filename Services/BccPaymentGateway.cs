@@ -544,9 +544,9 @@ public sealed class BccPaymentGateway : IPaymentGateway
 
     /// <summary>
     /// Выполняет запрос проверки статуса транзакции TRTYPE=90 со стороны мерчанта.
-    /// При проверке возврата передаётся TRAN_TRTYPE=14.
-    /// Если ответ банка содержит ACTION и RC с признаком возврата (TRTYPE=14), возвращается однозначный результат.
-    /// Если ответ относится к покупке (TRTYPE=1) или не содержит типа операции, статус остаётся неопределённым для ручной сверки.
+    /// Тип исходной операции задаётся в TRAN_TRTYPE: 1 для покупки и 14 для возврата.
+    /// BCC может не повторять TRTYPE=90 в синхронном ответе, поэтому контекст ответа
+    /// проверяется по TRAN_TRTYPE, ORDER и TERMINAL. Явно неверный TRTYPE отклоняется.
     /// </summary>
     public async Task<PaymentGatewayCheckResult> CheckStatusAsync(
         string orderId,
@@ -696,13 +696,19 @@ public sealed class BccPaymentGateway : IPaymentGateway
         string? respTerminal = dict.GetValueOrDefault("TERMINAL");
         string? rrn = dict.GetValueOrDefault("RRN");
         string? intRef = dict.GetValueOrDefault("INT_REF");
-        string? approvalCode = dict.GetValueOrDefault("APPROVAL_CODE") ?? dict.GetValueOrDefault("AUTH_CODE");
-        string? text = dict.GetValueOrDefault("TEXT") ?? dict.GetValueOrDefault("BANK_MESSAGE");
+        string? approvalCode = dict.GetValueOrDefault("APPROVAL")
+            ?? dict.GetValueOrDefault("APPROVAL_CODE")
+            ?? dict.GetValueOrDefault("AUTH_CODE");
+        string? text = dict.GetValueOrDefault("RC_TEXT")
+            ?? dict.GetValueOrDefault("TEXT")
+            ?? dict.GetValueOrDefault("BANK_MESSAGE");
 
-        // Требование: считать ответ результатом проверки возврата только при точном сочетании:
-        // TRTYPE == "90" && TRAN_TRTYPE == "14".
-        // Любые другие сочетания оставлять pending с IsFinal=false.
-        bool isExpectedStatus = string.Equals(respTrType, "90", StringComparison.OrdinalIgnoreCase)
+        // В реальном синхронном ответе BCC на TRTYPE=90 поле TRTYPE может отсутствовать.
+        // Это допустимо только когда остальные поля однозначно связывают ответ с запросом.
+        // Если TRTYPE присутствует, он обязан быть равен 90.
+        bool responseTrTypeMatches = string.IsNullOrWhiteSpace(respTrType)
+            || string.Equals(respTrType, "90", StringComparison.OrdinalIgnoreCase);
+        bool isExpectedStatus = responseTrTypeMatches
             && string.Equals(respTranTrType, tranTrType, StringComparison.OrdinalIgnoreCase)
             && string.Equals(respOrder, orderId, StringComparison.OrdinalIgnoreCase)
             && string.Equals(respTerminal, terminalId, StringComparison.OrdinalIgnoreCase);
@@ -730,12 +736,17 @@ public sealed class BccPaymentGateway : IPaymentGateway
             }
             else
             {
+                string operationName = tranTrType == "14" ? "возврата" : "покупки";
+
                 _logger.LogWarning(
                     PaymentEvents.BccGatewayWarning,
-                    "Ответ TRTYPE=90 для заказа {OrderId} относится к TRTYPE={TrType}, TRAN_TRTYPE={TranTrType} (не возврат TRTYPE=90/TRAN_TRTYPE=14). Возврат остаётся pending для ручной сверки.",
+                    "Ответ BCC не соответствует запросу проверки статуса {OperationName} для заказа {OrderId}: TRTYPE={TrType}, TRAN_TRTYPE={TranTrType}, ORDER={ResponseOrder}, TERMINAL={ResponseTerminal}. Результат остаётся неопределённым для ручной сверки.",
+                    operationName,
                     orderId,
                     respTrType ?? "null",
-                    respTranTrType ?? "null");
+                    respTranTrType ?? "null",
+                    respOrder ?? "null",
+                    respTerminal ?? "null");
 
                 return new PaymentGatewayCheckResult
                 {
@@ -747,7 +758,7 @@ public sealed class BccPaymentGateway : IPaymentGateway
                     Rrn = rrn,
                     IntRef = intRef,
                     ApprovalCode = approvalCode,
-                    BankMessage = "Ответ шлюза не содержит точного подтверждения возврата (требуется сочетание TRTYPE=90 и TRAN_TRTYPE=14). Требуется ручная сверка с выпиской банка.",
+                    BankMessage = $"Ответ шлюза не соответствует запросу проверки статуса {operationName}. Требуется ручная сверка с выпиской банка.",
                     TrType = respTrType,
                     ErrorCode = "response_context_mismatch",
                     ErrorMessage = "Реквизиты ответа BCC не совпадают с отправленным запросом."
@@ -1100,8 +1111,8 @@ public sealed class BccPaymentGateway : IPaymentGateway
             int eqIdx = pair.IndexOf('=');
             if (eqIdx > 0)
             {
-                string key = pair[..eqIdx].Trim();
-                string val = pair[(eqIdx + 1)..].Trim();
+                string key = System.Net.WebUtility.UrlDecode(pair[..eqIdx].Trim());
+                string val = System.Net.WebUtility.UrlDecode(pair[(eqIdx + 1)..].Trim());
                 dict[key] = val;
             }
         }

@@ -2144,6 +2144,75 @@ public sealed class PaymentRefundTests : IDisposable
         Assert.Equal(0, fakeGateway.CheckStatusCallCount); // Запрос в шлюз не отправлялся!
     }
 
+    [Fact(DisplayName = "48. Проверка покупки принимает успешный ответ BCC без TRTYPE и читает APPROVAL/RC_TEXT")]
+    public async Task Scenario48_CheckPurchaseStatus_ResponseWithoutTrType_IsFinalSuccess()
+    {
+        const string orderId = "ORD-PURCHASE-STATUS-01";
+        var mockFactory = new MockHttpClientFactory(req => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(
+                $"ACTION=0&RC=00&RC_TEXT={Uri.EscapeDataString("Завершено успешно")}" +
+                $"&APPROVAL=642374&TRAN_TRTYPE=1&ORDER={orderId}&TERMINAL=88888881" +
+                "&RRN=627722125063&INT_REF=4707383045302B5E")
+        });
+
+        var gateway = new BccPaymentGateway(CreateStatusCheckConfiguration(), httpClientFactory: mockFactory);
+
+        var result = await gateway.CheckStatusAsync(orderId, tranTrType: "1");
+
+        Assert.True(result.IsFinal);
+        Assert.True(result.Success);
+        Assert.Equal(PaymentStatuses.Paid, result.Status);
+        Assert.Equal("0", result.ActionCode);
+        Assert.Equal("00", result.ResponseCode);
+        Assert.Equal("642374", result.ApprovalCode);
+        Assert.Equal("Завершено успешно", result.BankMessage);
+    }
+
+    [Fact(DisplayName = "49. Проверка возврата принимает успешный ответ BCC без TRTYPE")]
+    public async Task Scenario49_CheckRefundStatus_ResponseWithoutTrType_IsFinalSuccess()
+    {
+        const string orderId = "ORD-REFUND-STATUS-01";
+        var mockFactory = new MockHttpClientFactory(req => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(
+                $"ACTION=0&RC=00&RC_TEXT={Uri.EscapeDataString("Завершено успешно")}" +
+                $"&TRAN_TRTYPE=14&ORDER={orderId}&TERMINAL=88888881" +
+                "&RRN=627722125063&INT_REF=4707383045302B5E")
+        });
+
+        var gateway = new BccPaymentGateway(CreateStatusCheckConfiguration(), httpClientFactory: mockFactory);
+
+        var result = await gateway.CheckStatusAsync(orderId, tranTrType: "14");
+
+        Assert.True(result.IsFinal);
+        Assert.True(result.Success);
+        Assert.Equal(PaymentStatuses.Refunded, result.Status);
+        Assert.Equal("Завершено успешно", result.BankMessage);
+    }
+
+    [Fact(DisplayName = "50. Проверка покупки отклоняет ответ с несовпадающим TRAN_TRTYPE")]
+    public async Task Scenario50_CheckPurchaseStatus_MismatchedTranTrType_RemainsIndeterminate()
+    {
+        const string orderId = "ORD-PURCHASE-MISMATCH-01";
+        var mockFactory = new MockHttpClientFactory(req => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(
+                $"ACTION=0&RC=00&TRAN_TRTYPE=14&ORDER={orderId}&TERMINAL=88888881")
+        });
+
+        var gateway = new BccPaymentGateway(CreateStatusCheckConfiguration(), httpClientFactory: mockFactory);
+
+        var result = await gateway.CheckStatusAsync(orderId, tranTrType: "1");
+
+        Assert.False(result.IsFinal);
+        Assert.False(result.Success);
+        Assert.Equal(PaymentStatuses.Unknown, result.Status);
+        Assert.Equal("response_context_mismatch", result.ErrorCode);
+        Assert.Contains("покупки", result.BankMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("возврата", result.BankMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact(DisplayName = "46. Исключение шлюза не раскрывает текст исключения в ответе и аудите")]
     public async Task Scenario46_GatewayException_DoesNotPersistOrReturnRawMessage()
     {
@@ -2190,6 +2259,23 @@ public sealed class PaymentRefundTests : IDisposable
             _configuration,
             logger: NullLogger<BccNotificationService>.Instance,
             refundRepository: _refundRepo);
+    }
+
+    private static IConfiguration CreateStatusCheckConfiguration()
+    {
+        return new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["BCC_ENVIRONMENT"] = "test",
+                ["BCC_TERMINAL_ID"] = "88888881",
+                ["BCC_GATEWAY_URL"] = "https://test3ds.bcc.kz:5445/cgi-bin/cgi_link",
+                ["BCC_NOTIFY_URL"] = "https://fenix.org/api/payments/bcc/notify",
+                ["BCC_RETURN_URL"] = "https://fenix.org/api/payments/bcc/return",
+                ["BCC_MERCHANT_ID"] = "00000001",
+                ["BCC_MERCHANT_NAME"] = "TEST",
+                ["BCC_MAC_KEY"] = "6BB0AC02E47BDF73D98FEB777F3B5294"
+            })
+            .Build();
     }
 
     private static string CreateBasicAuthHeader(string username, string password)
