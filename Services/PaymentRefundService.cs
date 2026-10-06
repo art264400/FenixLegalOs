@@ -422,11 +422,11 @@ public sealed class PaymentRefundService
     }
 
     /// <summary>
-    /// Выполняет сверку зависшего pending-возврата через операцию проверки со стороны торговца TRTYPE=90.
+    /// Выполняет сверку существующего возврата через операцию проверки со стороны торговца TRTYPE=90.
     /// Не отправляет повторный запрос возврата TRTYPE=14.
-    /// При однозначном подтверждении банка — завершает возврат через CompleteRefundTransaction.
-    /// При однозначном отказе — переводит в failed.
-    /// При неоднозначном ответе / сетевой ошибке / ответе для TRTYPE=1 — оставляет в pending для ручной сверки.
+    /// Pending-возврат синхронизируется с подтверждённым банковским результатом.
+    /// Для уже завершённого возврата проверка идемпотентна и не понижает локальный успешный статус.
+    /// При неоднозначном ответе / сетевой ошибке существующий локальный статус сохраняется.
     /// </summary>
     public async Task<PaymentRefundResult> CheckRefundStatusAsync(string orderId, string createdBy = "admin", CancellationToken cancellationToken = default)
     {
@@ -447,13 +447,9 @@ public sealed class PaymentRefundService
             return PaymentRefundResult.NotFound("refund_not_found", $"Операция возврата для заказа {orderId} не найдена.");
         }
 
-        // Сверка разрешена ТОЛЬКО для возврата в статусе pending
-        if (refund.Status != PaymentRefundStatuses.Pending)
-        {
-            return PaymentRefundResult.Conflict(
-                "invalid_refund_status",
-                $"Сверка статуса разрешена только для возвратов со статусом 'pending'. Текущий статус возврата: '{refund.Status}'.");
-        }
+        bool isPending = string.Equals(refund.Status, PaymentRefundStatuses.Pending, StringComparison.OrdinalIgnoreCase);
+        bool isSucceeded = string.Equals(refund.Status, PaymentRefundStatuses.Succeeded, StringComparison.OrdinalIgnoreCase);
+        bool isReconciliationRequired = string.Equals(refund.Status, PaymentRefundStatuses.ReconciliationRequired, StringComparison.OrdinalIgnoreCase);
 
         // Проверка совпадения провайдера и среды
         if (!string.Equals(payment.Provider, _gateway.Provider, StringComparison.OrdinalIgnoreCase))
@@ -498,8 +494,9 @@ public sealed class PaymentRefundService
 
         _logger.LogInformation(
             PaymentEvents.PaymentRefundGatewaySent,
-            "Инициирована сверка статуса pending-возврата TRTYPE=90 для заказа {OrderId}",
-            orderId);
+            "Инициирована сверка статуса возврата TRTYPE=90 для заказа {OrderId}, локальный статус {RefundStatus}",
+            orderId,
+            refund.Status);
 
         PaymentGatewayCheckResult checkResult;
         try
@@ -522,8 +519,8 @@ public sealed class PaymentRefundService
             {
                 orderId,
                 refundId = refund.Id,
-                status = PaymentRefundStatuses.Pending,
-                message = "Не удалось прочитать ответ BCC. Статус возврата остаётся в обработке (pending)."
+                status = refund.Status,
+                message = "Не удалось прочитать ответ BCC. Существующий локальный статус возврата сохранён."
             });
         }
 
@@ -538,7 +535,8 @@ public sealed class PaymentRefundService
                 rrn: checkResult.Rrn,
                 intRef: checkResult.IntRef,
                 bankMessage: checkResult.BankMessage,
-                completedAt: DateTime.UtcNow.ToString("o"));
+                completedAt: DateTime.UtcNow.ToString("o"),
+                allowSupersededAttempt: !isPending && !isSucceeded);
 
             if (!completionResult.Success)
             {
@@ -556,25 +554,59 @@ public sealed class PaymentRefundService
 
             _leads.AuditLog(createdBy, "refund_status_succeeded", $"OrderId: {orderId}, Bank checked (TRTYPE=90): Success");
 
+            string confirmedStatus = completionResult.ReconciliationRequired
+                ? PaymentRefundStatuses.ReconciliationRequired
+                : PaymentRefundStatuses.Succeeded;
+
             return PaymentRefundResult.Ok(new
             {
                 orderId,
                 refundId = refund.Id,
-                status = PaymentRefundStatuses.Succeeded,
+                status = confirmedStatus,
                 paymentStatus = PaymentStatuses.Refunded,
                 actionCode = checkResult.ActionCode,
                 responseCode = checkResult.ResponseCode,
                 rrn = checkResult.Rrn,
-                message = "Возврат средств успешно подтверждён платёжным шлюзом (TRTYPE=90) и завершён."
+                message = completionResult.ReconciliationRequired
+                    ? "Банк подтвердил возврат, но обнаружена более новая попытка. Требуется ручная сверка."
+                    : "Возврат средств успешно подтверждён платёжным шлюзом (TRTYPE=90)."
             });
         }
 
         // Б) Однозначный отказ банка
         if (checkResult.IsFinal && !checkResult.Success)
         {
+            // Уже подтверждённый возврат не понижаем из-за противоречивого ответа проверки.
+            if (isSucceeded)
+            {
+                _logger.LogWarning(
+                    PaymentEvents.BccGatewayWarning,
+                    "BCC вернул отказ при проверке уже успешного возврата {OrderId}. Локальный статус succeeded сохранён. ACTION {Action}, RC {ResponseCode}",
+                    orderId,
+                    checkResult.ActionCode,
+                    checkResult.ResponseCode);
+
+                _leads.AuditLog(createdBy, "refund_status_conflict", $"OrderId: {orderId}, Local=succeeded, Bank check rejected Action={checkResult.ActionCode}, RC={checkResult.ResponseCode}");
+
+                return PaymentRefundResult.Ok(new
+                {
+                    orderId,
+                    refundId = refund.Id,
+                    status = PaymentRefundStatuses.Succeeded,
+                    paymentStatus = PaymentStatuses.Refunded,
+                    actionCode = checkResult.ActionCode,
+                    responseCode = checkResult.ResponseCode,
+                    message = "Банк вернул противоречивый отказ при проверке уже успешного возврата. Локальный успешный статус сохранён; требуется ручная сверка."
+                });
+            }
+
+            string rejectedStatus = isReconciliationRequired
+                ? PaymentRefundStatuses.ReconciliationRequired
+                : PaymentRefundStatuses.Failed;
+
             _refundRepo.UpdateStatus(
                 refundId: refund.Id,
-                status: PaymentRefundStatuses.Failed,
+                status: rejectedStatus,
                 actionCode: checkResult.ActionCode,
                 responseCode: checkResult.ResponseCode,
                 rrn: checkResult.Rrn,
@@ -588,32 +620,40 @@ public sealed class PaymentRefundService
             {
                 orderId,
                 refundId = refund.Id,
-                status = PaymentRefundStatuses.Failed,
+                status = rejectedStatus,
                 actionCode = checkResult.ActionCode,
                 responseCode = checkResult.ResponseCode,
-                message = "Банк однозначно отклонил возврат средств по заказу."
+                message = isReconciliationRequired
+                    ? "Банк отклонил проверяемую операцию, но локальный статус ручной сверки сохранён."
+                    : "Банк однозначно отклонил возврат средств по заказу."
             });
         }
 
-        // В) Неоднозначный ответ / ответ для TRTYPE=1 / ошибка связи -> оставляем pending
-        _refundRepo.UpdateStatus(
-            refundId: refund.Id,
-            status: PaymentRefundStatuses.Pending,
-            actionCode: checkResult.ActionCode,
-            responseCode: checkResult.ResponseCode,
-            rrn: checkResult.Rrn,
-            intRef: checkResult.IntRef,
-            bankMessage: checkResult.BankMessage);
+        // В) Неоднозначный ответ / ответ для TRTYPE=1 / ошибка связи.
+        // Pending остаётся pending; любой терминальный локальный статус также сохраняется.
+        if (isPending)
+        {
+            _refundRepo.UpdateStatus(
+                refundId: refund.Id,
+                status: PaymentRefundStatuses.Pending,
+                actionCode: checkResult.ActionCode,
+                responseCode: checkResult.ResponseCode,
+                rrn: checkResult.Rrn,
+                intRef: checkResult.IntRef,
+                bankMessage: checkResult.BankMessage);
+        }
 
         string pendingMsg = !string.IsNullOrWhiteSpace(checkResult.BankMessage)
             ? checkResult.BankMessage
-            : "Статус возврата не подтверждён однозначно. Операция остаётся в обработке (pending) для ручной сверки.";
+            : isPending
+                ? "Статус возврата не подтверждён однозначно. Операция остаётся в обработке (pending) для ручной сверки."
+                : $"Статус возврата не подтверждён однозначно. Локальный статус '{refund.Status}' сохранён.";
 
         return PaymentRefundResult.Accepted(new
         {
             orderId,
             refundId = refund.Id,
-            status = PaymentRefundStatuses.Pending,
+            status = refund.Status,
             actionCode = checkResult.ActionCode,
             responseCode = checkResult.ResponseCode,
             message = pendingMsg

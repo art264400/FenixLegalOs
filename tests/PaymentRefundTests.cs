@@ -1478,6 +1478,119 @@ public sealed class PaymentRefundTests : IDisposable
         Assert.Equal(PaymentStatuses.Paid, paymentAfter.Status);
     }
 
+    [Fact(DisplayName = "36a. Проверка статуса уже успешного возврата разрешена и идемпотентна")]
+    public async Task Scenario36a_CheckRefundStatus_SucceededRefund_IsAllowedAndIdempotent()
+    {
+        string userId = CreateTestUser();
+        string sessionId = CreateTestSession(userId);
+        string orderId = "ORD-CHECK-ALREADY-SUCCEEDED";
+        var payment = CreatePaidPayment(orderId, sessionId);
+        var refund = new PaymentRefund
+        {
+            Id = Guid.NewGuid().ToString(),
+            PaymentId = payment.Id,
+            OrderId = orderId,
+            Provider = "bcc",
+            Environment = "test",
+            AmountKzt = payment.AmountKzt,
+            Reason = "Повторная проверка успешного возврата",
+            Status = PaymentRefundStatuses.Pending,
+            CreatedAt = DateTime.UtcNow.ToString("o"),
+            UpdatedAt = DateTime.UtcNow.ToString("o")
+        };
+        _refundRepo.Create(refund);
+        Assert.True(_refundRepo.CompleteRefundTransaction(
+            refund.Id,
+            orderId,
+            actionCode: "0",
+            responseCode: "00",
+            rrn: "RRN-ORIGINAL-SUCCESS",
+            completedAt: DateTime.UtcNow.ToString("o")));
+
+        var gatewayMock = new FakePaymentGateway(success: true, isFinal: true, actionCode: "0", responseCode: "00", rrn: "RRN-STATUS-CHECK");
+        var service = new PaymentRefundService(_paymentRepo, _refundRepo, gatewayMock, _leadRepo, NullLogger<PaymentRefundService>.Instance);
+
+        var result = await service.CheckRefundStatusAsync(orderId, "admin", CancellationToken.None);
+
+        Assert.Equal(200, result.StatusCode);
+        Assert.Equal(1, gatewayMock.CheckStatusCallCount);
+        Assert.Equal(PaymentRefundStatuses.Succeeded, _refundRepo.GetById(refund.Id)!.Status);
+        Assert.Equal(PaymentStatuses.Refunded, _paymentRepo.GetByOrderId(orderId)!.Status);
+    }
+
+    [Fact(DisplayName = "36b. Противоречивый отказ не понижает уже успешный возврат")]
+    public async Task Scenario36b_CheckRefundStatus_RejectionDoesNotDowngradeSucceededRefund()
+    {
+        string userId = CreateTestUser();
+        string sessionId = CreateTestSession(userId);
+        string orderId = "ORD-CHECK-SUCCEEDED-CONFLICT";
+        var payment = CreatePaidPayment(orderId, sessionId);
+        var refund = new PaymentRefund
+        {
+            Id = Guid.NewGuid().ToString(),
+            PaymentId = payment.Id,
+            OrderId = orderId,
+            Provider = "bcc",
+            Environment = "test",
+            AmountKzt = payment.AmountKzt,
+            Reason = "Проверка защиты успешного возврата",
+            Status = PaymentRefundStatuses.Pending,
+            CreatedAt = DateTime.UtcNow.ToString("o"),
+            UpdatedAt = DateTime.UtcNow.ToString("o")
+        };
+        _refundRepo.Create(refund);
+        Assert.True(_refundRepo.CompleteRefundTransaction(
+            refund.Id,
+            orderId,
+            actionCode: "0",
+            responseCode: "00",
+            rrn: "RRN-SUCCEEDED",
+            completedAt: DateTime.UtcNow.ToString("o")));
+
+        var gatewayMock = new FakePaymentGateway(success: false, isFinal: true, actionCode: "2", responseCode: "58", bankMessage: "Противоречивый отказ");
+        var service = new PaymentRefundService(_paymentRepo, _refundRepo, gatewayMock, _leadRepo, NullLogger<PaymentRefundService>.Instance);
+
+        var result = await service.CheckRefundStatusAsync(orderId, "admin", CancellationToken.None);
+
+        Assert.Equal(200, result.StatusCode);
+        Assert.Equal(1, gatewayMock.CheckStatusCallCount);
+        Assert.Equal(PaymentRefundStatuses.Succeeded, _refundRepo.GetById(refund.Id)!.Status);
+        Assert.Equal(PaymentStatuses.Refunded, _paymentRepo.GetByOrderId(orderId)!.Status);
+    }
+
+    [Fact(DisplayName = "36c. Проверка статуса отклонённого возврата разрешена")]
+    public async Task Scenario36c_CheckRefundStatus_FailedRefund_IsAllowed()
+    {
+        string userId = CreateTestUser();
+        string sessionId = CreateTestSession(userId);
+        string orderId = "ORD-CHECK-FAILED";
+        var payment = CreatePaidPayment(orderId, sessionId);
+        var refund = new PaymentRefund
+        {
+            Id = Guid.NewGuid().ToString(),
+            PaymentId = payment.Id,
+            OrderId = orderId,
+            Provider = "bcc",
+            Environment = "test",
+            AmountKzt = payment.AmountKzt,
+            Reason = "Повторная проверка отклонённого возврата",
+            Status = PaymentRefundStatuses.Failed,
+            CreatedAt = DateTime.UtcNow.ToString("o"),
+            UpdatedAt = DateTime.UtcNow.ToString("o")
+        };
+        _refundRepo.Create(refund);
+
+        var gatewayMock = new FakePaymentGateway(success: false, isFinal: true, actionCode: "2", responseCode: "58");
+        var service = new PaymentRefundService(_paymentRepo, _refundRepo, gatewayMock, _leadRepo, NullLogger<PaymentRefundService>.Instance);
+
+        var result = await service.CheckRefundStatusAsync(orderId, "admin", CancellationToken.None);
+
+        Assert.Equal(200, result.StatusCode);
+        Assert.Equal(1, gatewayMock.CheckStatusCallCount);
+        Assert.Equal(PaymentRefundStatuses.Failed, _refundRepo.GetById(refund.Id)!.Status);
+        Assert.Equal(PaymentStatuses.Paid, _paymentRepo.GetByOrderId(orderId)!.Status);
+    }
+
     // 37. Endpoint сверки требует admin-авторизацию
     [Fact(DisplayName = "37. AdminPaymentsController.CheckRefundStatus требует авторизацию администратора")]
     public async Task Scenario37_CheckRefundStatusEndpoint_RequiresAdminAuth()

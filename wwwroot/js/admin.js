@@ -1213,8 +1213,6 @@
           let actionBtn = '<span class="payment-empty">—</span>';
           if (p.canRefund) {
             actionBtn = '<button class="btn-ghost payment-action payment-action-danger refund-trigger-btn" data-order="' + orderId + '">Вернуть деньги</button>';
-          } else if (p.refundStatus === 'pending') {
-            actionBtn = '<button class="btn-ghost payment-action payment-action-warning check-refund-status-btn" data-order="' + orderId + '">Проверить статус</button>';
           } else if (p.status === 'refunded') {
             actionBtn = '<span class="payment-complete">Средства возвращены</span>';
           }
@@ -1222,9 +1220,13 @@
           const statusCheckBtn = p.canCheckStatus
             ? '<button class="btn-ghost payment-action check-payment-status-btn" data-order="' + orderId + '">Статус покупки</button>'
             : '';
+          const refundStatusCheckBtn = p.hasRefund && p.canCheckStatus
+            ? '<button class="btn-ghost payment-action payment-action-warning check-refund-status-btn" data-order="' + orderId + '">Статус возврата</button>'
+            : '';
           actionBtn = '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
             '<button class="btn-ghost payment-action payment-detail-btn" data-order="' + orderId + '">Карточка</button>' +
             statusCheckBtn +
+            refundStatusCheckBtn +
             actionBtn + '</div>';
 
           html += '<tr>' +
