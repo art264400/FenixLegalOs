@@ -38,7 +38,10 @@ public interface IPaymentGateway
     /// <summary>
     /// Проверка актуального статуса платежа в шлюзе.
     /// </summary>
-    Task<PaymentGatewayCheckResult> CheckStatusAsync(string orderId, CancellationToken cancellationToken = default);
+    Task<PaymentGatewayCheckResult> CheckStatusAsync(
+        string orderId,
+        CancellationToken cancellationToken = default,
+        string tranTrType = "14");
 
     /// <summary>
     /// Отмена или возврат платежа.
@@ -57,6 +60,8 @@ public sealed class PaymentGatewayRefundRequest
     public string Rrn { get; init; } = "";
     public string IntRef { get; init; } = "";
     public string? NotifyUrl { get; init; }
+    public string RequestTimestamp { get; init; } = "";
+    public string Nonce { get; init; } = "";
 }
 
 public sealed class PaymentGatewayInitRequest

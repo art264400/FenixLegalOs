@@ -112,7 +112,7 @@ public class PaymentRefundRepository
                 created_by AS CreatedBy, created_at AS CreatedAt,
                 updated_at AS UpdatedAt, completed_at AS CompletedAt
             FROM payment_refunds
-            WHERE payment_id = @paymentId AND status IN ('pending', 'succeeded')
+            WHERE payment_id = @paymentId AND status IN ('pending', 'succeeded', 'reconciliation_required')
             ORDER BY created_at DESC
             LIMIT 1", new { paymentId });
     }
@@ -198,7 +198,8 @@ public class PaymentRefundRepository
         string? rrn = null,
         string? intRef = null,
         string? bankMessage = null,
-        string? completedAt = null)
+        string? completedAt = null,
+        bool allowSupersededAttempt = false)
     {
         if (string.IsNullOrWhiteSpace(refundId) || string.IsNullOrWhiteSpace(orderId))
         {
@@ -212,7 +213,7 @@ public class PaymentRefundRepository
 
         // 1. Проверяем существование и соответствие операции возврата
         var refund = conn.QuerySingleOrDefault<PaymentRefund>(
-            "SELECT id AS Id, order_id AS OrderId, payment_id AS PaymentId, status AS Status FROM payment_refunds WHERE id = @refundId",
+            "SELECT id AS Id, order_id AS OrderId, payment_id AS PaymentId, status AS Status, created_at AS CreatedAt FROM payment_refunds WHERE id = @refundId",
             new { refundId },
             tx);
 
@@ -226,7 +227,13 @@ public class PaymentRefundRepository
             return CompleteRefundTransactionResult.Fail("order_id_mismatch", $"Заказ возврата {refund.OrderId} не соответствует запрошенному заказу {orderId}.");
         }
 
-        if (refund.Status != PaymentRefundStatuses.Pending && refund.Status != PaymentRefundStatuses.Succeeded)
+        bool mayCompleteSuperseded = allowSupersededAttempt &&
+            (refund.Status == PaymentRefundStatuses.Failed ||
+             refund.Status == PaymentRefundStatuses.ReconciliationRequired);
+
+        if (refund.Status != PaymentRefundStatuses.Pending &&
+            refund.Status != PaymentRefundStatuses.Succeeded &&
+            !mayCompleteSuperseded)
         {
             return CompleteRefundTransactionResult.Fail("invalid_refund_status", $"Возврат находится в статусе '{refund.Status}' и не может быть завершён.");
         }
@@ -252,9 +259,72 @@ public class PaymentRefundRepository
             return CompleteRefundTransactionResult.Fail("invalid_payment_status", $"Платёж находится в статусе '{payment.Status}' и не может быть переведён в refunded.");
         }
 
-        // 3. Обновляем payment_refunds до succeeded
+        bool reconciliationRequired = false;
+
+        if (allowSupersededAttempt && refund.Status == PaymentRefundStatuses.Succeeded)
+        {
+            reconciliationRequired = conn.ExecuteScalar<int>(@"
+                SELECT COUNT(1)
+                FROM payment_refunds
+                WHERE payment_id = @paymentId
+                  AND id != @refundId
+                  AND created_at > @createdAt
+                  AND status = 'reconciliation_required'",
+                new { paymentId = refund.PaymentId, refundId, createdAt = refund.CreatedAt },
+                tx) > 0;
+        }
+
+        // Поздний успешный callback относится к конкретной старой попытке. Новую попытку
+        // не перезаписываем реквизитами старой: переводим её в блокирующее состояние сверки.
+        if (allowSupersededAttempt && refund.Status != PaymentRefundStatuses.Succeeded)
+        {
+            int newerSucceededCount = conn.ExecuteScalar<int>(@"
+                SELECT COUNT(1)
+                FROM payment_refunds
+                WHERE payment_id = @paymentId
+                  AND id != @refundId
+                  AND created_at > @createdAt
+                  AND status = 'succeeded'",
+                new { paymentId = refund.PaymentId, refundId, createdAt = refund.CreatedAt },
+                tx);
+
+            int newerPendingRows = conn.Execute(@"
+                UPDATE payment_refunds
+                SET status = @reconciliationStatus,
+                    updated_at = @timestamp
+                WHERE payment_id = @paymentId
+                  AND id != @refundId
+                  AND created_at > @createdAt
+                  AND status = 'pending'",
+                new
+                {
+                    reconciliationStatus = PaymentRefundStatuses.ReconciliationRequired,
+                    timestamp,
+                    paymentId = refund.PaymentId,
+                    refundId,
+                    createdAt = refund.CreatedAt
+                },
+                tx);
+
+            reconciliationRequired = newerSucceededCount > 0 || newerPendingRows > 0;
+        }
+
+        // 3. Обновляем точно сопоставленную попытку. При уже успешной более новой попытке
+        // не утверждаем второй успех, а сохраняем банковский факт в состоянии сверки.
         if (refund.Status != PaymentRefundStatuses.Succeeded)
         {
+            string targetRefundStatus = reconciliationRequired && conn.ExecuteScalar<int>(@"
+                    SELECT COUNT(1)
+                    FROM payment_refunds
+                    WHERE payment_id = @paymentId
+                      AND id != @refundId
+                      AND created_at > @createdAt
+                      AND status = 'succeeded'",
+                    new { paymentId = refund.PaymentId, refundId, createdAt = refund.CreatedAt },
+                    tx) > 0
+                ? PaymentRefundStatuses.ReconciliationRequired
+                : PaymentRefundStatuses.Succeeded;
+
             int refundRows = conn.Execute(@"
                 UPDATE payment_refunds
                 SET
@@ -266,11 +336,16 @@ public class PaymentRefundRepository
                     bank_message = COALESCE(@bankMessage, bank_message),
                     completed_at = COALESCE(completed_at, @timestamp),
                     updated_at = @timestamp
-                WHERE id = @refundId AND status = 'pending'",
+                WHERE id = @refundId
+                  AND (
+                    status = 'pending'
+                    OR (@allowSupersededAttempt = 1 AND status IN ('failed', 'reconciliation_required'))
+                  )",
                 new
                 {
                     refundId,
-                    status = PaymentRefundStatuses.Succeeded,
+                    status = targetRefundStatus,
+                    allowSupersededAttempt,
                     actionCode,
                     responseCode,
                     rrn,
@@ -378,7 +453,7 @@ public class PaymentRefundRepository
         }
 
         tx.Commit();
-        return CompleteRefundTransactionResult.Ok();
+        return CompleteRefundTransactionResult.Ok(reconciliationRequired);
     }
 }
 
@@ -389,10 +464,12 @@ public class PaymentRefundRepository
 public sealed class CompleteRefundTransactionResult
 {
     public bool Success { get; init; }
+    public bool ReconciliationRequired { get; init; }
     public string? ErrorCode { get; init; }
     public string? ErrorMessage { get; init; }
 
-    public static CompleteRefundTransactionResult Ok() => new() { Success = true };
+    public static CompleteRefundTransactionResult Ok(bool reconciliationRequired = false) =>
+        new() { Success = true, ReconciliationRequired = reconciliationRequired };
 
     public static CompleteRefundTransactionResult Fail(string errorCode, string errorMessage) =>
         new() { Success = false, ErrorCode = errorCode, ErrorMessage = errorMessage };

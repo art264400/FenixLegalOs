@@ -92,7 +92,7 @@ void LoadDotEnv()
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Env] Error reading {path}: {ex.Message}");
+                Console.WriteLine($"[Env] Не удалось прочитать файл окружения. Тип ошибки: {ex.GetType().Name}");
             }
             break;
         }
@@ -127,7 +127,7 @@ app.Use(async (context, next) =>
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"[Unhandled Exception] {context.Request.Method} {context.Request.Path}: {ex}");
+        Console.WriteLine($"[Unhandled Exception] {context.Request.Method} {context.Request.Path}. Тип ошибки: {ex.GetType().Name}");
 
         if (!context.Response.HasStarted)
         {

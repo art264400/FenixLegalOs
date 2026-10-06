@@ -232,6 +232,10 @@ public class DbInitializer
             ON payment_refunds(payment_id)
             WHERE status IN ('pending', 'succeeded');
 
+            -- Таблица технического журнала больше не используется. Команда безопасно
+            -- удаляет её и связанные индексы из баз, где она уже успела появиться.
+            DROP TABLE IF EXISTS payment_gateway_operations;
+
             -- Question Bank Tables
             CREATE TABLE IF NOT EXISTS sections (
                 id TEXT PRIMARY KEY,
@@ -352,6 +356,12 @@ public class DbInitializer
 
         TryAddColumn(conn, "payments", "provider_metadata", "TEXT");
         TryAddColumn(conn, "payments", "merch_rn_id", "TEXT");
+        TryAddColumn(conn, "payments", "nonce", "TEXT");
+        TryAddColumn(conn, "payments", "request_timestamp", "TEXT");
+
+        // Поля корреляции добавляются отдельно для уже существующих баз.
+        TryAddColumn(conn, "payment_refunds", "request_timestamp", "TEXT");
+        TryAddColumn(conn, "payment_refunds", "nonce", "TEXT");
 
         // Проверка наличия дубликатов активных платежей перед созданием частичного уникального индекса
         var duplicateActiveSessions = conn.Query<string>(@"

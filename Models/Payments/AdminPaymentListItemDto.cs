@@ -17,6 +17,7 @@ public sealed class AdminPaymentListItemDto
     public string Currency { get; init; } = "KZT";
     public string Provider { get; init; } = "";
     public string Environment { get; init; } = "";
+    public string? TerminalId { get; init; }
     public string Status { get; init; } = "";
     public string? Rrn { get; init; }
     public string? IntRef { get; init; }
@@ -45,4 +46,9 @@ public sealed class AdminPaymentListItemDto
     /// Вычисляется при получении списка в контексте текущего окружения шлюза.
     /// </summary>
     public bool CanRefund { get; set; }
+
+    /// <summary>
+    /// Проверка статуса разрешена только для платежа текущего провайдера, окружения и терминала.
+    /// </summary>
+    public bool CanCheckStatus { get; set; }
 }

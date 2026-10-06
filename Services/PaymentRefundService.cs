@@ -1,4 +1,6 @@
 using System;
+using System.Globalization;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using FenixLegalOs.Models.Payments;
@@ -243,6 +245,8 @@ public sealed class PaymentRefundService
         // Сумма возврата берётся СТРОГО из БД
         int refundAmount = payment.AmountKzt;
         var now = DateTime.UtcNow.ToString("o");
+        string requestTimestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
+        string nonce = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
 
         var refundRecord = new PaymentRefund
         {
@@ -254,6 +258,8 @@ public sealed class PaymentRefundService
             AmountKzt = refundAmount,
             Reason = trimmedReason,
             Status = PaymentRefundStatuses.Pending,
+            RequestTimestamp = requestTimestamp,
+            Nonce = nonce,
             CreatedBy = createdBy,
             CreatedAt = now,
             UpdatedAt = now
@@ -286,7 +292,9 @@ public sealed class PaymentRefundService
             Currency = payment.Currency,
             TerminalId = terminalId,
             Rrn = payment.Rrn,
-            IntRef = payment.IntRef
+            IntRef = payment.IntRef,
+            RequestTimestamp = requestTimestamp,
+            Nonce = nonce
         };
 
         PaymentGatewayRefundResult gatewayResult;
@@ -298,11 +306,14 @@ public sealed class PaymentRefundService
         {
             _logger.LogError(
                 PaymentEvents.PaymentRefundFailed,
-                ex,
-                "Неожиданное исключение вызова шлюза возврата для заказа {OrderId}",
-                orderId);
+                "Неожиданная ошибка вызова шлюза возврата для заказа {OrderId}. Тип ошибки: {ErrorType}",
+                orderId,
+                ex.GetType().Name);
 
-            _leads.AuditLog("admin", "refund_error", $"OrderId: {orderId}, Reason: {trimmedReason}, Result: Exception {ex.Message}");
+            _leads.AuditLog(
+                "admin",
+                "refund_error",
+                $"OrderId: {orderId}, Reason: {trimmedReason}, Result: ExceptionType {ex.GetType().Name}");
 
             // При неожиданном исключении возврат остаётся pending до выяснения статуса
             return PaymentRefundResult.BadGateway(
@@ -494,22 +505,25 @@ public sealed class PaymentRefundService
         try
         {
             // Вызываем проверку статуса (TRTYPE=90), повторный TRTYPE=14 НЕ отправляется!
-            checkResult = await _gateway.CheckStatusAsync(orderId, cancellationToken);
+            checkResult = await _gateway.CheckStatusAsync(
+                orderId,
+                cancellationToken,
+                tranTrType: "14");
         }
         catch (Exception ex)
         {
             _logger.LogError(
                 PaymentEvents.BccGatewayError,
-                ex,
-                "Ошибка при запросе проверки статуса TRTYPE=90 для заказа {OrderId}",
-                orderId);
+                "Ошибка при запросе проверки статуса TRTYPE=90 для заказа {OrderId}. Тип ошибки: {ErrorType}",
+                orderId,
+                ex.GetType().Name);
 
             return PaymentRefundResult.Accepted(new
             {
                 orderId,
                 refundId = refund.Id,
                 status = PaymentRefundStatuses.Pending,
-                message = $"Сетевая ошибка при сверке статуса с банком: {ex.Message}. Статус возврата остаётся в обработке (pending)."
+                message = "Не удалось прочитать ответ BCC. Статус возврата остаётся в обработке (pending)."
             });
         }
 

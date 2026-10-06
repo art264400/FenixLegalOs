@@ -8,12 +8,14 @@ public static class PaymentRefundStatuses
     public const string Pending = "pending";
     public const string Succeeded = "succeeded";
     public const string Failed = "failed";
+    public const string ReconciliationRequired = "reconciliation_required";
 
     public static readonly HashSet<string> All = new(StringComparer.OrdinalIgnoreCase)
     {
         Pending,
         Succeeded,
-        Failed
+        Failed,
+        ReconciliationRequired
     };
 
     public static bool IsValid(string? status) =>

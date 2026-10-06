@@ -1013,6 +1013,59 @@ public sealed class PaymentControllersTests : IDisposable
         Assert.DoesNotContain(macKey, entry.Properties.Values.Select(v => v?.ToString() ?? ""));
     }
 
+    [Fact(DisplayName = "BCC test logging writes the complete purchase request as cURL")]
+    public async Task BccPaymentGateway_TestPayloadLogging_WritesCompletePurchaseCurl()
+    {
+        const string macKey = "6BB0AC02E47BDF73D98FEB777F3B5294";
+        var logger = new ListLogger<BccPaymentGateway>();
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["BCC_ENVIRONMENT"] = "test",
+                ["BCC_TERMINAL_ID"] = "88888881",
+                ["BCC_GATEWAY_URL"] = "https://test3ds.bcc.kz:5445/cgi-bin/cgi_link",
+                ["BCC_NOTIFY_URL"] = "https://example.com:443/api/payments/bcc/notify",
+                ["BCC_RETURN_URL"] = "https://example.com:443/api/payments/bcc/return",
+                ["BCC_MERCHANT_ID"] = "00000001",
+                ["BCC_MERCHANT_NAME"] = "TOO MERCHANT",
+                ["BCC_MAC_KEY"] = macKey,
+                ["BCC_LOG_TEST_PAYLOADS"] = "true"
+            })
+            .Build();
+
+        var gateway = new BccPaymentGateway(config, logger);
+        var result = await gateway.CreatePaymentAsync(new PaymentGatewayInitRequest
+        {
+            SessionId = "session-test-curl",
+            Tariff = "report",
+            AmountKzt = 49990,
+            Currency = "KZT",
+            ClientIp = "192.0.2.10",
+            Phone = "+77001234567",
+            BillingAddress = "г. Астана, ул. Абая, д. 10",
+            BrowserScreenHeight = 1080,
+            BrowserScreenWidth = 1920
+        });
+
+        Assert.True(result.Success);
+        var entry = Assert.Single(logger.Entries.Where(e =>
+            e.Message.Contains("Полный тестовый запрос BCC", StringComparison.Ordinal)));
+        string curl = entry.Properties["CurlRequest"]?.ToString() ?? "";
+
+        Assert.StartsWith("curl --location 'https://test3ds.bcc.kz:5445/cgi-bin/cgi_link'", curl);
+        foreach (string field in new[]
+        {
+            "AMOUNT", "CURRENCY", "ORDER", "MERCH_RN_ID", "DESC", "MERCHANT",
+            "MERCH_NAME", "TERMINAL", "TIMESTAMP", "MERCH_GMT", "TRTYPE", "BACKREF",
+            "LANG", "NONCE", "P_SIGN", "NOTIFY_URL", "CLIENT_IP", "M_INFO"
+        })
+        {
+            Assert.Contains($"--data-urlencode '{field}=", curl, StringComparison.Ordinal);
+        }
+
+        Assert.DoesNotContain(macKey, curl, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact(DisplayName = "CreatePaymentAsync returns error if gateway is not configured")]
     public async Task BccPaymentGateway_NotConfigured_ReturnsPaymentGatewayNotConfiguredError()
     {

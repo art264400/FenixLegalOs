@@ -484,7 +484,12 @@ public class PaymentRepository
     /// Возвращает типизированный список платежей для админки с данными клиента и последнего возврата.
     /// CanRefund вычисляется на основе статуса paid, отсутствия активного возврата и совпадения окружения с gatewayEnvironment.
     /// </summary>
-    public List<AdminPaymentListItemDto> GetAdminPaymentsList(string? statusFilter = null, int limit = 100, string? gatewayEnvironment = null)
+    public List<AdminPaymentListItemDto> GetAdminPaymentsList(
+        string? statusFilter = null,
+        int limit = 100,
+        string? gatewayEnvironment = null,
+        string? gatewayProvider = null,
+        string? gatewayTerminalId = null)
     {
         using var conn = GetConn();
         int safeLimit = Math.Clamp(limit, 1, 500);
@@ -502,6 +507,7 @@ public class PaymentRepository
                 p.currency AS Currency,
                 p.provider AS Provider,
                 p.environment AS Environment,
+                p.terminal_id AS TerminalId,
                 p.status AS Status,
                 p.rrn AS Rrn,
                 p.int_ref AS IntRef,
@@ -532,17 +538,25 @@ public class PaymentRepository
         var items = conn.Query<AdminPaymentListItemDto>(sql, new { statusFilter, safeLimit }).AsList();
 
         string currentGatewayEnv = gatewayEnvironment?.Trim().ToLowerInvariant() ?? "";
+        string currentGatewayProvider = gatewayProvider?.Trim().ToLowerInvariant() ?? "";
+        string currentGatewayTerminal = gatewayTerminalId?.Trim() ?? "";
 
         foreach (var item in items)
         {
             bool isPaid = string.Equals(item.Status, PaymentStatuses.Paid, StringComparison.OrdinalIgnoreCase);
             bool envMatches = string.IsNullOrEmpty(currentGatewayEnv) ||
                               string.Equals(item.Environment?.Trim(), currentGatewayEnv, StringComparison.OrdinalIgnoreCase);
+            bool providerMatches = !string.IsNullOrEmpty(currentGatewayProvider) &&
+                                   string.Equals(item.Provider?.Trim(), currentGatewayProvider, StringComparison.OrdinalIgnoreCase);
+            bool terminalMatches = !string.IsNullOrEmpty(currentGatewayTerminal) &&
+                                   string.Equals(item.TerminalId?.Trim(), currentGatewayTerminal, StringComparison.OrdinalIgnoreCase);
 
             bool hasBlockingRefund = string.Equals(item.RefundStatus, PaymentRefundStatuses.Pending, StringComparison.OrdinalIgnoreCase) ||
-                                     string.Equals(item.RefundStatus, PaymentRefundStatuses.Succeeded, StringComparison.OrdinalIgnoreCase);
+                                     string.Equals(item.RefundStatus, PaymentRefundStatuses.Succeeded, StringComparison.OrdinalIgnoreCase) ||
+                                     string.Equals(item.RefundStatus, PaymentRefundStatuses.ReconciliationRequired, StringComparison.OrdinalIgnoreCase);
 
-            item.CanRefund = isPaid && envMatches && !hasBlockingRefund;
+            item.CanRefund = isPaid && envMatches && providerMatches && terminalMatches && !hasBlockingRefund;
+            item.CanCheckStatus = envMatches && providerMatches && terminalMatches;
         }
 
         return items;

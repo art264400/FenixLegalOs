@@ -64,9 +64,9 @@ public sealed class BccCallbacksController : ControllerBase
             {
                 _logger.LogWarning(
                     PaymentEvents.BccControllerWarning,
-                    ex,
-                    "Невозможно прочитать тело формы уведомления BCC, TraceIdentifier {TraceIdentifier}",
-                    traceId);
+                    "Невозможно прочитать тело формы уведомления BCC, TraceIdentifier {TraceIdentifier}. Тип ошибки: {ErrorType}",
+                    traceId,
+                    ex.GetType().Name);
 
                 // Если Form не была передана в теле Request, используем переданный параметр или пустую коллекцию
                 formCollection = form ?? new FormCollection(new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>());
@@ -82,9 +82,9 @@ public sealed class BccCallbacksController : ControllerBase
         {
             _logger.LogError(
                 PaymentEvents.BccControllerError,
-                ex,
-                "Неожиданная ошибка обработки уведомления BCC, TraceIdentifier {TraceIdentifier}",
-                traceId);
+                "Ошибка обработки уведомления BCC, TraceIdentifier {TraceIdentifier}. Тип ошибки: {ErrorType}",
+                traceId,
+                ex.GetType().Name);
             throw;
         }
 

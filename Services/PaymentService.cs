@@ -435,10 +435,10 @@ public sealed class PaymentService
         {
             _logger.LogError(
                 PaymentEvents.PaymentError,
-                ex,
-                "Неожиданное исключение при создании платежа {OrderId} для сессии {SessionId}",
+                "Ошибка при создании платежа {OrderId} для сессии {SessionId}. Тип ошибки: {ErrorType}",
                 paymentRecord.OrderId,
-                sessionId);
+                sessionId,
+                ex.GetType().Name);
             throw;
         }
 

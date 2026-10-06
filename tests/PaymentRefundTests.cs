@@ -82,6 +82,27 @@ public sealed class PaymentRefundTests : IDisposable
         }
     }
 
+    [Fact(DisplayName = "DbInitializer удаляет устаревшую таблицу журнала платёжного шлюза")]
+    public void DbInitializer_DropsObsoletePaymentGatewayOperationsTable()
+    {
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection(_dbInitializer.ConnectionString))
+        {
+            connection.Open();
+            connection.Execute("CREATE TABLE payment_gateway_operations (id TEXT PRIMARY KEY)");
+        }
+
+        _dbInitializer.Initialize();
+
+        using var verification = new Microsoft.Data.Sqlite.SqliteConnection(_dbInitializer.ConnectionString);
+        verification.Open();
+        int tableCount = verification.ExecuteScalar<int>(@"
+            SELECT COUNT(1)
+            FROM sqlite_master
+            WHERE type = 'table' AND name = 'payment_gateway_operations'");
+
+        Assert.Equal(0, tableCount);
+    }
+
     private string CreateTestUser()
     {
         var user = _userRepo.CreateUser(
@@ -662,7 +683,11 @@ public sealed class PaymentRefundTests : IDisposable
         CreatePaidPayment(orderId, sessionId);
 
         // Без возвратов: CanRefund = true (окружение test совпадает со шлюзом test), HasRefund = false
-        var items = _paymentRepo.GetAdminPaymentsList(limit: 10, gatewayEnvironment: "test");
+        var items = _paymentRepo.GetAdminPaymentsList(
+            limit: 10,
+            gatewayEnvironment: "test",
+            gatewayProvider: "bcc",
+            gatewayTerminalId: "92000001");
         var item = items.FirstOrDefault(i => i.OrderId == orderId);
 
         Assert.NotNull(item);
@@ -687,7 +712,11 @@ public sealed class PaymentRefundTests : IDisposable
         _refundRepo.Create(pendingRefund);
 
         // Снова запрашиваем список
-        var itemsWithRefund = _paymentRepo.GetAdminPaymentsList(limit: 10, gatewayEnvironment: "test");
+        var itemsWithRefund = _paymentRepo.GetAdminPaymentsList(
+            limit: 10,
+            gatewayEnvironment: "test",
+            gatewayProvider: "bcc",
+            gatewayTerminalId: "92000001");
         var itemWithRefund = itemsWithRefund.FirstOrDefault(i => i.OrderId == orderId);
 
         Assert.NotNull(itemWithRefund);
@@ -2002,6 +2031,44 @@ public sealed class PaymentRefundTests : IDisposable
         Assert.Equal(0, fakeGateway.CheckStatusCallCount); // Запрос в шлюз не отправлялся!
     }
 
+    [Fact(DisplayName = "46. Исключение шлюза не раскрывает текст исключения в ответе и аудите")]
+    public async Task Scenario46_GatewayException_DoesNotPersistOrReturnRawMessage()
+    {
+        string userId = CreateTestUser();
+        string sessionId = CreateTestSession(userId);
+        string orderId = $"ORD-EX-{Guid.NewGuid():N}";
+        CreatePaidPayment(orderId, sessionId);
+
+        const string secretMarker = "password=do-not-persist-4111111111111111";
+        var gateway = new FakePaymentGateway
+        {
+            RefundExceptionToThrow = new InvalidOperationException(secretMarker)
+        };
+        var service = new PaymentRefundService(
+            _paymentRepo,
+            _refundRepo,
+            gateway,
+            _leadRepo,
+            NullLogger<PaymentRefundService>.Instance);
+
+        var result = await service.RefundAsync(
+            orderId,
+            "Возврат для проверки безопасной обработки исключения",
+            "admin",
+            CancellationToken.None);
+
+        string serializedResult = JsonSerializer.Serialize(result.Value);
+        Assert.Equal(StatusCodes.Status502BadGateway, result.StatusCode);
+        Assert.DoesNotContain(secretMarker, serializedResult, StringComparison.Ordinal);
+
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection(_dbInitializer.ConnectionString);
+        connection.Open();
+        string auditDetails = string.Join("\n", connection.Query<string?>(
+            "SELECT detail FROM audit_log WHERE action = 'refund_error'").Where(value => value != null));
+        Assert.DoesNotContain(secretMarker, auditDetails, StringComparison.Ordinal);
+        Assert.Contains(nameof(InvalidOperationException), auditDetails, StringComparison.Ordinal);
+    }
+
     // Вспомогательные методы
     private BccNotificationService CreateNotificationService()
     {
@@ -2069,6 +2136,8 @@ public sealed class PaymentRefundTests : IDisposable
         public string? LastCheckStatusOrderId { get; private set; }
 
         public PaymentGatewayCheckResult? CheckStatusResultToReturn { get; set; }
+        public Exception? RefundExceptionToThrow { get; set; }
+        public Exception? CheckStatusExceptionToThrow { get; set; }
 
         private readonly string _environment;
         private readonly bool _accepted;
@@ -2108,10 +2177,17 @@ public sealed class PaymentRefundTests : IDisposable
         public Task<PaymentGatewayInitResult> CreatePaymentAsync(PaymentGatewayInitRequest request, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
 
-        public Task<PaymentGatewayCheckResult> CheckStatusAsync(string orderId, CancellationToken cancellationToken = default)
+        public Task<PaymentGatewayCheckResult> CheckStatusAsync(
+            string orderId,
+            CancellationToken cancellationToken = default,
+            string tranTrType = "14")
         {
             CheckStatusCallCount++;
             LastCheckStatusOrderId = orderId;
+            if (CheckStatusExceptionToThrow != null)
+            {
+                throw CheckStatusExceptionToThrow;
+            }
             if (CheckStatusResultToReturn != null)
             {
                 return Task.FromResult(CheckStatusResultToReturn);
@@ -2135,6 +2211,10 @@ public sealed class PaymentRefundTests : IDisposable
         {
             RefundCallCount++;
             LastRefundRequest = request;
+            if (RefundExceptionToThrow != null)
+            {
+                throw RefundExceptionToThrow;
+            }
             if (_delayMs > 0)
             {
                 await Task.Delay(_delayMs, cancellationToken);

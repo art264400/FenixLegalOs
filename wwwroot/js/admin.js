@@ -54,7 +54,8 @@
           body: JSON.stringify({ password: document.getElementById('pwd').value }),
         });
         if (!res.ok) throw new Error();
-        renderShell('overview');
+        const params = new URLSearchParams(window.location.search);
+        renderShell(params.get('tab') || 'overview', params.get('order'));
       } catch (err) {
         document.getElementById('login-error').hidden = false;
       }
@@ -86,7 +87,7 @@
     const content = document.getElementById('tab-content');
     if (active === 'overview') loadOverview(content);
     if (active === 'leads') detailId ? loadLeadDetail(content, detailId) : loadLeads(content);
-    if (active === 'payments') loadPayments(content);
+    if (active === 'payments') detailId ? loadPaymentDetail(content, detailId) : loadPayments(content);
     if (active === 'pricing') loadPricingSettings(content);
     if (active === 'testbench') loadTestBench(content);
     if (active === 'questions') loadQuestions(content);
@@ -1218,6 +1219,14 @@
             actionBtn = '<span class="payment-complete">Средства возвращены</span>';
           }
 
+          const statusCheckBtn = p.canCheckStatus
+            ? '<button class="btn-ghost payment-action check-payment-status-btn" data-order="' + orderId + '">Статус покупки</button>'
+            : '';
+          actionBtn = '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
+            '<button class="btn-ghost payment-action payment-detail-btn" data-order="' + orderId + '">Карточка</button>' +
+            statusCheckBtn +
+            actionBtn + '</div>';
+
           html += '<tr>' +
             '<td><div class="payment-client-name">' + clientName + '</div><div class="payment-client-contact">' + clientContact + '</div></td>' +
             '<td><div class="payment-order">' + orderId + '</div><div class="payment-meta">' + tariff + '</div></td>' +
@@ -1261,6 +1270,31 @@
         });
       });
 
+      el.querySelectorAll('.payment-detail-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          const ordId = this.getAttribute('data-order');
+          history.replaceState(null, '', '/admin?tab=payments&order=' + encodeURIComponent(ordId));
+          renderShell('payments', ordId);
+        });
+      });
+
+      el.querySelectorAll('.check-payment-status-btn').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+          const ordId = this.getAttribute('data-order');
+          if (!ordId) return;
+          this.disabled = true;
+          this.textContent = 'Проверка...';
+          try {
+            const resp = await api('POST', '/api/admin/payments/' + encodeURIComponent(ordId) + '/status');
+            alert('TRTYPE=90 / TRAN_TRTYPE=1: ' + (resp.bankMessage || resp.status || 'ответ получен'));
+          } catch (err) {
+            alert('Ошибка проверки статуса покупки: ' + err.message);
+          } finally {
+            loadPayments(el);
+          }
+        });
+      });
+
       el.querySelectorAll('.check-refund-status-btn').forEach(function (btn) {
         btn.addEventListener('click', async function () {
           const ordId = this.getAttribute('data-order');
@@ -1283,6 +1317,42 @@
 
     } catch (err) {
       el.innerHTML = '<div class="admin-empty" style="color:var(--critical);">Ошибка загрузки платежей: ' + esc(err.message) + '</div>';
+    }
+  }
+
+  async function loadPaymentDetail(el, orderId) {
+    el.innerHTML = '<div class="admin-loading">Загрузка карточки платежа...</div>';
+    try {
+      const data = await api('GET', '/api/admin/payments/' + encodeURIComponent(orderId));
+      const payment = data.payment || {};
+      const refund = data.refund;
+      let html = '<section class="payments-view">' +
+        '<div class="admin-section-header"><div><h2 class="admin-section-title">ORDER ' + esc(orderId) + '</h2>' +
+        '<p class="admin-section-sub">Карточка платежа и возврата</p></div>' +
+        '<button id="payment-detail-back" class="btn-ghost">Назад к платежам</button></div>' +
+        '<div class="admin-card" style="padding:18px;margin-bottom:18px">' +
+        '<div><strong>ID платежа:</strong> <code>' + esc(payment.id) + '</code></div>' +
+        '<div><strong>Тариф / сумма:</strong> ' + esc(payment.tariff) + ' / ' + formatKzt(payment.amountKzt) + '</div>' +
+        '<div><strong>Статус БД:</strong> ' + esc(payment.status) + '</div>' +
+        '<div><strong>Провайдер / среда:</strong> ' + esc(payment.provider) + ' / ' + esc(payment.environment) + '</div>' +
+        '<div><strong>Создан:</strong> ' + esc(formatDate(payment.createdAt)) + '</div>' +
+        '<div><strong>RRN / INT_REF / APPROVAL:</strong> ' + esc(payment.rrn || '-') + ' / ' + esc(payment.intRef || '-') + ' / ' + esc(payment.approvalCode || '-') + '</div>' +
+        '</div>';
+
+      if (refund) {
+        html += '<div class="admin-card" style="padding:18px;margin-bottom:18px"><h3>Возврат</h3>' +
+          '<div><strong>ID:</strong> <code>' + esc(refund.id) + '</code></div>' +
+          '<div><strong>Статус:</strong> ' + esc(refund.status) + '</div>' +
+          '<div><strong>Сумма:</strong> ' + formatKzt(refund.amountKzt) + '</div></div>';
+      }
+      html += '</section>';
+      el.innerHTML = html;
+      document.getElementById('payment-detail-back').addEventListener('click', function () {
+        history.replaceState(null, '', '/admin?tab=payments');
+        renderShell('payments');
+      });
+    } catch (err) {
+      el.innerHTML = '<div class="admin-empty" style="color:var(--critical)">Ошибка загрузки карточки платежа: ' + esc(err.message) + '</div>';
     }
   }
 
@@ -1397,6 +1467,9 @@
   // -----------------------------------------------------------------------
 
   api('GET', '/api/admin/overview')
-    .then(function () { renderShell('overview'); })
+    .then(function () {
+      const params = new URLSearchParams(window.location.search);
+      renderShell(params.get('tab') || 'overview', params.get('order'));
+    })
     .catch(function () { /* renderLogin уже вызван */ });
 })();

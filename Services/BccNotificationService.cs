@@ -1,16 +1,10 @@
-using System;
-using System.Collections.Generic;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
+using System.Text.Json;
 using FenixLegalOs.Models.Payments;
 using FenixLegalOs.Options;
 using FenixLegalOs.Repositories;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FenixLegalOs.Services;
@@ -37,6 +31,7 @@ public sealed class BccNotificationService
     private readonly PaymentRefundRepository? _refundRepository;
     private readonly BccPaymentOptions _options;
     private readonly ILogger<BccNotificationService> _logger;
+    private readonly bool _logTestPayloads;
 
     public BccNotificationService(
         PaymentRepository paymentRepository,
@@ -48,6 +43,7 @@ public sealed class BccNotificationService
         _paymentRepository = paymentRepository;
         _refundRepository = refundRepository;
         _logger = logger ?? NullLogger<BccNotificationService>.Instance;
+        _logTestPayloads = ParseBool(configuration?["BCC_LOG_TEST_PAYLOADS"] ?? Environment.GetEnvironmentVariable("BCC_LOG_TEST_PAYLOADS"));
         _options = options ?? new BccPaymentOptions
         {
             Environment = configuration?["BCC_ENVIRONMENT"]?.Trim().ToLowerInvariant() ?? Environment.GetEnvironmentVariable("BCC_ENVIRONMENT")?.Trim().ToLowerInvariant() ?? "",
@@ -141,7 +137,7 @@ public sealed class BccNotificationService
                 PaymentEvents.BccCallbackRejected,
                 "Отсутствуют данные формы в callback BCC");
 
-            return Task.FromResult(new BccNotificationResult
+                return Task.FromResult(new BccNotificationResult
             {
                 StatusCode = StatusCodes.Status400BadRequest,
                 Value = new
@@ -164,10 +160,29 @@ public sealed class BccNotificationService
         string intRef = form["INT_REF"].ToString()?.Trim() ?? "";
         string approval = form["APPROVAL"].ToString()?.Trim() ?? "";
         string madvCode = form["MADV_CODE"].ToString()?.Trim() ?? "";
+        string callbackTimestamp = form["TIMESTAMP"].ToString()?.Trim() ?? "";
+        string callbackNonce = form["NONCE"].ToString()?.Trim() ?? "";
         string bankMessage = form["TEXT"].ToString()?.Trim() ?? "";
         if (string.IsNullOrWhiteSpace(bankMessage))
         {
             bankMessage = form["BANK_MESSAGE"].ToString()?.Trim() ?? "";
+        }
+
+        if (isTest && _logTestPayloads)
+        {
+            var callbackFields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var field in form)
+            {
+                callbackFields[field.Key] = IsSensitiveCallbackField(field.Key)
+                    ? "[СКРЫТО]"
+                    : field.Value.ToString();
+            }
+
+            _logger.LogInformation(
+                PaymentEvents.BccCallbackReceived,
+                "Полный тестовый callback BCC ORDER={OrderId}: {CallbackPayload}",
+                order,
+                JsonSerializer.Serialize(callbackFields));
         }
 
         // 3. Поиск платежа по полю ORDER
@@ -177,7 +192,7 @@ public sealed class BccNotificationService
                 PaymentEvents.BccCallbackRejected,
                 "В callback BCC отсутствует обязательное поле ORDER");
 
-            return Task.FromResult(new BccNotificationResult
+                return Task.FromResult(new BccNotificationResult
             {
                 StatusCode = StatusCodes.Status400BadRequest,
                 Value = new
@@ -202,9 +217,9 @@ public sealed class BccNotificationService
         {
             _logger.LogError(
                 PaymentEvents.BccCallbackError,
-                ex,
-                "Неожиданное исключение поиска платежа {OrderId} при обработке callback",
-                order);
+                "Ошибка поиска платежа {OrderId} при обработке callback. Тип ошибки: {ErrorType}",
+                order,
+                ex.GetType().Name);
             throw;
         }
 
@@ -215,7 +230,7 @@ public sealed class BccNotificationService
                 "Платёж с ORDER {OrderId} не найден в БД",
                 order);
 
-            return Task.FromResult(new BccNotificationResult
+                return Task.FromResult(new BccNotificationResult
             {
                 StatusCode = StatusCodes.Status400BadRequest,
                 Value = new
@@ -232,7 +247,13 @@ public sealed class BccNotificationService
             payment.OrderId,
             payment.Status);
 
-        // Проверка соответствия провайдера
+        RefundCorrelationResult refundCorrelation = ResolveRefundCorrelation(
+            payment.OrderId,
+            trType,
+            tranTrType,
+            callbackNonce,
+            callbackTimestamp);
+
         if (!string.Equals(payment.Provider, "bcc", StringComparison.OrdinalIgnoreCase))
         {
             _logger.LogWarning(
@@ -241,7 +262,7 @@ public sealed class BccNotificationService
                 payment.OrderId,
                 payment.Provider);
 
-            return Task.FromResult(new BccNotificationResult
+                return Task.FromResult(new BccNotificationResult
             {
                 StatusCode = StatusCodes.Status400BadRequest,
                 Value = new
@@ -262,7 +283,7 @@ public sealed class BccNotificationService
                 payment.Environment,
                 _options.Environment);
 
-            return Task.FromResult(new BccNotificationResult
+                return Task.FromResult(new BccNotificationResult
             {
                 StatusCode = StatusCodes.Status400BadRequest,
                 Value = new
@@ -326,7 +347,7 @@ public sealed class BccNotificationService
                 expectedTerminal,
                 payment.OrderId);
 
-            return Task.FromResult(new BccNotificationResult
+                return Task.FromResult(new BccNotificationResult
             {
                 StatusCode = StatusCodes.Status400BadRequest,
                 Value = new
@@ -412,7 +433,7 @@ public sealed class BccNotificationService
                 trType,
                 payment.OrderId);
 
-            return Task.FromResult(new BccNotificationResult
+                return Task.FromResult(new BccNotificationResult
             {
                 StatusCode = StatusCodes.Status400BadRequest,
                 Value = new
@@ -442,6 +463,7 @@ public sealed class BccNotificationService
         string notificationReceivedAt = DateTime.UtcNow.ToString("o");
 
         bool updated = false;
+        bool reconciliationRequired = false;
         string targetStatus;
 
         if (trType == "90")
@@ -470,7 +492,20 @@ public sealed class BccNotificationService
             }
 
             // TRAN_TRTYPE == "14": проверяем локальную запись возврата
-            var existingRefund = _refundRepository?.GetLatestByOrderId(payment.OrderId);
+            if (refundCorrelation.Ambiguous)
+            {
+                return Task.FromResult(new BccNotificationResult
+                {
+                    StatusCode = StatusCodes.Status409Conflict,
+                    Value = new
+                    {
+                        error = "ambiguous_refund_attempt",
+                        message = "Callback нельзя однозначно связать с конкретной попыткой возврата. Статусы не изменены."
+                    }
+                });
+            }
+
+            var existingRefund = refundCorrelation.Refund;
             if (existingRefund == null)
             {
                 _logger.LogWarning(
@@ -569,7 +604,7 @@ public sealed class BccNotificationService
                         payment.OrderId,
                         existingRefund.Id);
 
-                    return Task.FromResult(new BccNotificationResult
+                return Task.FromResult(new BccNotificationResult
                     {
                         StatusCode = StatusCodes.Status200OK,
                         Value = new
@@ -591,7 +626,8 @@ public sealed class BccNotificationService
                         rrn: string.IsNullOrWhiteSpace(rrn) ? null : rrn,
                         intRef: string.IsNullOrWhiteSpace(intRef) ? null : intRef,
                         bankMessage: string.IsNullOrWhiteSpace(bankMessage) ? null : bankMessage,
-                        completedAt: notificationReceivedAt)
+                        completedAt: notificationReceivedAt,
+                        allowSupersededAttempt: refundCorrelation.Superseded)
                     : CompleteRefundTransactionResult.Fail("no_repository", "Репозиторий возвратов не инициализирован.");
 
                 if (!completeResult.Success)
@@ -603,7 +639,7 @@ public sealed class BccNotificationService
                         completeResult.ErrorCode,
                         completeResult.ErrorMessage);
 
-                    return Task.FromResult(new BccNotificationResult
+                return Task.FromResult(new BccNotificationResult
                     {
                         StatusCode = StatusCodes.Status500InternalServerError,
                         Value = new
@@ -628,7 +664,8 @@ public sealed class BccNotificationService
                         status = "ok",
                         orderId = payment.OrderId,
                         refundId = existingRefund.Id,
-                        paymentStatus = PaymentStatuses.Refunded
+                        paymentStatus = PaymentStatuses.Refunded,
+                        reconciliationRequired = completeResult.ReconciliationRequired
                     }
                 });
             }
@@ -664,6 +701,22 @@ public sealed class BccNotificationService
                         action,
                         rc);
                 }
+                else if (refundCorrelation.Superseded /* точное сопоставление старой попытки */ &&
+                         (existingRefund.Status == PaymentRefundStatuses.Failed ||
+                          existingRefund.Status == PaymentRefundStatuses.ReconciliationRequired))
+                {
+                    // Фиксируем банковские реквизиты на точно сопоставленной старой попытке.
+                    // Более новая попытка при этом не изменяется.
+                    _refundRepository?.UpdateStatus(
+                        refundId: existingRefund.Id,
+                        status: existingRefund.Status,
+                        actionCode: action,
+                        responseCode: rc,
+                        rrn: string.IsNullOrWhiteSpace(rrn) ? null : rrn,
+                        intRef: string.IsNullOrWhiteSpace(intRef) ? null : intRef,
+                        bankMessage: string.IsNullOrWhiteSpace(bankMessage) ? null : bankMessage,
+                        completedAt: notificationReceivedAt);
+                }
 
                 return Task.FromResult(new BccNotificationResult
                 {
@@ -683,7 +736,20 @@ public sealed class BccNotificationService
         else if (trType == "14")
         {
             // Обработка уведомления возврата TRTYPE=14
-            var existingRefund = _refundRepository?.GetLatestByOrderId(payment.OrderId);
+            if (refundCorrelation.Ambiguous)
+            {
+                return Task.FromResult(new BccNotificationResult
+                {
+                    StatusCode = StatusCodes.Status409Conflict,
+                    Value = new
+                    {
+                        error = "ambiguous_refund_attempt",
+                        message = "Callback нельзя однозначно связать с конкретной попыткой возврата. Статусы не изменены."
+                    }
+                });
+            }
+
+            var existingRefund = refundCorrelation.Refund;
 
             // Требование 5: Успешный callback не должен переводить payment в refunded, если в payment_refunds
             // нет соответствующей локальной операции возврата.
@@ -739,20 +805,26 @@ public sealed class BccNotificationService
                             rrn: string.IsNullOrWhiteSpace(rrn) ? null : rrn,
                             intRef: string.IsNullOrWhiteSpace(intRef) ? null : intRef,
                             bankMessage: string.IsNullOrWhiteSpace(bankMessage) ? null : bankMessage,
-                            completedAt: notificationReceivedAt)
+                            completedAt: notificationReceivedAt,
+                            allowSupersededAttempt: refundCorrelation.Superseded)
                         : CompleteRefundTransactionResult.Fail("no_repository", "Репозиторий возвратов не инициализирован.");
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(
                         PaymentEvents.BccCallbackError,
-                        ex,
-                        "Неожиданное исключение атомарного обновления статуса возврата {OrderId} в БД",
-                        payment.OrderId);
-                    throw;
+                        "Ошибка обновления статуса возврата {OrderId} в БД. Тип ошибки: {ErrorType}",
+                        payment.OrderId,
+                        ex.GetType().Name);
+                    return Task.FromResult(new BccNotificationResult
+                    {
+                        StatusCode = StatusCodes.Status500InternalServerError,
+                        Value = new { error = "refund_processing_error", message = "Не удалось обновить статус возврата." }
+                    });
                 }
 
                 updated = completeResult.Success;
+                reconciliationRequired = completeResult.ReconciliationRequired;
 
                 if (!completeResult.Success)
                 {
@@ -763,7 +835,7 @@ public sealed class BccNotificationService
                         completeResult.ErrorCode,
                         completeResult.ErrorMessage);
 
-                    return Task.FromResult(new BccNotificationResult
+                return Task.FromResult(new BccNotificationResult
                     {
                         StatusCode = StatusCodes.Status500InternalServerError,
                         Value = new
@@ -808,6 +880,21 @@ public sealed class BccNotificationService
                         action,
                         rc);
                 }
+                else if (refundCorrelation.Superseded &&
+                         (existingRefund.Status == PaymentRefundStatuses.Failed ||
+                          existingRefund.Status == PaymentRefundStatuses.ReconciliationRequired))
+                {
+                    // Фиксируем отказ на старой точно сопоставленной попытке.
+                    _refundRepository?.UpdateStatus(
+                        refundId: existingRefund.Id,
+                        status: existingRefund.Status,
+                        actionCode: action,
+                        responseCode: rc,
+                        rrn: string.IsNullOrWhiteSpace(rrn) ? null : rrn,
+                        intRef: string.IsNullOrWhiteSpace(intRef) ? null : intRef,
+                        bankMessage: string.IsNullOrWhiteSpace(bankMessage) ? null : bankMessage,
+                        completedAt: notificationReceivedAt);
+                }
             }
         }
         else
@@ -840,10 +927,14 @@ public sealed class BccNotificationService
             {
                 _logger.LogError(
                     PaymentEvents.BccCallbackError,
-                    ex,
-                    "Неожиданное исключение обновления статуса платежа {OrderId} в БД",
-                    payment.OrderId);
-                throw;
+                    "Ошибка обновления статуса платежа {OrderId} в БД. Тип ошибки: {ErrorType}",
+                    payment.OrderId,
+                    ex.GetType().Name);
+                return Task.FromResult(new BccNotificationResult
+                {
+                    StatusCode = StatusCodes.Status500InternalServerError,
+                    Value = new { error = "payment_processing_error", message = "Не удалось обновить статус платежа." }
+                });
             }
         }
 
@@ -890,17 +981,25 @@ public sealed class BccNotificationService
             payment.OrderId,
             actualPayment.Status);
 
-        return Task.FromResult(new BccNotificationResult
+                return Task.FromResult(new BccNotificationResult
         {
             StatusCode = StatusCodes.Status200OK,
             Value = new
             {
                 status = "ok",
                 orderId = payment.OrderId,
-                paymentStatus = actualPayment.Status
+                paymentStatus = actualPayment.Status,
+                reconciliationRequired
             }
         });
     }
+
+    private static bool IsSensitiveCallbackField(string fieldName) =>
+        fieldName.Equals("CARD", StringComparison.OrdinalIgnoreCase) ||
+        fieldName.Equals("CVC2", StringComparison.OrdinalIgnoreCase) ||
+        fieldName.Equals("EXP", StringComparison.OrdinalIgnoreCase) ||
+        fieldName.Equals("EXP_YEAR", StringComparison.OrdinalIgnoreCase) ||
+        fieldName.Equals("AUTHORIZATION", StringComparison.OrdinalIgnoreCase);
 
     private bool ValidateBasicAuth(string? authHeader)
     {
@@ -939,5 +1038,73 @@ public sealed class BccNotificationService
         bool passMatch = CryptographicOperations.FixedTimeEquals(passBytes, expectedPassBytes);
 
         return userMatch && passMatch;
+    }
+
+    private RefundCorrelationResult ResolveRefundCorrelation(
+        string orderId,
+        string trType,
+        string tranTrType,
+        string callbackNonce,
+        string callbackTimestamp)
+    {
+        if (_refundRepository == null || (trType != "14" && !(trType == "90" && tranTrType == "14")))
+            return RefundCorrelationResult.None;
+
+        if (trType == "90")
+        {
+            // Проверку статуса связываем только с единственным незавершённым возвратом
+            // этого заказа. При неоднозначности данные не меняем автоматически.
+            var statusRefunds = _refundRepository.GetByOrderId(orderId);
+            var candidates = statusRefunds
+                .Where(refund =>
+                    string.Equals(refund.Status, PaymentRefundStatuses.Pending, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(refund.Status, PaymentRefundStatuses.Succeeded, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(refund.Status, PaymentRefundStatuses.ReconciliationRequired, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (candidates.Count == 1)
+                return new RefundCorrelationResult(candidates[0], false, false);
+
+            return new RefundCorrelationResult(null, statusRefunds.Count > 0);
+        }
+
+        var refunds = _refundRepository.GetByOrderId(orderId);
+        if (refunds.Count == 0)
+            return RefundCorrelationResult.None;
+
+        var refundMatches = refunds.Where(refund =>
+            (!string.IsNullOrWhiteSpace(callbackNonce) || !string.IsNullOrWhiteSpace(callbackTimestamp)) &&
+            (string.IsNullOrWhiteSpace(callbackNonce) || string.Equals(refund.Nonce, callbackNonce, StringComparison.Ordinal)) &&
+            (string.IsNullOrWhiteSpace(callbackTimestamp) || string.Equals(refund.RequestTimestamp, callbackTimestamp, StringComparison.Ordinal)))
+            .ToList();
+
+        if (refundMatches.Count == 1)
+            return new RefundCorrelationResult(
+                refundMatches[0],
+                false,
+                IsSuperseded(refunds, refundMatches[0]));
+
+        if (string.IsNullOrWhiteSpace(callbackNonce) && string.IsNullOrWhiteSpace(callbackTimestamp) && refunds.Count == 1)
+            return new RefundCorrelationResult(refunds[0], false);
+
+        return new RefundCorrelationResult(null, true);
+    }
+
+    private static bool IsSuperseded(IReadOnlyList<PaymentRefund> refunds, PaymentRefund? matchedRefund)
+    {
+        if (matchedRefund == null)
+            return false;
+
+        return refunds.Any(refund =>
+            !string.Equals(refund.Id, matchedRefund.Id, StringComparison.Ordinal) &&
+            string.CompareOrdinal(refund.CreatedAt, matchedRefund.CreatedAt) > 0);
+    }
+
+    private readonly record struct RefundCorrelationResult(
+        PaymentRefund? Refund,
+        bool Ambiguous,
+        bool Superseded = false)
+    {
+        public static RefundCorrelationResult None => new(null, false);
     }
 }
