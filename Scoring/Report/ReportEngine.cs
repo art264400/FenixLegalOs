@@ -5,6 +5,7 @@ using FenixLegalOs.Models;
 using FenixLegalOs.Models.Enums;
 using FenixLegalOs.Models.Report;
 using FenixLegalOs.Scoring.Core;
+using FenixLegalOs.Scoring.Modules.Investment;
 
 namespace FenixLegalOs.Scoring.Report;
 
@@ -16,26 +17,16 @@ public static class ReportEngine
         string sessionId,
         string? projectName = null)
     {
-        var rawStage = (string?)facts.Facts.GetValueOrDefault("product.stage") ?? "";
-        var stageDisplayName = rawStage switch
-        {
-            "idea" => "Идея",
-            "prototype" => "Прототип",
-            "mvp" or "first" or "live_or_ready" => "MVP / Первые пользователи",
-            "commercial" or "scaling" or "regular" or "large" => "Коммерческий запуск",
-            _ => "Ранняя стадия"
-        };
-
         var ctx = new ReportContext
         {
             SessionId = sessionId,
             ReportNumber = $"SLS-{DateTime.UtcNow:yyMMdd}-{sessionId[..Math.Min(6, sessionId.Length)].ToUpperInvariant()}",
-            ProjectName = string.IsNullOrWhiteSpace(projectName) ? "Проект" : projectName,
-            ProjectStage = stageDisplayName
+            ProjectName = string.IsNullOrWhiteSpace(projectName) ? "Проект" : projectName
         };
 
         // 1. Profile
         ctx.Profile = ProjectProfileExtractor.ExtractProfile(facts, ctx.ProjectName);
+        ctx.ProjectStage = ctx.Profile.KeyFacts.FirstOrDefault(f => f.Key == "stage")?.Value ?? "Не указано";
 
         // 2. Overall Score & Scale
         var bandTitle = result.Overall >= 80 ? "Хорошая готовность"
@@ -101,14 +92,25 @@ public static class ReportEngine
         };
 
         // 3. Top Root Causes (Section 04) - Lossless all Critical/Blocker + grouped High
-        ctx.AllFindings = result.Risks.ToList();
-        ctx.TopFindings = RootCauseMerger.ExtractTopRootCauses(result.Risks, maxCount: 8);
 
         // 4. Positive Factors (Section 05)
         ctx.PositiveFactors = FactorBreakdownEvaluator.ExtractGlobalPositiveFactors(result);
 
-        // 5. Executive Conclusion (Section 03)
-        ctx.ExecutiveConclusion = DeterministicFallbackNarratives.GenerateFallbackNarratives(ctx).ExecutiveConclusion;
+        // New-round plans and existing investor obligations are separate contexts.
+        var investmentTiming = facts.Facts.GetValueOrDefault("investment.timing")?.ToString();
+        var priorInvestment = facts.Facts.GetValueOrDefault("investment.priorInvestment");
+        ctx.InvestmentReadiness = new InvestmentReadinessReportDto
+        {
+            InvestmentTiming = investmentTiming,
+            PriorInvestmentStatus = priorInvestment?.ToString()?.ToLowerInvariant(),
+            NewRoundPlanned = investmentTiming is "6_12m" or "3_6m" or "active_search" or "specific_investor" or "terms_received",
+            NewRoundPossible = investmentTiming == "within_12m",
+            RoundIsCloseOrActive = InvestmentTimingClassifier.IsCloseOrActiveRound(facts),
+            HasPriorInvestment = priorInvestment is true || priorInvestment?.ToString() == "unknown"
+        };
+        var reportFindings = result.Risks.Select(r => CopyFindingForReport(r, ctx.InvestmentReadiness.NewRoundPlanned)).ToList();
+        ctx.AllFindings = reportFindings;
+        ctx.TopFindings = RootCauseMerger.ExtractTopRootCauses(reportFindings, maxCount: 8);
 
         // 6. 8-Zone Classification & Detail (Section 06, 07, 08, 09)
         var renderModes = RenderModeClassifier.ClassifyRenderModes(result);
@@ -118,7 +120,7 @@ public static class ReportEngine
         foreach (var s in result.Sections)
         {
             var mode = renderModes.GetValueOrDefault(s.SectionId, ReportRenderMode.Compact);
-            var sectionRisks = result.Risks.Where(r => r.SectionId.Equals(s.SectionId, StringComparison.OrdinalIgnoreCase)).ToList();
+            var sectionRisks = reportFindings.Where(r => r.SectionId.Equals(s.SectionId, StringComparison.OrdinalIgnoreCase)).ToList();
             var maxSev = sectionRisks.Count > 0 ? sectionRisks.Max(r => r.Severity) : (RiskSeverity?)null;
 
             var maxSevLabel = maxSev switch
@@ -151,7 +153,9 @@ public static class ReportEngine
                     ? "Штатные сотрудники и постоянная команда пока не привлекались (привлекаются разовые подрядчики/фрилансеры)."
                     : "Постоянная команда и сотрудники пока не привлекались.",
                 "data" => "Обработка персональных данных и AI пока не осуществляется.",
-                "investment" => "Привлечение инвестиций в настоящий момент не планируется.",
+                "investment" => investmentTiming == "none"
+                    ? "Привлечение инвестиций в настоящий момент не планируется."
+                    : "Планы привлечения инвестиций не указаны.",
                 _ => "Раздел не применим к текущей конфигурации проекта."
             };
 
@@ -161,7 +165,7 @@ public static class ReportEngine
                 "contracts" => "Станет применимым при заключении первых коммерческих контрактов.",
                 "team" => "Станет применимым при найме штатных сотрудников или постоянных подрядчиков.",
                 "data" => "Станет применимым при начале сбора персональных данных или интеграции AI.",
-                "investment" => "Станет применимым при планировании выхода на инвестиционный раунд.",
+                "investment" => "Станет применимым при появлении планов привлечения инвестиций или сведений об обязательствах перед прежними инвесторами.",
                 _ => "Станет применимым при изменении параметров деятельности."
             };
 
@@ -210,17 +214,19 @@ public static class ReportEngine
                             _ => "Низкий"
                         },
                         WhyFound = !string.IsNullOrWhiteSpace(r.Finding) ? r.Finding : r.Title,
-                        WhyItMatters = r.WhyItMatters,
-                        Recommendation = r.Recommendation,
-                        Recommendations = r.Recommendations != null && r.Recommendations.Count > 0
-                            ? r.Recommendations
-                            : (!string.IsNullOrWhiteSpace(r.Recommendation) ? new List<string> { r.Recommendation } : new List<string>()),
+                        WhyItMatters = InvestmentNarrativePresentation.GetWhyItMatters(r.Code, r.WhyItMatters, ctx.InvestmentReadiness.NewRoundPlanned),
+                        Recommendation = InvestmentNarrativePresentation.GetRecommendation(r.Code, r.Recommendation, ctx.InvestmentReadiness.NewRoundPlanned),
+                        Recommendations = InvestmentNarrativePresentation.GetRecommendations(r.Code,
+                            r.Recommendations != null && r.Recommendations.Count > 0
+                                ? r.Recommendations
+                                : (!string.IsNullOrWhiteSpace(r.Recommendation) ? new List<string> { r.Recommendation } : new List<string>()),
+                            ctx.InvestmentReadiness.NewRoundPlanned),
                         Priority = r.Priority,
                         PriorityLabel = r.Priority switch
                         {
                             RiskPriority.Now => "В первую очередь",
                             RiskPriority.ThirtyDays => "В течение 30 дней",
-                            RiskPriority.BeforeRound => "До раунда / сделки",
+                            RiskPriority.BeforeRound => ctx.InvestmentReadiness.NewRoundPlanned ? "До раунда / сделки" : "Плановое улучшение",
                             _ => "Плановое улучшение"
                         },
                         ResolutionMode = effectiveMode,
@@ -245,7 +251,7 @@ public static class ReportEngine
                     MaxSeverity = maxSev ?? RiskSeverity.Medium,
                     MaxSeverityLabel = maxSevLabel,
                     SubtitleNarrative = $"Направление «{s.Title}» требует первоочередного внимания: выявлены уязвимости, влияющие на общую оценку готовности компании.",
-                    PracticalMeaning = GetSectionPracticalMeaning(s.SectionId, isUnincorporated),
+                    PracticalMeaning = GetSectionPracticalMeaning(s.SectionId, isUnincorporated, ctx.InvestmentReadiness),
                     NegativeDrivers = neg,
                     AttentionDrivers = att,
                     PositiveDrivers = pos,
@@ -293,7 +299,7 @@ public static class ReportEngine
                     : reasonIfNa;
                 if (!fullReason.Contains("не влияет на результат юридической оценки", StringComparison.OrdinalIgnoreCase))
                 {
-                    fullReason = $"{fullReason.TrimEnd('.')} (не влияет на результат юридической оценкий).";
+                    fullReason = $"{fullReason.TrimEnd('.')} (не влияет на результат юридической оценки).";
                 }
 
                 ctx.NotApplicableModules.Add(new NotApplicableModuleDto
@@ -310,7 +316,6 @@ public static class ReportEngine
         }
 
         // Populate vNext Collections
-        ctx.AllFindings = result.Risks.ToList();
         ctx.RootCauses = result.Risks
             .GroupBy(r => !string.IsNullOrWhiteSpace(r.RootCauseGroup) ? r.RootCauseGroup : "GENERAL", StringComparer.OrdinalIgnoreCase)
             .Select(g =>
@@ -333,17 +338,27 @@ public static class ReportEngine
             .ThenBy(rc => rc.Priority)
             .ToList();
 
-        // 7. Investment Readiness (2-Layer Architecture: Base + Cross-Module Blockers)
+        // 7. Investment Readiness: present the canonical scoring result without a second cap.
         var invSec = result.Sections.FirstOrDefault(s => s.SectionId.Equals("investment", StringComparison.OrdinalIgnoreCase));
-        var isInvApplicable = invSec != null && invSec.Status == ApplicabilityStatus.Applicable;
+        var investment = ctx.InvestmentReadiness;
+        var canonicalReadiness = result.InvestmentReadiness;
+        var isInvApplicable = invSec?.Status == ApplicabilityStatus.Applicable && canonicalReadiness.Applicable;
         int baseScore = invSec?.Score ?? 0;
-        var baseCategory = baseScore >= 80 ? "Высокая готовность" : baseScore >= 60 ? "Умеренная готовность" : baseScore >= 40 ? "Требуется подготовка" : "Критические блокеры";
+        int readinessScore = isInvApplicable ? canonicalReadiness.ReadinessScore ?? baseScore : 0;
+        var baseCategory = GetInvestmentReadinessCategory(baseScore);
+        var readinessCategory = GetInvestmentReadinessCategory(readinessScore);
 
-        // Collect cross-module blockers from other sections
-        var crossBlockers = result.Risks
-            .Where(r => !r.SectionId.Equals("investment", StringComparison.OrdinalIgnoreCase) && 
-                        (r.Severity is RiskSeverity.Blocker or RiskSeverity.Critical || 
-                         r.Code.Contains("DEADLOCK") || r.Code.Contains("DISPUTE") || r.Code.Contains("OWNERSHIP")))
+        // Only blockers identified by the canonical calculator belong in round readiness.
+        // Past investments alone do not turn ordinary operational risks into DD blockers.
+        var allBlockerTitles = isInvApplicable && investment.RoundIsCloseOrActive
+            ? canonicalReadiness.Blockers.Where(t => !string.IsNullOrWhiteSpace(t)).Select(t => t.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList()
+            : new List<string>();
+        var canonicalBlockerTitles = allBlockerTitles.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var blockerFindings = result.Risks
+            .Where(r => canonicalBlockerTitles.Contains(r.Title.Trim()))
+            .ToList();
+        var crossBlockers = blockerFindings
+            .Where(r => !r.SectionId.Equals("investment", StringComparison.OrdinalIgnoreCase))
             .Select(r => new CrossModuleInvestmentBlockerDto
             {
                 ModuleTitle = result.Sections.FirstOrDefault(s => s.SectionId.Equals(r.SectionId, StringComparison.OrdinalIgnoreCase))?.Title ?? r.SectionId,
@@ -354,105 +369,65 @@ public static class ReportEngine
                 WhyItBlocksDueDiligence = !string.IsNullOrWhiteSpace(r.WhyItMatters) ? r.WhyItMatters : r.Finding
             })
             .ToList();
-
-        var allBlockerTitles = crossBlockers.Select(cb => $"{cb.ModuleTitle}: {cb.Title}").ToList();
-        var canonicalBlockerTitles = crossBlockers
-            .Select(cb => cb.Title.Trim())
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (result.InvestmentReadiness?.Blockers != null && result.InvestmentReadiness.Blockers.Count > 0)
-        {
-            foreach (var blockerTitle in result.InvestmentReadiness.Blockers)
-            {
-                var canonicalTitle = blockerTitle.Trim();
-                if (canonicalBlockerTitles.Add(canonicalTitle))
-                {
-                    allBlockerTitles.Add(canonicalTitle);
-                }
-            }
-        }
-        var displayedBlockerCount = allBlockerTitles.Count;
-        var displayedBlockerPhrase = displayedBlockerCount == 1
-            ? "1 критическим блокером или существенным риском"
-            : $"{displayedBlockerCount} критическими блокерами и существенными рисками";
-
-        var dealScore = isInvApplicable ? (crossBlockers.Count > 0 ? Math.Min(baseScore, 45) : baseScore) : 0;
-        var dealCategory = !isInvApplicable 
-            ? "Не применимо" 
-            : crossBlockers.Count > 0 
-                ? "Сквозные юридические блокеры" 
-                : baseCategory;
+        var unresolvedBlockersCount = blockerFindings
+            .Select(r => r.RootCauseGroup)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
 
         string roundVerdict;
         string summaryDesc;
-
         if (!isInvApplicable)
         {
-            roundVerdict = "Привлечение инвестиций не заявлено как активная цель текущего этапа.";
-            summaryDesc = "Привлечение инвестиций не заявлено как активная цель текущего этапа.";
+            roundVerdict = investmentTiming == "none"
+                ? "Новый инвестиционный раунд не планируется."
+                : "Планы нового инвестиционного раунда не указаны.";
+            summaryDesc = "Инвестиционный блок не применяется к текущей диагностике и не влияет на общую юридическую оценку.";
         }
-        else if (baseScore >= 75)
+        else if (!investment.NewRoundPlanned)
         {
-            if (displayedBlockerCount > 0)
-            {
-                roundVerdict = "Общая готовность к раунду: требует устранения юридических блокеров перед закрытием сделки.";
-                summaryDesc = $"Параметры раунда и инвест-документы проработаны хорошо ({baseScore}/100), однако закрытие сделки ограничено {displayedBlockerPhrase} (структура, права, договоренности). Итоговая проходимость проверки (Due Diligence): {dealScore}/100.";
-            }
-            else
-            {
-                roundVerdict = "Общая готовность к раунду: высокая, проект готов к юридической проверке и открытию Data Room.";
-                summaryDesc = $"Оценка инвестиционной готовности компании составляет {baseScore} / 100 ({baseCategory}). Критичных сквозных юридических блокеров не выявлено. Итоговая проходимость проверки (Due Diligence): {dealScore}/100.";
-            }
+            roundVerdict = investment.NewRoundPossible
+                ? "Привлечение инвестиций рассматривается как возможность, новый раунд пока не запланирован."
+                : "Новый инвестиционный раунд не заявлен; оценены сведения о прошлых инвестициях.";
+            summaryDesc = investment.PriorInvestmentStatus == "unknown"
+                ? $"Оценка инвестиционного блока: {readinessScore}/100 ({readinessCategory}). Наличие или условия прошлых инвестиций не определены; их следует уточнить. Новый раунд не заявлен как запланированный."
+                : investment.HasPriorInvestment
+                ? $"Оценка оформления инвестиционных отношений: {readinessScore}/100 ({readinessCategory}). Учитываются документы и обязательства перед прежними инвесторами. Блокеры нового раунда не определяются, поскольку он не запланирован."
+                : $"Базовая готовность инвестиционного блока: {readinessScore}/100 ({readinessCategory}). Возможность будущего привлечения не означает, что раунд уже начался; блокеры активной сделки не определяются.";
         }
-        else if (baseScore >= 50)
+        else if (unresolvedBlockersCount > 0)
         {
-            if (displayedBlockerCount > 0)
-            {
-                roundVerdict = "Общая готовность к раунду: требует доработки документов и устранения рисков в смежных зонах.";
-                summaryDesc = $"Параметры раунда и инвест-документы проработаны частично ({baseScore}/100), при этом закрытие сделки осложнено {displayedBlockerPhrase} (структура, права, обязательства). Итоговая проходимость проверки (Due Diligence): {dealScore}/100.";
-            }
-            else
-            {
-                roundVerdict = "Общая готовность к раунду: средняя, требуется доработка инвестиционных документов.";
-                summaryDesc = $"Базовая готовность инвестиционного блока составляет {baseScore} / 100 ({baseCategory}). Сквозных блокеров из других зон не выявлено, однако инвест-пакет требует структурирования перед открытием Data Room.";
-            }
+            roundVerdict = "Подготовка к заявленному раунду требует устранения выявленных юридических блокеров.";
+            summaryDesc = $"Базовая оценка инвестиционных документов: {baseScore}/100. С учетом выявленных блокеров оценка готовности к заявленному раунду составляет {readinessScore}/100 ({readinessCategory}). Она совпадает с результатом расчета диагностики.";
         }
         else
         {
-            if (displayedBlockerCount > 0)
-            {
-                roundVerdict = "Общая готовность к раунду: критические риски в инвестиционном блоке и смежных зонах компании.";
-                summaryDesc = $"Собственная готовность инвестиционного модуля находится на критическом уровне ({baseScore}/100): не сформированы базовые документы и параметры раунда. Кроме того, закрытие сделки блокируется {displayedBlockerPhrase}. Итоговая проходимость проверки (Due Diligence): {dealScore}/100.";
-            }
-            else
-            {
-                roundVerdict = "Общая готовность к раунду: не готов, требуется фундаментальная подготовка инвест-пакета.";
-                summaryDesc = $"Собственная готовность инвестиционного модуля находится на критическом уровне ({baseScore}/100): отсутствуют ключевые инвестиционные документы и параметры раунда.";
-            }
+            roundVerdict = $"Готовность к заявленному раунду: {readinessCategory.ToLowerInvariant()}.";
+            summaryDesc = $"Оценка инвестиционной готовности: {readinessScore}/100 ({readinessCategory}). Учитываются заявленные сроки и ответы об инвестиционных документах. Блокеры близкого или активного раунда по правилам диагностики не выявлены.";
         }
 
-        ctx.InvestmentReadiness = new InvestmentReadinessReportDto
-        {
-            IsApplicable = isInvApplicable,
-            ReadinessScore = dealScore,
-            BaseScore = baseScore,
-            BaseCategory = isInvApplicable ? baseCategory : "Не применимо",
-            Category = dealCategory,
-            RoundVerdict = roundVerdict,
-            UnresolvedBlockersCount = allBlockerTitles.Count,
-            BlockerTitles = allBlockerTitles,
-            CatalystTitles = result.InvestmentReadiness?.Blockers != null ? result.Strengths : new List<string>(),
-            CrossModuleBlockers = crossBlockers,
-            SummaryDescription = summaryDesc
-        };
+        investment.IsApplicable = isInvApplicable;
+        investment.ReadinessScore = readinessScore;
+        investment.BaseScore = baseScore;
+        investment.BaseCategory = isInvApplicable ? baseCategory : "Не применимо";
+        investment.Category = isInvApplicable ? readinessCategory : "Не применимо";
+        investment.RoundVerdict = roundVerdict;
+        investment.UnresolvedBlockersCount = unresolvedBlockersCount;
+        investment.BlockerTitles = allBlockerTitles;
+        investment.CatalystTitles = isInvApplicable ? result.Strengths : new List<string>();
+        investment.CrossModuleBlockers = crossBlockers;
+        investment.SummaryDescription = summaryDesc;
 
         // 8. Unified Action Plan (Section 11)
         ctx.ActionPlan = UnifiedActionPlanBuilder.BuildUnifiedActionPlan(result.Risks, facts);
 
         // 9. Fenix Law Recommendation (Section 12)
-        ctx.FenixLaw = FenixLawRecommendationEvaluator.EvaluateRecommendation(result.Risks, result, ctx.ActionPlan);
+        ctx.FenixLaw = FenixLawRecommendationEvaluator.EvaluateRecommendation(result.Risks, result, ctx.ActionPlan, ctx.InvestmentReadiness);
 
         // 10. Legal Terms & Methodology (Sections 13-14)
         ctx.LegalTerms = ReportStaticContent.GetLegalTerms();
+
+        // Executive fallback consumes the fully assembled investment and operational context.
+        ctx.ExecutiveConclusion = DeterministicFallbackNarratives.GenerateFallbackNarratives(ctx).ExecutiveConclusion;
 
         // Enforce Strict Deterministic Semantic Invariants (Fail-Closed)
         ReportContextValidator.Validate(ctx);
@@ -460,6 +435,31 @@ public static class ReportEngine
 
         return ctx;
     }
+
+    private static RiskFinding CopyFindingForReport(RiskFinding finding, bool newRoundPlanned) => new()
+    {
+        Code = finding.Code,
+        RootCauseGroup = finding.RootCauseGroup,
+        Severity = finding.Severity,
+        Priority = finding.Priority,
+        SectionId = finding.SectionId,
+        Modules = finding.Modules.ToList(),
+        Title = finding.Title,
+        Finding = finding.Finding,
+        WhyItMatters = InvestmentNarrativePresentation.GetWhyItMatters(finding.Code, finding.WhyItMatters, newRoundPlanned),
+        Recommendations = InvestmentNarrativePresentation.GetRecommendations(finding.Code, finding.Recommendations, newRoundPlanned),
+        Recommendation = InvestmentNarrativePresentation.GetRecommendation(finding.Code, finding.Recommendation, newRoundPlanned),
+        Basis = finding.Basis.ToList(),
+        LawyerRequired = finding.LawyerRequired,
+        Resolution = finding.Resolution,
+        ResolutionMode = finding.ResolutionMode,
+        RecommendedActionId = finding.RecommendedActionId,
+        Facts = finding.Facts.ToList(),
+        BusinessImpact = finding.BusinessImpact.ToList(),
+        ServiceCode = finding.ServiceCode,
+        Cta = finding.Cta,
+        AffectedDimensions = finding.AffectedDimensions.ToList()
+    };
 
     private static string GetSectionIcon(string sectionId) => sectionId switch
     {
@@ -474,20 +474,47 @@ public static class ReportEngine
         _ => "circle"
     };
 
-    private static string GetSectionPracticalMeaning(string sectionId, bool isUnincorporated) => sectionId switch
+    private static string GetInvestmentReadinessCategory(int score) => score >= 80
+        ? "Высокая готовность"
+        : score >= 60 ? "Умеренная готовность"
+        : score >= 40 ? "Требуется подготовка"
+        : "Критические пробелы";
+
+    private static string GetSectionPracticalMeaning(string sectionId, bool isUnincorporated, InvestmentReadinessReportDto investment)
     {
-        "founders" => "Пока договоренности и доли между основателями не зафиксированы юридически, любое разногласие грозит корпоративным тупиком (deadlock) и остановкой операционной деятельности. При входе инвестора отсутствие фаундерского соглашения станет прямым препятствием к раунду, а разрешение конфликтов постфактум обойдется несоизмеримо дороже.",
-        "corporate" => isUnincorporated
-            ? "Пока коммерческая деятельность ведется без регистрации юридического лица, основатели несут персональную ответственность всем своим имуществом по любым обязательствам. Выручка и база пользователей не капитализируются в стоимость бизнеса, а привлечение инвестиций заблокировано до создания компании."
-            : "Пока корпоративная структура и регламенты принятия решений не выстроены, любые стратегические сделки и распределение прибыли остаются уязвимыми для оспаривания. На этапе Due Diligence несогласованность в структуре владения затянет инвестиционный раунд и потребует экстренной перерегистрации.",
-        "ip" => isUnincorporated
-            ? "Пока права на ключевые результаты находятся у создателей, при инкорпорации и привлечении инвестора придется отдельно подтверждать историю разработки и оформлять недостающие документы о правах. Чем дольше продукт развивается в текущей конструкции, тем больше объем документов придется восстанавливать позднее."
-            : "Пока исключительные права на продукт и кодовую базу не консолидированы на балансе компании по договорам и актам, сохраняется риск претензий от разработчиков или подрядчиков. При юридической проверке инвестором отсутствие сквозной цепочки прав приведет к требованию экстренно подписывать документы с авторами на их условиях либо сорвет раунд.",
-        "team" => "Пока отношения с разработчиками и ключевыми специалистами не закрыты договорами с передачей прав и NDA, созданный актив юридически остается за авторами, а переквалификация отношений грозит доначислениями налогов. При росте команды уход любого ключевого участника с наработками поставит бизнес под прямой удар.",
-        "product" => "Пока работа с пользователями ведется без актуальной публичной оферты и правил сервиса, проект уязвим для потребительских исков, требований о возврате средств и блокировок эквайрингом. По мере роста аудитории цена каждого неурегулированного инцидента возрастает кратно, создавая регуляторные риски до первого раунда.",
-        "data" => "Пока процессы сбора персональных данных и интеграции с внешними сервисами или AI не обвязаны соглашениями и политиками, компания рискует получить предписания регулятора, блокировку домена или штрафы за утечки. Инвесторы оценивают чистоту данных в первую очередь, так как претензии регуляторов могут парализовать работу сервиса.",
-        "contracts" => "Пока договоры с клиентами и подрядчиками не содержат четких лимитов ответственности и условий расторжения, компания несет неконтролируемые финансовые риски по обязательствам контрагентов. При кассовых разрывах или спорах нехватка юридических рычагов приведет к потере выручки и длительным судебным издержкам.",
-        "investment" => "Пока не сформирован базовый юридический инвест-пакет и не сняты блокеры в смежных зонах, компания теряет переговорную позицию перед инвесторами. Каждое несоответствие в документах затягивает Due Diligence, увеличивает дисконт к оценке бизнеса или дает инвестору повод пересмотреть условия сделки в неблагоприятную сторону.",
-        _ => "Пока правовая основа направления не формализована, компания накапливает скрытые юридические обязательства. При масштабировании или внешнем аудите неурегулированные вопросы потребуют срочного устранения на невыгодных условиях."
-    };
+        var operationalMeaning = sectionId switch
+        {
+            "founders" => "Пока договоренности и доли между основателями не зафиксированы юридически, любое разногласие грозит корпоративным тупиком (deadlock) и остановкой операционной деятельности. Разрешение конфликтов постфактум потребует дополнительных затрат и может затруднить управление компанией.",
+            "corporate" => isUnincorporated
+                ? "При коммерческой деятельности без зарегистрированного юридического лица обязательства приходится оформлять на основателей. Это затрудняет разграничение личной и деловой ответственности, заключение договоров и передачу активов компании."
+                : "Пока корпоративная структура и регламенты принятия решений не выстроены, стратегические сделки и распределение прибыли остаются уязвимыми для оспаривания. Несогласованность структуры владения может затруднить управление и исполнение обязательств компании.",
+            "ip" => isUnincorporated
+                ? "Пока права на ключевые результаты находятся у создателей, при регистрации компании придется отдельно подтверждать историю разработки и оформлять недостающие документы о правах. Чем дольше продукт развивается в текущей конструкции, тем больше объем документов придется восстанавливать позднее."
+                : "Пока исключительные права на продукт и кодовую базу не подтверждены договорами и актами, сохраняется риск претензий от разработчиков или подрядчиков. Пробелы в цепочке прав могут осложнить использование продукта, продажу лицензий и заключение договоров с клиентами.",
+            "team" => "Пока отношения с разработчиками и ключевыми специалистами не закрыты договорами с передачей прав и NDA, созданный актив юридически остается за авторами, а переквалификация отношений грозит доначислениями налогов. При росте команды уход ключевого участника с наработками поставит бизнес под прямой удар.",
+            "product" => "Пока работа с пользователями ведется без актуальной публичной оферты и правил сервиса, проект уязвим для потребительских исков, требований о возврате средств и ограничений со стороны платежных сервисов. По мере роста аудитории увеличиваются возможные затраты на урегулирование претензий и устранение нарушений.",
+            "data" => "Пока процессы сбора персональных данных и интеграции с внешними сервисами или AI не обеспечены соглашениями и политиками, компания рискует получить предписания регулятора, ограничения работы сервиса или штрафы за утечки. Претензии пользователей и регуляторов могут нарушить работу продукта и потребовать дополнительных затрат.",
+            "contracts" => "Пока договоры с клиентами и подрядчиками не содержат четких лимитов ответственности и условий расторжения, компания несет неконтролируемые финансовые риски по обязательствам контрагентов. При кассовых разрывах или спорах нехватка юридических рычагов приведет к потере выручки и длительным судебным издержкам.",
+            "investment" => investment.NewRoundPlanned
+                ? "Подготовка к заявленному раунду включает оформление инвестиционных документов и устранение подтвержденных юридических рисков. Несоответствия в документах могут осложнить юридическую проверку и согласование условий сделки."
+                : investment.HasPriorInvestment
+                    ? "Сведения о прошлых инвестициях и обязательствах перед инвесторами должны однозначно подтверждать права сторон. Неясные условия могут привести к спорам о долях, возврате средств и исполнении договоренностей."
+                    : investment.NewRoundPossible
+                        ? "Если компания решит привлекать инвестиции, потребуется подтвердить структуру долей, права на продукт и условия сделки. Сейчас инвестиции рассматриваются как возможность, а не как начавшийся раунд."
+                        : "Планы нового инвестиционного раунда не заявлены. Оценка не предполагает, что компания готовится к привлечению инвестиций.",
+            _ => "Пока правовая основа направления не формализована, компания накапливает скрытые юридические обязательства. При масштабировании или внешней проверке неурегулированные вопросы потребуют срочного устранения."
+        };
+        if (!investment.NewRoundPlanned || sectionId == "investment") return operationalMeaning;
+
+        var fundraisingMeaning = sectionId switch
+        {
+            "founders" => " При подготовке к заявленному инвестиционному раунду потребуется подтвердить договоренности основателей и структуру долей.",
+            "corporate" => " Для заявленного инвестиционного раунда необходимо подтвердить юридическую структуру и полномочия участников сделки.",
+            "ip" => " Для заявленного раунда потребуется подтвердить непрерывную цепочку прав на продукт при юридической проверке инвестором.",
+            "product" => " При подготовке к заявленному раунду выявленные проблемы взаимодействия с пользователями также потребуют раскрытия и урегулирования.",
+            "data" => " При юридической проверке в рамках заявленного раунда потребуется подтвердить правовые основания обработки данных и использования внешних сервисов.",
+            _ => string.Empty
+        };
+        return operationalMeaning + fundraisingMeaning;
+    }
 }

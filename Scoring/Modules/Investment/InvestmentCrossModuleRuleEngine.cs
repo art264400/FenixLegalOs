@@ -17,7 +17,7 @@ public static class InvestmentCrossModuleRuleEngine
 
         var timing = (string?)facts.Facts.GetValueOrDefault("investment.timing");
         bool priorInvestment = facts.Facts.TryGetValue("investment.priorInvestment", out var pi) && (pi is true || pi?.ToString() == "unknown");
-        bool isInvestmentApplicable = timing != "none" || priorInvestment;
+        bool isInvestmentApplicable = (timing != null && timing != "none") || priorInvestment;
 
         if (!isInvestmentApplicable)
         {

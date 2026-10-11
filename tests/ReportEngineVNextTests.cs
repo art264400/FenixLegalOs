@@ -161,11 +161,12 @@ public class ReportEngineVNextTests
         Assert.InRange(ctx.ActionPlan.Count, 4, 8);
     }
 
-    [Fact(DisplayName = "Investment Readiness: 2-Layer Model captures Cross-Module Blockers even when Base Score is High")]
-    public void InvestmentReadiness_TwoLayer_Model_Captures_CrossModule_Blockers()
+    [Fact(DisplayName = "Investment readiness report preserves canonical blockers and score without another cap")]
+    public void InvestmentReadiness_Report_Preserves_Canonical_Blockers_And_Score()
     {
         var facts = new SharedFactStore();
         facts.Facts["company.entityStatus"] = "registered";
+        facts.Facts["investment.timing"] = "active_search";
 
         var result = new ScoreResult
         {
@@ -180,7 +181,7 @@ public class ReportEngineVNextTests
             {
                 new()
                 {
-                    Code = "FND_DEADLOCK_RISK",
+                    Code = "FND_EQUITY_DISPUTE",
                     SectionId = "founders",
                     Severity = RiskSeverity.Blocker,
                     Priority = RiskPriority.Now,
@@ -191,8 +192,8 @@ public class ReportEngineVNextTests
             InvestmentReadiness = new InvestmentReadinessOverlay
             {
                 Applicable = true,
-                ReadinessScore = 85,
-                Blockers = new List<string>()
+                ReadinessScore = 59,
+                Blockers = new List<string> { "Корпоративный тупик 50/50" }
             }
         };
 
@@ -203,7 +204,8 @@ public class ReportEngineVNextTests
         Assert.Equal(85, ctx.InvestmentReadiness.BaseScore);
         Assert.True(ctx.InvestmentReadiness.HasCrossModuleBlockers);
         Assert.Single(ctx.InvestmentReadiness.CrossModuleBlockers);
-        Assert.Equal("FND_DEADLOCK_RISK", ctx.InvestmentReadiness.CrossModuleBlockers[0].FindingCode);
-        Assert.True(ctx.InvestmentReadiness.ReadinessScore <= 45, "Readiness score must be constrained by cross-module blocker");
+        Assert.Equal("FND_EQUITY_DISPUTE", ctx.InvestmentReadiness.CrossModuleBlockers[0].FindingCode);
+        Assert.Equal(result.InvestmentReadiness.ReadinessScore, ctx.InvestmentReadiness.ReadinessScore);
+        Assert.Equal(59, ctx.InvestmentReadiness.ReadinessScore);
     }
 }

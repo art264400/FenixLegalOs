@@ -28,6 +28,21 @@ public class CompactSharedProjectContextDto
     [JsonPropertyName("fundraising")]
     public string Fundraising { get; set; } = string.Empty;
 
+    [JsonPropertyName("investmentTiming")]
+    public string? InvestmentTiming { get; set; }
+
+    [JsonPropertyName("newRoundPlanned")]
+    public bool NewRoundPlanned { get; set; }
+
+    [JsonPropertyName("newRoundPossible")]
+    public bool NewRoundPossible { get; set; }
+
+    [JsonPropertyName("hasPriorInvestment")]
+    public bool HasPriorInvestment { get; set; }
+
+    [JsonPropertyName("priorInvestmentStatus")]
+    public string? PriorInvestmentStatus { get; set; }
+
     [JsonPropertyName("overallScore")]
     public int OverallScore { get; set; }
 
@@ -215,6 +230,21 @@ public class TopActionExecutiveSummaryDto
 
 public class CompactInvestmentReadinessDto
 {
+    [JsonPropertyName("investmentTiming")]
+    public string? InvestmentTiming { get; set; }
+
+    [JsonPropertyName("newRoundPlanned")]
+    public bool NewRoundPlanned { get; set; }
+
+    [JsonPropertyName("newRoundPossible")]
+    public bool NewRoundPossible { get; set; }
+
+    [JsonPropertyName("hasPriorInvestment")]
+    public bool HasPriorInvestment { get; set; }
+
+    [JsonPropertyName("priorInvestmentStatus")]
+    public string? PriorInvestmentStatus { get; set; }
+
     [JsonPropertyName("isApplicable")]
     public bool IsApplicable { get; set; }
 
@@ -256,6 +286,21 @@ public class CompactProjectProfileExecutiveDto
 
     [JsonPropertyName("fundraising")]
     public string Fundraising { get; set; } = string.Empty;
+
+    [JsonPropertyName("investmentTiming")]
+    public string? InvestmentTiming { get; set; }
+
+    [JsonPropertyName("newRoundPlanned")]
+    public bool NewRoundPlanned { get; set; }
+
+    [JsonPropertyName("newRoundPossible")]
+    public bool NewRoundPossible { get; set; }
+
+    [JsonPropertyName("hasPriorInvestment")]
+    public bool HasPriorInvestment { get; set; }
+
+    [JsonPropertyName("priorInvestmentStatus")]
+    public string? PriorInvestmentStatus { get; set; }
 }
 
 public class ExecutiveSynthesisRequestDto

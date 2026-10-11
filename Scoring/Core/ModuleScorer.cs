@@ -16,7 +16,7 @@ public class ModuleScorer
             "product" => true,
             "data" => GetBoolFact(f, "data.personalDataProcessed") || GetBoolFact(f, "ai.used") || f.GetValueOrDefault("data.userInfoDeclared")?.ToString() == "unknown" || f.GetValueOrDefault("ai.used")?.ToString() == "unknown",
             "contracts" => GetBoolFact(f, "contracts.b2bRelevant"),
-            "investment" => (string?)f.GetValueOrDefault("investment.timing") != "none" || GetBoolFact(f, "investment.priorInvestment") || f.GetValueOrDefault("investment.priorInvestment")?.ToString() == "unknown",
+            "investment" => (f.GetValueOrDefault("investment.timing") is string investmentTiming && investmentTiming != "none") || GetBoolFact(f, "investment.priorInvestment") || f.GetValueOrDefault("investment.priorInvestment")?.ToString() == "unknown",
             _ => sectionQs.Count > 0
         };
     }

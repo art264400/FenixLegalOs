@@ -77,12 +77,24 @@ public static class ProjectProfileExtractor
         var stageVal = stage switch
         {
             "idea" => "Идея",
-            "prototype" => "Прототип",
-            "mvp" => "MVP (первые пользователи)",
-            "commercial" or "scaling" => "Коммерческий запуск",
-            _ => "Прототип / MVP"
+            "prototype" => "Прототип / тестовая версия",
+            "live_or_ready" or "ready" => "Готовый продукт",
+            "multiple_products" or "multiple" => "Несколько продуктов",
+            _ => "Не указано"
         };
-        keyFacts.Add(new FactItemDto { Key = "stage", Label = "Стадия продукта", Value = stageVal, Icon = "rocket" });
+        keyFacts.Add(new FactItemDto { Key = "stage", Label = "Состояние продукта", Value = stageVal, Icon = "rocket" });
+
+        var userStage = GetStringVal(facts, "product.userStage");
+        var noLiveUsers = userStage == "prelaunch"
+            || (facts.Facts.TryGetValue("product.liveUsers", out var liveUsers) && liveUsers is false);
+        var usageVal = noLiveUsers ? "Пользователей пока нет" : userStage switch
+        {
+            "first_users" or "first" => "Есть первые пользователи",
+            "regular" => "Есть постоянные пользователи",
+            "large" => "Используется большим количеством пользователей",
+            _ => "Не указано"
+        };
+        keyFacts.Add(new FactItemDto { Key = "usage", Label = "Использование продукта", Value = usageVal, Icon = "user_check" });
 
         var ipCreatorsList = GetListVal(facts, "ip.creators");
         string creatorsVal;
@@ -152,29 +164,36 @@ public static class ProjectProfileExtractor
         // 4. Team, Audience & Investment
         var userTypes = GetListVal(facts, "product.userTypes");
         var users = GetStringVal(facts, "product.targetAudience");
-        var noLiveUsers = facts.Facts.TryGetValue("product.liveUsers", out var liveUsers) && liveUsers is false;
         var userOptions = Data.DataBank.Questions.FirstOrDefault(q => q.Id == "PROD-02")?.Options;
-        var usersVal = userTypes.Count > 0
-            ? string.Join(", ", userTypes.Select(type => userOptions?.FirstOrDefault(option => option.Id == type)?.Label ?? "Другая категория"))
-            : noLiveUsers ? "Пользователей пока нет"
+        var usersVal = noLiveUsers ? "Пользователей пока нет"
+            : userTypes.Count > 0
+            ? string.Join(", ", userTypes.Select(type => userOptions?.FirstOrDefault(option => option.Id == type)?.Label ?? "Не указано").Distinct())
             : users switch
             {
                 "b2b" => "B2B-клиенты",
                 "b2c" => "Физические лица (B2C)",
                 "both" => "B2B и B2C",
-                _ => "Не указана"
+                _ => "Не указано"
             };
         keyFacts.Add(new FactItemDto { Key = "users", Label = "Пользователи", Value = usersVal, Icon = "user_check" });
+        var productDescription = $"Продукт: {stageVal}. Использование: {usageVal}.";
+        var productBlock = $"Продукт: {stageVal}.\nИспользование: {usageVal}.";
+        if (!noLiveUsers)
+        {
+            productDescription += $" Аудитория: {usersVal}.";
+            productBlock += $"\nАудитория: {usersVal}.";
+        }
         var invTiming = GetStringVal(facts, "investment.timing");
         var invVal = invTiming switch
         {
-            "terms_received" => "Получен Term Sheet",
-            "specific_investor" => "Переговоры с инвестором",
-            "active_search" => "Активный поиск раунда",
-            "3_6m" => "Раунд в течение 3–6 месяцев",
-            "6_12m" or "within_12m" => "Раунд в течение года",
-            "none" => "Привлечение не планируется",
-            _ => "Не указаны"
+            "terms_received" => "Уже получили предложение с условиями сделки",
+            "specific_investor" => "Уже обсуждаем условия с конкретным инвестором",
+            "active_search" => "Уже ищем инвесторов",
+            "3_6m" => "Планируем в ближайшие 3–6 месяцев",
+            "6_12m" => "Планируем в ближайшие 6–12 месяцев",
+            "within_12m" => "Возможно в течение ближайшего года",
+            "none" => "Нет, пока не планируем",
+            _ => "Не указано"
         };
         keyFacts.Add(new FactItemDto { Key = "investment", Label = "Инвестиции", Value = invVal, Icon = "coins" });
 
@@ -184,7 +203,7 @@ public static class ProjectProfileExtractor
             ? " Юрисдикция проекта не указана."
             : $" в юрисдикции {jurVal}.";
         var p1 = isUnincorporated
-            ? $"{name} находится на ранней стадии и работает без зарегистрированного юридического лица.{jurisdictionSuffix}"
+            ? $"{name} работает без зарегистрированного юридического лица.{jurisdictionSuffix}"
             : isInProcess
             ? $"{name} находится в процессе регистрации юридического лица.{jurisdictionSuffix}"
             : isGroup && !string.IsNullOrEmpty(structureNarrative)
@@ -201,7 +220,7 @@ public static class ProjectProfileExtractor
             ? rightsVal.Substring(5).Trim() 
             : rightsVal;
 
-        var p3 = $"Разработка продукта ({stageVal}) ведется с участием: {creatorsVal}. При этом права на созданные результаты {rightsDesc.ToLowerInvariant()}.";
+        var p3 = $"{productDescription} Создатели продукта: {creatorsVal}. При этом права на созданные результаты {rightsDesc.ToLowerInvariant()}.";
 
         var narrative = $"{p1} {p2} {p3}";
 
@@ -211,7 +230,7 @@ public static class ProjectProfileExtractor
             {
                 new() { Label = "Компания и юрисдикция", Value = $"Название: {name}. Юридическое лицо: {(string.IsNullOrEmpty(entityStatus) ? "не указано" : entityVal)}. Юрисдикции: {jurVal}.{(isGroup && !string.IsNullOrEmpty(structureNarrative) ? " " + structureNarrative : "")}" },
                 new() { Label = "Основатели и управление", Value = $"Состав: {fVal}. Распределение долей: {eqVal}." },
-                new() { Label = "Продукт и стадия", Value = $"Стадия: {(string.IsNullOrEmpty(stage) ? "не указана" : stageVal)}. Аудитория: {usersVal}." },
+                new() { Label = "Продукт и стадия", Value = productBlock },
                 new() { Label = "Команда и права на разработки", Value = $"Создатели продукта: {(ipCreatorsList.Count == 0 ? "не указаны" : creatorsVal)}. Права на результаты: {(string.IsNullOrEmpty(ipRights) ? "сведения не указаны" : rightsVal)}." },
                 new() { Label = "Данные и ИИ", Value = $"Персональные данные: {DescribeFlag(facts, "data.personalDataProcessed", "обрабатываются", "не обрабатываются по ответам анкеты")}. ИИ: {DescribeFlag(facts, "ai.used", "используется", "не используется")}." },
                 new() { Label = "Договоры и инвестиции", Value = $"B2B-отношения: {DescribeFlag(facts, "contracts.b2bRelevant", "присутствуют", "не заявлены")}. Инвестиционные планы: {(string.IsNullOrEmpty(invTiming) ? "не указаны" : invVal)}." }

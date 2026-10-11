@@ -12,7 +12,7 @@ public class ReportContext
     public string ReportNumber { get; set; } = string.Empty;
     public string GeneratedDate { get; set; } = DateTime.UtcNow.ToString("dd MMMM yyyy", new System.Globalization.CultureInfo("ru-RU"));
     public string ProjectName { get; set; } = "Стартап";
-    public string ProjectStage { get; set; } = "Ранняя стадия";
+    public string ProjectStage { get; set; } = "Не указано";
 
     public ProjectProfileDto Profile { get; set; } = new();
     public OverallScoreDto Overall { get; set; } = new();
@@ -180,6 +180,12 @@ public class NotApplicableModuleDto
 public class InvestmentReadinessReportDto
 {
     public bool IsApplicable { get; set; }
+    public string? InvestmentTiming { get; set; }
+    public string? PriorInvestmentStatus { get; set; }
+    public bool NewRoundPlanned { get; set; }
+    public bool NewRoundPossible { get; set; }
+    public bool RoundIsCloseOrActive { get; set; }
+    public bool HasPriorInvestment { get; set; }
     public int ReadinessScore { get; set; }
     public string Category { get; set; } = string.Empty;
     public int BaseScore { get; set; }

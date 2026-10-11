@@ -19,6 +19,8 @@ public static class UnifiedActionPlanBuilder
         if (facts.Facts.TryGetValue("company.entityStatus", out var esObj) && esObj != null)
             entityStatus = esObj.ToString() ?? "";
         bool isUnincorporated = entityStatus is "not_incorporated" or "none" or "no_entity" or "";
+        var investmentTiming = facts.Facts.TryGetValue("investment.timing", out var timing) ? timing?.ToString() : null;
+        var newRoundPlanned = investmentTiming is "6_12m" or "3_6m" or "active_search" or "specific_investor" or "terms_received";
 
         // 1. Map each finding to a canonical ActionDefinition from ActionLibrary
         var findingActionPairs = findings
@@ -136,7 +138,7 @@ public static class UnifiedActionPlanBuilder
 
             var coveredCodes = item.CoveredFindings.Select(f => f.Code).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
-            actionList.Add(new UnifiedActionItemDto
+            var action = new UnifiedActionItemDto
             {
                 Number = counter++,
                 ActionId = def.ActionId,
@@ -151,7 +153,9 @@ public static class UnifiedActionPlanBuilder
                 ResolutionFormat = resolutionLabel,
                 Dependencies = def.Dependencies.ToList(),
                 CoveredFindingCodes = coveredCodes
-            });
+            };
+            InvestmentNarrativePresentation.ApplyToAction(action, newRoundPlanned);
+            actionList.Add(action);
         }
 
         return actionList;

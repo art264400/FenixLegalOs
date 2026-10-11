@@ -12,7 +12,8 @@ public static class FenixLawRecommendationEvaluator
     public static FenixLawRecommendationReportDto EvaluateRecommendation(
         List<RiskFinding> findings, 
         ScoreResult result,
-        List<UnifiedActionItemDto>? actionPlan = null)
+        List<UnifiedActionItemDto>? actionPlan = null,
+        InvestmentReadinessReportDto? investmentContext = null)
     {
         // 1. Determine legal work requirement from ActionPlan (or findings fallback)
         List<UnifiedActionItemDto> legalActions;
@@ -120,8 +121,12 @@ public static class FenixLawRecommendationEvaluator
             }
             else if (secId.Equals("investment", StringComparison.OrdinalIgnoreCase))
             {
-                cardTitle = "Подготовка к инвестициям (Data Room & DD)";
-                cardDesc = "Устранение блокеров раунда, проверка инвестиционной истории, подготовка Term Sheet и юридического пакета для инвесторов.";
+                cardTitle = investmentContext?.NewRoundPlanned == true
+                    ? "Подготовка к инвестициям (Data Room & DD)"
+                    : "Инвестиционная история и обязательства";
+                cardDesc = investmentContext?.NewRoundPlanned == true
+                    ? "Устранение блокеров раунда, проверка инвестиционной истории, подготовка Term Sheet и юридического пакета для инвесторов."
+                    : "Проверка ранее полученных инвестиций, прав инвесторов и отражения обязательств в структуре капитала.";
                 cardIcon = "coins";
             }
             else // founders, corporate, or fallback

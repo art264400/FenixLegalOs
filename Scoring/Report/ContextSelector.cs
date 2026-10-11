@@ -12,13 +12,17 @@ public static class ContextSelector
         string GetFact(string key) =>
             facts.FirstOrDefault(f => string.Equals(f.Key, key, StringComparison.OrdinalIgnoreCase))?.Value ?? string.Empty;
 
-        var fundraisingVal = GetFact("invest_readiness");
-        if (string.IsNullOrWhiteSpace(fundraisingVal) && ctx.InvestmentReadiness != null)
-        {
-            fundraisingVal = ctx.InvestmentReadiness.IsApplicable
-                ? $"{ctx.InvestmentReadiness.Category} (базовый скор: {ctx.InvestmentReadiness.BaseScore})"
-                : "Не применимо к текущей стадии";
-        }
+        var productState = GetFact("stage");
+        var productUsage = GetFact("usage");
+        var productContext = string.IsNullOrWhiteSpace(productUsage)
+            ? productState
+            : $"{productState}. Использование: {productUsage}.";
+
+        // Applicability can come from old investor obligations; it does not imply a new round.
+        var fundraisingVal = GetFact("investment");
+        if (string.IsNullOrWhiteSpace(fundraisingVal))
+            fundraisingVal = "Не указано";
+        var investment = ctx.InvestmentReadiness;
 
         return new CompactSharedProjectContextDto
         {
@@ -26,13 +30,38 @@ public static class ContextSelector
             EntityStatus = GetFact("entity"),
             Founders = GetFact("founders"),
             Ownership = GetFact("equity"),
-            ProductStage = GetFact("stage"),
+            ProductStage = productContext,
             ProductCreators = GetFact("creators"),
             Users = GetFact("users"),
             Fundraising = fundraisingVal,
+            InvestmentTiming = investment?.InvestmentTiming,
+            NewRoundPlanned = investment?.NewRoundPlanned ?? false,
+            NewRoundPossible = investment?.NewRoundPossible ?? false,
+            HasPriorInvestment = investment?.HasPriorInvestment ?? false,
+            PriorInvestmentStatus = investment?.PriorInvestmentStatus,
             OverallScore = ctx.Overall?.Score ?? 0,
             OverallBand = ctx.Overall?.Band ?? string.Empty,
             OverallConfidence = ctx.Overall?.Confidence ?? 0
+        };
+    }
+
+    public static CompactInvestmentReadinessDto? ExtractCompactInvestmentReadiness(ReportContext ctx)
+    {
+        var investment = ctx.InvestmentReadiness;
+        if (investment?.IsApplicable != true) return null;
+
+        return new CompactInvestmentReadinessDto
+        {
+            IsApplicable = true,
+            InvestmentTiming = investment.InvestmentTiming,
+            NewRoundPlanned = investment.NewRoundPlanned,
+            NewRoundPossible = investment.NewRoundPossible,
+            HasPriorInvestment = investment.HasPriorInvestment,
+            PriorInvestmentStatus = investment.PriorInvestmentStatus,
+            ReadinessScore = investment.ReadinessScore,
+            Category = investment.Category,
+            UnresolvedBlockersCount = investment.UnresolvedBlockersCount,
+            BlockerTitles = investment.BlockerTitles.Take(3).ToList()
         };
     }
 
@@ -58,7 +87,9 @@ public static class ContextSelector
                 }
 
                 // Signal 2: Investment blocker relevance
-                if (ctx.InvestmentReadiness?.CrossModuleBlockers.Any(b => b.SectionId.Equals("ip", StringComparison.OrdinalIgnoreCase)) == true)
+                if (ctx.InvestmentReadiness?.NewRoundPlanned == true &&
+                    ctx.InvestmentReadiness.RoundIsCloseOrActive &&
+                    ctx.InvestmentReadiness.CrossModuleBlockers.Any(b => b.SectionId.Equals("ip", StringComparison.OrdinalIgnoreCase)))
                 {
                     signals.Add("Инвестиции: выявленные дефекты оформления прав на продукт квалифицированы как прямой блокер Due Diligence.");
                 }
@@ -97,9 +128,11 @@ public static class ContextSelector
                 // Signal 1: Product user flow and stage
                 var usersFact = ctx.Profile?.KeyFacts.FirstOrDefault(f => f.Key == "users")?.Value ?? string.Empty;
                 var stageFact = ctx.Profile?.KeyFacts.FirstOrDefault(f => f.Key == "stage")?.Value ?? string.Empty;
+                var usageFact = ctx.Profile?.KeyFacts.FirstOrDefault(f => f.Key == "usage")?.Value ?? string.Empty;
+                var usageContext = string.IsNullOrWhiteSpace(usageFact) ? string.Empty : $" Использование: {usageFact}.";
                 if (!string.IsNullOrWhiteSpace(usersFact))
                 {
-                    signals.Add($"Продукт: пользовательский контур — {usersFact} (стадия: {stageFact}).");
+                    signals.Add($"Продукт: пользовательский контур — {usersFact} (состояние продукта: {stageFact}).{usageContext}");
                 }
                 break;
 
@@ -116,7 +149,9 @@ public static class ContextSelector
 
             case "investment":
                 // Material cross-module DD blockers
-                if (ctx.InvestmentReadiness?.CrossModuleBlockers != null && ctx.InvestmentReadiness.CrossModuleBlockers.Count > 0)
+                if (ctx.InvestmentReadiness?.NewRoundPlanned == true &&
+                    ctx.InvestmentReadiness.RoundIsCloseOrActive &&
+                    ctx.InvestmentReadiness.CrossModuleBlockers.Count > 0)
                 {
                     foreach (var blocker in ctx.InvestmentReadiness.CrossModuleBlockers.Take(3))
                     {

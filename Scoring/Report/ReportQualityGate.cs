@@ -217,9 +217,70 @@ public static class ReportQualityGate
     private static readonly Regex InventedDisputeMotiveRegex = new(@"(конфликт[а-я]*.*из-за\s+(денег|невыплат[а-я]*|гонорар[а-я]*)|спор[а-я]*\s+из-за\s+оплат[а-я]*)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex DefinitiveNegativeOnUnknownRegex = new(@"(точно\s+отсутствуют|достоверно\s+не\s+ведется|гарантированно\s+нет)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    // Reject consequences of an invented future round, without banning factual references
+    // to past investors or investments supplied as part of the product's business model.
+    private static readonly Regex FundraisingClaimRegex = new(
+        @"(\bраунд[а-яё]*\b|(?:привлеч[а-яё]*|привлек[а-яё]*)\s+(?:венчурн[а-яё]*\s+)?(?:инвестици[а-яё]*|инвестор[а-яё]*)|венчурн[а-яё]*\s+финансировани[а-яё]*|инвестиционн[а-яё]*\s+привлекательност[а-яё]*|привлекательност[а-яё]*\s+для\s+инвестор[а-яё]*|инвестиционн[а-яё]*\s+проверк[а-яё]*|(?:инвестор[а-яё]*[^.!?;]{0,70}(?:due\s+diligence|дью\s*дилидженс)|(?:due\s+diligence|дью\s*дилидженс)[^.!?;]{0,70}инвестор[а-яё]*)|блокер[а-яё]*\s+(?:due\s+diligence|дью\s*дилидженс))",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex NoRoundStatementRegex = new(
+        @"((?:раунд[а-яё]*|привлечени[а-яё]*\s+инвестици[а-яё]*)[^,;.!?]{0,35}не\s+(?:планир[а-яё]*|заявлен[а-яё]*|предусмотрен[а-яё]*)|не\s+планир[а-яё]*[^,;.!?]{0,35}(?:раунд[а-яё]*|привлек[а-яё]*\s+инвестици[а-яё]*)|не\s+(?:как\s+)?(?:начавш[а-яё]*|активн[а-яё]*|заявленн[а-яё]*)\s+(?:инвестиционн[а-яё]*\s+)?раунд[а-яё]*|не\s+предполагает[^;.!?]{0,80}привлечени[а-яё]*\s+инвестици[а-яё]*)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex PastRoundStatementRegex = new(
+        @"((?:прошл[а-яё]*|предыдущ[а-яё]*|состоявш[а-яё]*|ранее\s+закрыт[а-яё]*)\s+(?:инвестиционн[а-яё]*\s+)?раунд[а-яё]*|раунд[а-яё]*[^,;.!?]{0,20}ранее\s+(?:закрыт[а-яё]*|завершен[а-яё]*))",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex PastInvestmentCheckRegex = new(
+        @"((?:прошл[а-яё]*|предыдущ[а-яё]*|ранее\s+проведенн[а-яё]*)\s+инвестиционн[а-яё]*\s+проверк[а-яё]*|инвестиционн[а-яё]*\s+проверк[а-яё]*[^,;.!?]{0,20}ранее\s+(?:проведен[а-яё]*|завершен[а-яё]*))",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex PastFundraisingStatementRegex = new(
+        @"(?:ранее|в\s+прошлом|уже)\s+(?:(?:были|было|компанией)\s+)?(?:привлек(?:ла|ли)?|привлечен[а-яё]*)\s+(?:венчурн[а-яё]*\s+)?инвестици[а-яё]*",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex PossibleRoundStatementRegex = new(
+        @"(?:возможн[а-яё]*|потенциальн[а-яё]*)\s+(?:будущ[а-яё]*\s+)?(?:инвестиционн[а-яё]*\s+)?раунд[а-яё]*",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex ConditionalFundraisingPrefixRegex = new(
+        @"^\s*(?:если\s+(?:компания|проект|команда|бизнес|основатели)\s+(?:(?:решит|решат|будет|будут|планирует|планируют)\s+)?(?:привлечь|привлекать|привлекает|привлекают|привлечет|привлекут)\s+(?:венчурн[а-яё]*\s+)?инвестици[а-яё]*|если\s+(?:появятся|возникнут)\s+планы\s+(?:привлечь|привлекать)\s+инвестици[а-яё]*|в\s+случае\s+(?:решения\s+(?:привлечь|привлекать)|будущ[а-яё]*\s+привлечени[а-яё]*)\s+инвестици[а-яё]*|при\s+(?:будущ[а-яё]*|возможн[а-яё]*)\s+(?:привлечени[а-яё]*\s+инвестици[а-яё]*|(?:инвестиционн[а-яё]*\s+)?раунд[а-яё]*))",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex IndependentClauseBoundaryRegex = new(
+        @";|\s*[,—–]\s*(?:но|однако|а\s+(?:сейчас|также)|тем\s+временем|при\s+этом)\b|\b(?:но|однако)\b",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static bool IsCoveredBy(Match claim, Regex allowedStatement, string sentence) =>
+        allowedStatement.Matches(sentence).Cast<Match>()
+            .Any(statement => statement.Index <= claim.Index &&
+                              statement.Index + statement.Length >= claim.Index + claim.Length);
+
+    private static bool IsConditionalFundraisingClaim(Match claim, string sentence)
+    {
+        // A fundraising condition can govern its consequences, but not an independent
+        // assertion after "но", "однако" or a semicolon. An unrelated "если" is no basis.
+        var boundary = IndependentClauseBoundaryRegex.Match(sentence);
+        var scopeEnd = boundary.Success ? boundary.Index : sentence.Length;
+        return claim.Index + claim.Length <= scopeEnd &&
+               ConditionalFundraisingPrefixRegex.IsMatch(sentence[..scopeEnd]);
+    }
+
     public static bool IsFactuallyGrounded(string? text, ReportContext ctx)
     {
         if (string.IsNullOrWhiteSpace(text)) return true;
+
+        if (ctx.InvestmentReadiness?.NewRoundPlanned != true)
+        {
+            foreach (var sentence in Regex.Split(text, @"[.!?\n]+"))
+            {
+                foreach (Match claim in FundraisingClaimRegex.Matches(sentence))
+                {
+                    if (IsCoveredBy(claim, NoRoundStatementRegex, sentence)) continue;
+                    if (ctx.InvestmentReadiness?.HasPriorInvestment == true &&
+                        (IsCoveredBy(claim, PastRoundStatementRegex, sentence) ||
+                         IsCoveredBy(claim, PastInvestmentCheckRegex, sentence) ||
+                         IsCoveredBy(claim, PastFundraisingStatementRegex, sentence))) continue;
+                    if (ctx.InvestmentReadiness?.NewRoundPossible == true &&
+                        (IsCoveredBy(claim, PossibleRoundStatementRegex, sentence) ||
+                         IsConditionalFundraisingClaim(claim, sentence))) continue;
+                    return false;
+                }
+            }
+        }
 
         // 1. Invented departure
         if (InventedDepartureRegex.IsMatch(text))

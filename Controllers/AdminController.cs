@@ -717,7 +717,12 @@ public class AdminController : ControllerBase
                 ProductStage = sharedContext.ProductStage,
                 ProductCreators = sharedContext.ProductCreators,
                 Users = sharedContext.Users,
-                Fundraising = sharedContext.Fundraising
+                Fundraising = sharedContext.Fundraising,
+                InvestmentTiming = sharedContext.InvestmentTiming,
+                NewRoundPlanned = sharedContext.NewRoundPlanned,
+                NewRoundPossible = sharedContext.NewRoundPossible,
+                HasPriorInvestment = sharedContext.HasPriorInvestment,
+                PriorInvestmentStatus = sharedContext.PriorInvestmentStatus
             },
             OverallScore = reportCtx.Overall?.Score ?? 0,
             OverallBand = reportCtx.Overall?.Band ?? string.Empty,
@@ -747,14 +752,7 @@ public class AdminController : ControllerBase
             }).ToList(),
             TopActions = reportCtx.ActionPlan.Take(3).Select(a => a.Title).ToList(),
             PositiveFactors = reportCtx.PositiveFactors.Take(3).Select(p => p.Title).ToList(),
-            InvestmentReadiness = reportCtx.InvestmentReadiness != null ? new FenixLegalOs.Models.Report.CompactInvestmentReadinessDto
-            {
-                IsApplicable = reportCtx.InvestmentReadiness.IsApplicable,
-                ReadinessScore = reportCtx.InvestmentReadiness.ReadinessScore,
-                Category = reportCtx.InvestmentReadiness.Category,
-                UnresolvedBlockersCount = reportCtx.InvestmentReadiness.UnresolvedBlockersCount,
-                BlockerTitles = reportCtx.InvestmentReadiness.BlockerTitles.Take(3).ToList()
-            } : null,
+            InvestmentReadiness = FenixLegalOs.Scoring.Report.ContextSelector.ExtractCompactInvestmentReadiness(reportCtx),
             RequiresLegalWork = reportCtx.FenixLaw?.RequiresLegalWork ?? false,
             FenixLawServiceAreas = reportCtx.FenixLaw?.ServiceAreas ?? new List<string>()
         };

@@ -101,7 +101,9 @@ public class ReportEngineTests
             new() { Code = "INVEST_DATA_ROOM_MISSING", Title = "Подготовить Data Room", Priority = RiskPriority.BeforeRound, Severity = RiskSeverity.High, Recommendation = "Собрать документы" }
         };
 
-        var actions = UnifiedActionPlanBuilder.BuildUnifiedActionPlan(findings, new SharedFactStore());
+        var facts = new SharedFactStore();
+        facts.Facts["investment.timing"] = "3_6m";
+        var actions = UnifiedActionPlanBuilder.BuildUnifiedActionPlan(findings, facts);
 
         Assert.Equal(3, actions.Count);
         Assert.Equal("В ПЕРВУЮ ОЧЕРЕДЬ", actions[0].PriorityGroup);
@@ -363,7 +365,7 @@ public class ReportEngineTests
 
         Assert.Equal("Проект", ctx.ProjectName);
         Assert.NotEqual("live_or_ready", ctx.ProjectStage);
-        Assert.Contains("MVP", ctx.ProjectStage);
+        Assert.Equal("Готовый продукт", ctx.ProjectStage);
     }
 
     [Fact]
@@ -423,7 +425,7 @@ public class ReportEngineTests
         Assert.DoesNotContain("взаимной блокировки", corpAction.WhyNow, StringComparison.OrdinalIgnoreCase);
 
         // Founders must receive deadlock/equity rationale
-        Assert.Contains("блокировки", fndAction.WhyNow, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("блокир", fndAction.WhyNow, StringComparison.OrdinalIgnoreCase);
 
         // Product must receive user rules rationale, NOT data/AI processing
         Assert.Contains("пользовател", prodAction.WhyNow, StringComparison.OrdinalIgnoreCase);

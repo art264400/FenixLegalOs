@@ -269,7 +269,12 @@ public class AiReportService
                         ProductStage = sharedContext.ProductStage,
                         ProductCreators = sharedContext.ProductCreators,
                         Users = sharedContext.Users,
-                        Fundraising = sharedContext.Fundraising
+                        Fundraising = sharedContext.Fundraising,
+                        InvestmentTiming = sharedContext.InvestmentTiming,
+                        NewRoundPlanned = sharedContext.NewRoundPlanned,
+                        NewRoundPossible = sharedContext.NewRoundPossible,
+                        HasPriorInvestment = sharedContext.HasPriorInvestment,
+                        PriorInvestmentStatus = sharedContext.PriorInvestmentStatus
                     },
                     OverallScore = context.Overall?.Score ?? 0,
                     OverallBand = context.Overall?.Band ?? string.Empty,
@@ -292,14 +297,7 @@ public class AiReportService
                     ModuleSummaries = moduleSummariesForExecutive,
                     TopActions = context.ActionPlan.Take(3).Select(a => a.Title).ToList(),
                     PositiveFactors = context.PositiveFactors.Take(3).Select(p => p.Title).ToList(),
-                    InvestmentReadiness = context.InvestmentReadiness != null ? new CompactInvestmentReadinessDto
-                    {
-                        IsApplicable = context.InvestmentReadiness.IsApplicable,
-                        ReadinessScore = context.InvestmentReadiness.ReadinessScore,
-                        Category = context.InvestmentReadiness.Category,
-                        UnresolvedBlockersCount = context.InvestmentReadiness.UnresolvedBlockersCount,
-                        BlockerTitles = context.InvestmentReadiness.BlockerTitles.Take(3).ToList()
-                    } : null,
+                    InvestmentReadiness = ContextSelector.ExtractCompactInvestmentReadiness(context),
                     RequiresLegalWork = context.FenixLaw?.RequiresLegalWork ?? false,
                     FenixLawServiceAreas = context.FenixLaw?.ServiceAreas ?? new List<string>()
                 };
