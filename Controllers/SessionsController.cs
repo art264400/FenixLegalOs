@@ -160,7 +160,9 @@ public class SessionsController : ControllerBase
         {
             answers = answersDict,
             currentQuestionId,
-            lastSectionId = session.LastSectionId
+            lastSectionId = session.LastSectionId,
+            reportRevisionId = session.ReportRevisionId,
+            reportRevisionNumber = session.ReportRevisionNumber
         });
     }
 
@@ -203,7 +205,9 @@ public class SessionsController : ControllerBase
         {
             result = clientResult,
             preview = !paid,
-            paid
+            paid,
+            reportRevisionId = session.ReportRevisionId,
+            reportRevisionNumber = session.ReportRevisionNumber
         });
     }
 
@@ -250,38 +254,46 @@ public class SessionsController : ControllerBase
             paid,
             paidAt = session.PaidAt,
             paymentAmount = session.PaymentAmount,
+            reportRevisionId = session.ReportRevisionId,
+            reportRevisionNumber = session.ReportRevisionNumber,
             paymentMethod = session.PaymentMethod
         });
     }
 
     [HttpGet("{id}/pdf")]
     [RequireSessionAccess(requirePayment: true)]
-    public async Task<IActionResult> DownloadPdf(string id)
+    public async Task<IActionResult> DownloadPdf(string id, [FromQuery] string? revisionId = null)
     {
         var session = HttpContext?.Items["DiagnosticSession"] as DiagnosticSession ?? _sessions.GetSession(id);
         if (session == null || string.IsNullOrEmpty(session.ResultJson))
             return NotFound(new { error = "not_found" });
 
+        if (revisionId != null && revisionId != (session.ReportRevisionId ?? "original"))
+            return Conflict(new { error = "report_revision_changed", message = "Опубликована новая редакция отчёта. Обновите результат." });
+
+
+        string generationKey = session.ReportRevisionId == null ? id : $"{id}_{session.ReportRevisionId}";
+
         // 1. Check in-memory cache
         var cache = HttpContext?.RequestServices?.GetService<Microsoft.Extensions.Caching.Memory.IMemoryCache>();
-        string cacheKey = $"pdf_report_{id}";
+        string cacheKey = $"pdf_report_{generationKey}";
         if (cache != null && cache.TryGetValue(cacheKey, out byte[]? cachedBytes) && cachedBytes != null && cachedBytes.Length > 0)
         {
-            return File(cachedBytes, "application/pdf", $"Fenix_SLS_Report_{id}.pdf");
+            return ServePdf(session, cachedBytes);
         }
 
         // 2. Check if already persisted in database
         if (session.PdfBytes != null && session.PdfBytes.Length > 0)
         {
-            cache?.Set(cacheKey, session.PdfBytes, TimeSpan.FromHours(2));
-            return File(session.PdfBytes, "application/pdf", $"Fenix_SLS_Report_{id}.pdf");
+
+            return ServePdf(session, session.PdfBytes);
         }
 
         var existingPdf = _sessions.GetPdf(id);
         if (existingPdf != null && existingPdf.Length > 0)
         {
-            cache?.Set(cacheKey, existingPdf, TimeSpan.FromHours(2));
-            return File(existingPdf, "application/pdf", $"Fenix_SLS_Report_{id}.pdf");
+
+            return ServePdf(session, existingPdf);
         }
 
         // 3. Resolve result and context: require stored immutable diagnostic result!
@@ -317,7 +329,7 @@ public class SessionsController : ControllerBase
             ? JsonSerializer.Deserialize<Dictionary<string, object>>(session.AnswersJson) ?? new()
             : new();
 
-        var facts = FenixLegalOs.Scoring.Core.FactNormalizer.NormalizeFacts(answersDict);
+        var (_, effectiveAnswers, facts) = ScoringEngine.ResolveEffectiveState(_questionRepo.GetQuestions(), answersDict);
         var lead = _leads.FindLeadsBySession(id).FirstOrDefault();
         string? leadCompany = lead?.Company as string;
         if (string.IsNullOrWhiteSpace(leadCompany) && !string.IsNullOrWhiteSpace(session.UserId) && _users != null)
@@ -341,7 +353,7 @@ public class SessionsController : ControllerBase
 
         lock (_pdfGenerationTasks)
         {
-            if (_pdfGenerationTasks.TryGetValue(id, out var inFlightTask))
+            if (_pdfGenerationTasks.TryGetValue(generationKey, out var inFlightTask))
             {
                 generationTask = inFlightTask;
             }
@@ -376,7 +388,7 @@ public class SessionsController : ControllerBase
                     var canonicalDb = _sessions.GetPdf(id);
                     return canonicalDb;
                 });
-                _pdfGenerationTasks[id] = generationTask;
+                _pdfGenerationTasks[generationKey] = generationTask;
             }
         }
 
@@ -391,12 +403,18 @@ public class SessionsController : ControllerBase
             {
                 lock (_pdfGenerationTasks)
                 {
-                    _pdfGenerationTasks.TryRemove(id, out _);
+                    _pdfGenerationTasks.TryRemove(generationKey, out _);
                 }
             }
         }
 
-        var finalPdf = _sessions.GetPdf(id) ?? pdfBytes;
+        var finalSession = _sessions.GetSession(id);
+        if (revisionId != null && revisionId != (finalSession?.ReportRevisionId ?? "original"))
+            return Conflict(new { error = "report_revision_changed", message = "Опубликована новая редакция отчёта. Обновите результат." });
+        var finalPdf = finalSession?.PdfBytes ?? _sessions.GetPdf(id) ?? pdfBytes;
+
+
+        cacheKey = finalSession?.ReportRevisionId == null ? $"pdf_report_{id}" : $"pdf_report_{id}_{finalSession.ReportRevisionId}";
         if (finalPdf == null || finalPdf.Length == 0)
         {
             return StatusCode(StatusCodes.Status500InternalServerError, new
@@ -406,8 +424,29 @@ public class SessionsController : ControllerBase
             });
         }
 
-        cache?.Set(cacheKey, finalPdf, TimeSpan.FromHours(2));
-        return File(finalPdf, "application/pdf", $"Fenix_SLS_Report_{id}.pdf");
+
+        return ServePdf(finalSession ?? session, finalPdf);
+
+        IActionResult ServePdf(DiagnosticSession captured, byte[] bytes)
+        {
+            // Publication may happen after the access filter or a cache/database read.
+            // Label and cache only the freshly observed canonical snapshot.
+            var current = _sessions.GetSession(id);
+            if (current == null) return NotFound(new { error = "not_found" });
+            if (revisionId != null && revisionId != (current.ReportRevisionId ?? "original"))
+                return Conflict(new { error = "report_revision_changed", message = "Опубликована новая редакция отчёта. Обновите результат." });
+            if (current.ReportRevisionId != captured.ReportRevisionId)
+            {
+                if (current.PdfBytes is not { Length: > 0 })
+                    return StatusCode(500, new { error = "pdf_persistence_failed" });
+                bytes = current.PdfBytes;
+            }
+            if (HttpContext != null) Response.Headers["X-Report-Revision-Id"] = current.ReportRevisionId ?? "original";
+            if (HttpContext != null) Response.Headers["X-Report-Revision-Number"] = current.ReportRevisionNumber.ToString();
+            var currentKey = current.ReportRevisionId == null ? $"pdf_report_{id}" : $"pdf_report_{id}_{current.ReportRevisionId}";
+            cache?.Set(currentKey, bytes, TimeSpan.FromHours(2));
+            return File(bytes, "application/pdf", $"Fenix_SLS_Report_{id}.pdf");
+        }
     }
 
     [HttpPost("{id}/ai-summary")]
@@ -422,11 +461,11 @@ public class SessionsController : ControllerBase
         if (result == null) return BadRequest(new { error = "invalid_result" });
 
         var answersDict = JsonSerializer.Deserialize<Dictionary<string, object>>(session.AnswersJson) ?? new();
-        var facts = FenixLegalOs.Scoring.Core.FactNormalizer.NormalizeFacts(answersDict);
+        var (_, effectiveAnswers, facts) = ScoringEngine.ResolveEffectiveState(_questionRepo.GetQuestions(), answersDict);
 
         var reportCtx = FenixLegalOs.Scoring.Report.ReportEngine.AssembleReportContext(result, facts, id, "Стартап");
         var narratives = await _aiReportService.GenerateReportNarrativesAsync(reportCtx);
 
-        return Ok(new { summary = narratives.ExecutiveConclusion, narratives });
+        return Ok(new { summary = narratives.ExecutiveConclusion, narratives, reportRevisionId = session.ReportRevisionId, reportRevisionNumber = session.ReportRevisionNumber });
     }
 }

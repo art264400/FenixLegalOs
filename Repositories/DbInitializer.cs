@@ -109,6 +109,31 @@ public class DbInitializer
             );
 
 
+            CREATE TABLE IF NOT EXISTS report_revisions (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE RESTRICT,
+                base_revision_id TEXT REFERENCES report_revisions(id),
+                number INTEGER NOT NULL,
+                version INTEGER NOT NULL DEFAULT 1,
+                status TEXT NOT NULL DEFAULT 'draft',
+                answers TEXT NOT NULL,
+                base_answers TEXT NOT NULL,
+                questions TEXT NOT NULL,
+                sections TEXT NOT NULL,
+                bank_fingerprint TEXT NOT NULL,
+                reason TEXT NOT NULL DEFAULT '',
+                created_by TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                published_at TEXT,
+                result TEXT,
+                pdf_bytes BLOB,
+                error TEXT,
+                UNIQUE(session_id, number)
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_report_revision_active_draft
+                ON report_revisions(session_id) WHERE status IN ('draft','generating','ready','failed');
+
             CREATE TABLE IF NOT EXISTS leads (
                 id TEXT PRIMARY KEY,
                 session_id TEXT NOT NULL,
@@ -343,6 +368,7 @@ public class DbInitializer
         TryAddColumn(conn, "sessions", "pdf_bytes", "BLOB");
         TryAddColumn(conn, "sessions", "pdf_generated_at", "TEXT");
         TryAddColumn(conn, "sessions", "current_question_id", "TEXT");
+        TryAddColumn(conn, "sessions", "published_revision_id", "TEXT");
 
         TryAddColumn(conn, "leads", "paid", "INTEGER NOT NULL DEFAULT 0");
 

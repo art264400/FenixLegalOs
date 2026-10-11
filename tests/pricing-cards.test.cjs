@@ -77,6 +77,7 @@ function harness(pricing = { priceKzt: 35000, consultationPriceKzt: 79000 }) {
       if (url === '/api/sessions/pricing') result = pricing;
       else if (url === '/api/stats/benchmark' || url === '/api/events') result = {};
       else if (url === '/api/sessions') result = { id: 'new-session' };
+      else if (url === '/api/payments/new-session/start') result = {};
       else throw new Error('Unexpected request: ' + url);
       return { ok: true, status: 200, json: async () => result };
     },
@@ -87,11 +88,12 @@ function harness(pricing = { priceKzt: 35000, consultationPriceKzt: 79000 }) {
   screenFullReport = () => {};
   globalThis.pricingTest = {
     screenLanding, screenResults, renderPricingCard, getSelectedPriceKzt,
-    authorize() { currentUser = { id: 'user-a', name: 'Founder', email: 'founder@example.test', termsAccepted: true }; },
+    authorize() { currentUser = { id: 'user-a', name: 'Founder', email: 'founder@example.test', phone: '+77001234567', termsAccepted: true }; },
     async completeAuth() { this.authorize(); pendingAuth(); },
     hasPendingAuth() { return Boolean(pendingAuth); },
     prepareResult() {
       state.sessionId = 'new-session';
+      lastResultSessionId = state.sessionId;
       lastResult = { overall: 70, risks: [], sections: [], actionPlan: [], strongAreas: [] };
       isPaid = false;
     },
@@ -134,9 +136,14 @@ test('configured prices match both pages and card payment modal follows the clic
   assert.ok(h.el('sticky-pay-btn').textContent.includes(money(79000)));
   h.el('btn-pay-card').emit('click');
   await flush();
-  assert.equal(h.elements.has('card-payment-overlay'), true);
-  assert.match(h.el('modal-root').innerHTML, /79[\s ]?000 ₸/);
-  assert.match(h.el('modal-root').innerHTML, /BCC/);
+  assert.equal(h.elements.has('payment-confirm-overlay'), true);
+  assert.equal(h.el('pay-phone').value, '+77001234567');
+  assert.equal(h.requests.some(request => request.url === '/api/payments/new-session/start'), false);
+  h.el('pay-address').value = 'Астана, ул. Абая, д. 10';
+  await h.el('payment-confirm-form').emit('submit', { preventDefault() {} });
+  const start = h.requests.find(request => request.url === '/api/payments/new-session/start');
+  assert.equal(start.body.tariff, 'consultation');
+  assert.equal(start.body.billingAddress, 'Астана, ул. Абая, д. 10');
   assert.equal(h.requests.some(request => request.url.endsWith('/pay')), false);
   assert.equal(h.requests.some(request => request.url === '/api/leads'), false);
 });

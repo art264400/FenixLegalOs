@@ -297,6 +297,11 @@ public class CorporateFactNormalizer : IFactNormalizer
         return role switch
         {
             "holding" => "холдинг",
+            "clients" => "работа с клиентами / заключение договоров",
+            "payments" => "получение платежей и выручки",
+            "ip_assets" => "владение продуктом или важными активами",
+            "hiring" => "найм команды и разработчиков",
+            "unknown" => "назначение не уточнено",
             "ip_holder" => "владение IP",
             "operating" => "операционная деятельность",
             "rnd" => "R&D / разработка",

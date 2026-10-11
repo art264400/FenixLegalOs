@@ -172,6 +172,9 @@ public class TypstPdfService
     {
         var sb = new StringBuilder();
         int secNum = 1;
+        // Full project name stays in the body; the running header has bounded height.
+        var headerCompany = !string.IsNullOrWhiteSpace(ctx.ProjectName) ? ctx.ProjectName : "Стартап";
+        if (headerCompany.Length > 70) headerCompany = headerCompany[..67] + "...";
 
         // 1. Global Document Setup & Premium Editorial Design System (Derived from FENIX SLS Presentation)
         sb.AppendLine(@"
@@ -179,26 +182,33 @@ public class TypstPdfService
 #set page(
   paper: ""a4"",
   fill: rgb(""#060A13""),
-  margin: (x: 1.4cm, top: 1.4cm, bottom: 1.4cm),
+  margin: (x: 1.4cm, top: 2.2cm, bottom: 1.6cm),
+  header-ascent: 6pt,
+  footer-descent: 6pt,
   header: context [
+    #set par(leading: 2pt)
     #grid(
-      columns: (auto, 1fr, auto),
-      align: (left + horizon, center + horizon, right + horizon),
+      columns: (1fr, 1fr),
+      column-gutter: 12pt,
+      align: (left + horizon, right + horizon),
       [
         #grid(
-          columns: (auto, auto),
+          columns: (auto, 1fr),
           gutter: 8pt,
           align: horizon,
           [#text(font: (""Georgia"", ""Times New Roman""), size: 9pt, fill: rgb(""#E5C07B""), weight: ""bold"")[FENIX SLS]],
           [#text(font: (""Segoe UI"", ""Arial""), size: 7.5pt, fill: rgb(""#64748B""), tracking: 1.2pt)[SMART LEGAL SCREENING]]
         )
       ],
-      [
-        #text(font: (""Segoe UI"", ""Arial""), size: 7.5pt, fill: rgb(""#94A3B8""))[Компания: ]#text(font: (""Segoe UI"", ""Arial""), size: 8pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[" + EscapeTypst(!string.IsNullOrWhiteSpace(ctx.ProjectName) ? ctx.ProjectName : "Стартап") + @"]
-      ],
-      [
-        #text(font: (""Segoe UI"", ""Arial""), size: 7.5pt, fill: rgb(""#94A3B8""))[Отчет: " + EscapeTypst(ctx.ReportNumber) + @"  ·  " + EscapeTypst(ctx.GeneratedDate) + @"  ·  " + EscapeTypst(ctx.ProjectStage) + @"]
-      ]
+      [#text(font: (""Segoe UI"", ""Arial""), size: 7.5pt, fill: rgb(""#94A3B8""))[Компания: ]#text(font: (""Segoe UI"", ""Arial""), size: 8pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[" + EscapeTypst(headerCompany) + @"]]
+    )
+    #v(3pt)
+    #grid(
+      columns: (1fr, 1fr),
+      column-gutter: 12pt,
+      align: (left, right),
+      [#text(font: (""Segoe UI"", ""Arial""), size: 7.5pt, fill: rgb(""#94A3B8""))[Отчет: " + EscapeTypst(ctx.ReportNumber) + @"  ·  " + EscapeTypst(ctx.GeneratedDate) + @"]],
+      [#text(font: (""Segoe UI"", ""Arial""), size: 7.5pt, fill: rgb(""#94A3B8""))[" + EscapeTypst(ctx.ProjectStage) + @"]]
     )
     #v(3pt)
     #line(length: 100%, stroke: 0.5pt + rgb(""#1E2D4A""))
@@ -224,9 +234,11 @@ public class TypstPdfService
 #let serif = (""Georgia"", ""Times New Roman"")
 #let sans = (""Segoe UI"", ""Arial"", ""Liberation Sans"")
 
-#let card(body, fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), radius: 6pt, inset: 11pt) = {
-  rect(
+#let card(body, fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), radius: 6pt, inset: 11pt, compact: false) = {
+  block(
     width: 100%,
+    breakable: true,
+    ..(if compact { (above: 0pt, below: 0pt) } else { (:) }),
     fill: fill,
     stroke: 0.75pt + stroke,
     radius: radius,
@@ -327,7 +339,7 @@ public class TypstPdfService
   columns: (1.2fr, 1fr),
   gutter: 12pt,
   [
-    #card(fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), inset: 11pt)[
+    #card(compact: true, fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), inset: 11pt)[
       #text(font: sans, size: 7.5pt, fill: rgb(""#94A3B8""), tracking: 1.2pt, weight: ""medium"")[ИНДЕКС ГОТОВНОСТИ]
       #v(4pt)
       #grid(
@@ -348,7 +360,7 @@ public class TypstPdfService
     ]
   ],
   [
-    #card(fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), inset: 11pt)[
+    #card(compact: true, fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), inset: 11pt)[
       #text(font: sans, size: 7.5pt, fill: rgb(""#94A3B8""), tracking: 1.2pt, weight: ""medium"")[КАНОНИЧЕСКАЯ ШКАЛА SLS]
       #v(5pt)
       #table(
@@ -380,7 +392,7 @@ public class TypstPdfService
             {
                 var drvColor = GetScoreColor(drv.Score ?? 0);
                 sb.AppendLine($@"
-  card(fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), inset: 8pt)[
+  card(compact: true, fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), inset: 8pt)[
     #grid(
       columns: (1fr, auto),
       [#text(font: serif, size: 15pt, weight: ""bold"", fill: rgb(""{drvColor}""))[{drv.Score ?? 0} #text(font: sans, size: 7.5pt, fill: rgb(""#64748B""))[\/ 100]]],
@@ -397,7 +409,7 @@ public class TypstPdfService
 
         sb.AppendLine(@"
 #v(0.18cm)
-#card(fill: rgb(""#0D1628""), inset: 8pt)[
+#card(compact: true, fill: rgb(""#0D1628""), inset: 8pt)[
   #grid(
     columns: (1fr, auto),
     [
@@ -1094,7 +1106,7 @@ public class TypstPdfService
             {
                 foreach (var b in inv.BlockerTitles)
                 {
-                    sb.AppendLine($"      #text(font: sans, size: 8pt, fill: rgb(\"#FCA5A5\"))[● {EscapeTypst(b)}]\n      #v(3pt)");
+                    sb.AppendLine($"      #block(breakable: false)[#text(font: sans, size: 8pt, fill: rgb(\"#FCA5A5\"))[● {EscapeTypst(b)}]#v(3pt)]");
                 }
             }
             else
@@ -1114,7 +1126,7 @@ public class TypstPdfService
             {
                 foreach (var c in inv.CatalystTitles)
                 {
-                    sb.AppendLine($"      #text(font: sans, size: 8pt, fill: rgb(\"#86EFAC\"))[● {EscapeTypst(c)}]\n      #v(3pt)");
+                    sb.AppendLine($"      #block(breakable: false)[#text(font: sans, size: 8pt, fill: rgb(\"#86EFAC\"))[● {EscapeTypst(c)}]#v(3pt)]");
                 }
             }
             else
@@ -1192,7 +1204,7 @@ public class TypstPdfService
             : "Оценка необходимости привлечения профессиональных юристов и форматы самостоятельного решения.";
 
         sb.AppendLine(@"
-#section-header(""" + secNum++.ToString("D2") + @""", ""РЕКОМЕНДОВАННЫЙ СЛЕДУЮЩИЙ ШАГ"", category: ""Юридическое сопровождение"")
+#section-header(""" + secNum++.ToString("D2") + @""", ""РЕКОМЕНДОВАННЫЙ СЛЕДУЮЩИЙ ШАГ"", category: ""Юридическое сопровождение от Fenix Law"")
 #text(font: sans, size: 8.5pt, fill: rgb(""#94A3B8""))[" + secNextSubtitle + @"]
 #v(0.4cm)
 

@@ -3,6 +3,7 @@
   'use strict';
 
   const app = document.getElementById('app');
+  let answerEditor = null;
 
   function esc(s) {
     return String(s == null ? '' : s)
@@ -36,6 +37,7 @@
   // -----------------------------------------------------------------------
 
   function renderLogin() {
+    if (answerEditor) { answerEditor.close(); answerEditor = null; }
     app.innerHTML =
       '<section class="gate" style="max-width:420px;margin:80px auto">' +
         '<h2>Вход в admin</h2>' +
@@ -77,6 +79,10 @@
   ];
 
   function renderShell(active, detailId) {
+    if (answerEditor) {
+      if (answerEditor.hasUnsavedChanges() && !window.confirm('У вас есть несохранённые изменения ответов. Выйти из редактора?')) return;
+      answerEditor.close(); answerEditor = null;
+    }
     const nav = TABS.map(function (t) {
       return '<button data-tab="' + t[0] + '" class="' + (t[0] === active ? 'active' : '') + '">' + t[1] + '</button>';
     }).join('');
@@ -713,9 +719,10 @@
             'Lead heat: <span class="heat heat-' + esc(l.heatLabel) + '">' + l.heatScore + ' · ' + HEAT_LABEL[l.heatLabel] + '</span><br>' +
             'Fundraising: ' + esc(TIMELINE_LABEL[data.fundraisingTimeline] || 'нет данных') +
           '</div>' +
-          '<div style="margin-top:16px;display:flex;gap:10px;align-items:center">' +
+          '<div class="lead-report-actions" style="margin-top:16px">' +
             '<a href="/api/admin/leads/' + encodeURIComponent(l.id) + '/pdf" target="_blank" class="btn" style="padding:8px 16px;font-size:13px;text-decoration:none;display:inline-flex;align-items:center;gap:6px">📥 Скачать PDF-отчёт</a>' +
           '</div>' +
+          (r ? '<button type="button" class="btn btn-secondary" id="edit-report-answers">Исправить ответы</button>' : '') +
           '<div class="field" style="margin-top:20px;max-width:260px"><label>Статус</label>' +
             '<select id="lead-status">' + statusOptions + '</select></div>' +
           '<div class="field" style="margin-top:16px;max-width:420px"><label>Внутренняя заметка</label>' +
@@ -735,6 +742,14 @@
       '<h3 class="serif" style="font-size:20px;margin-top:40px">Все ответы (' + data.answers.length + ')</h3>' +
       '<div class="answers-list" style="max-width:720px">' + answers + '</div>';
 
+    const editAnswers = document.getElementById('edit-report-answers');
+    if (editAnswers) editAnswers.addEventListener('click', async function () {
+      const editor = await window.AdminAnswerEditor.open(el, id, {
+        onBack: function () { answerEditor = null; renderShell('leads', id); },
+        onUnauthorized: renderLogin
+      });
+      if (el.isConnected) answerEditor = editor; else if (editor) editor.close();
+    });
     document.getElementById('back-to-leads').addEventListener('click', function () { renderShell('leads'); });
     document.getElementById('lead-status').addEventListener('change', async function (e) {
       await api('POST', '/api/admin/leads/' + id + '/status', { status: e.target.value });

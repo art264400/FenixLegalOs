@@ -9,7 +9,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'wwwroot', 'js', 'app.js'), 'utf8');
-const startup = /  window\.addEventListener\('hashchange', route\);\s+route\(\);(?=\s*\}\)\(\);\s*$)/;
+const startup = /  window\.addEventListener\('hashchange', route\);[\s\S]*?  route\(\);(?=\s*\}\)\(\);\s*$)/;
 assert.match(source, startup, 'The harness must replace only the terminal route startup.');
 
 function deferred() {
@@ -36,11 +36,15 @@ async function flushMicrotasks() {
   for (let i = 0; i < 20; i++) await Promise.resolve();
 }
 
-function createHarness() {
+function createHarness({ deferResults = false } = {}) {
   const elements = new Map();
   const downloads = [];
   const objectUrls = [];
   const requests = [];
+  const resultRequests = [];
+  const reportResults = new Map();
+  const defaultResult = { overall: 70, risks: [], sections: [], strongAreas: [] };
+  const resultData = (revisionId = null, overall = 70) => ({ result: { ...defaultResult, overall }, paid: true, reportRevisionId: revisionId, reportRevisionNumber: revisionId ? 1 : 0 });
   const timers = new Map();
   const alerts = [];
   let now = 1_000_000;
@@ -139,7 +143,14 @@ function createHarness() {
     alert: message => alerts.push(message),
     fetch(url, options = {}) {
       if (url === '/api/events') return Promise.resolve(response());
-      assert.match(url, /^\/api\/sessions\/[^/]+\/pdf$/, 'Unexpected network request');
+      const resultMatch = /^\/api\/sessions\/([^/]+)\/result$/.exec(url);
+      if (resultMatch) {
+        const pending = deferred();
+        resultRequests.push({ url, options, ...pending });
+        if (!deferResults) pending.resolve(response(200, reportResults.get(resultMatch[1]) || resultData()));
+        return pending.promise;
+      }
+      assert.match(url, /^\/api\/sessions\/[^/]+\/pdf\?revisionId=[^&]+$/, 'Unexpected network request');
       const pending = deferred();
       requests.push({ url, options, ...pending });
       return pending.promise;
@@ -148,20 +159,23 @@ function createHarness() {
   const exports = `
   globalThis.pdfTest = {
     startPdfPreparation, preheatPdf, downloadPDFReport, renderPdfStatus,
-    updatePdfButtonState, screenFullReport, cancelInFlightPdfFetch,
+    updatePdfButtonState, screenFullReport, renderFullReport, cancelInFlightPdfFetch,
+    acceptReportResult, refreshReportResult, selectReportSession, route,
     configure() {
       state.sessionId = 'session-a';
       isPaid = true;
       currentUser = { id: 'user-a', termsAccepted: true };
-      lastResult = { overall: 70, risks: [], sections: [], strongAreas: [] };
+      bank = { sections: [], questions: [] };
+      acceptReportResult('session-a', { result: { overall: 70, risks: [], sections: [], strongAreas: [] }, paid: true });
     },
-    setSession(sessionId) { state.sessionId = sessionId; },
+    setSession(sessionId) { selectReportSession(sessionId); acceptReportResult(sessionId, { result: { overall: 70, risks: [], sections: [], strongAreas: [] }, paid: true }); },
     setReAuth(callback) { requestReAuth = callback; },
     setPaymentPrompt(callback) { showPaymentPrompt = callback; },
     snapshot() {
       return { preparation: { ...pdfPreparation }, promise: pdfFetchPromise,
         controller: pdfAbortController, fetchSessionId: pdfFetchSessionId, timer: pdfWaitTimer,
-        cachedBlob: cachedPdfBlob, cachedSessionId: cachedPdfSessionId };
+        cachedBlob: cachedPdfBlob, cachedSessionId: cachedPdfSessionId, cachedRevisionId: cachedPdfRevisionId,
+        sessionId: state.sessionId, resultSessionId: lastResultSessionId, revisionId: reportRevisionId, result: lastResult };
     }
   };`;
   vm.runInContext(source.replace(startup, exports), context, { filename: 'wwwroot/js/app.js' });
@@ -169,7 +183,9 @@ function createHarness() {
   api.configure();
 
   return {
-    api, requests, downloads, objectUrls, alerts, timers,
+    api, requests, resultRequests, downloads, objectUrls, alerts, timers,
+    resultData, setServerResult(sessionId, data) { reportResults.set(sessionId, data); },
+    setHash(hash) { context.location.hash = hash; },
     element: id => {
       assert.ok(elements.has(id), 'Missing rendered element #' + id);
       return elements.get(id);
@@ -193,7 +209,7 @@ function createHarness() {
 
 test('the report disables downloading while one shared PDF request is pending', async () => {
   const h = createHarness();
-  h.api.screenFullReport('session-a');
+  h.api.renderFullReport('session-a');
   const pending = h.api.snapshot().promise;
   assert.ok(pending);
   assert.equal(h.api.startPdfPreparation('session-a'), pending);
@@ -231,7 +247,7 @@ test('the report disables downloading while one shared PDF request is pending', 
 
 test('a failure stays visible across report rerenders until an explicit retry succeeds', async () => {
   const h = createHarness();
-  h.api.screenFullReport('session-a');
+  h.api.renderFullReport('session-a');
   const first = h.api.snapshot().promise;
   h.requests[0].resolve(response(503, { error: 'pdf_unavailable' }));
   assert.equal(await first, null);
@@ -239,12 +255,13 @@ test('a failure stays visible across report rerenders until an explicit retry su
   assert.match(h.element('download-pdf-btn').textContent, /повтор/i);
   assert.equal(h.element('download-pdf-btn').disabled, false);
   assert.equal(h.api.snapshot().timer, null);
-  h.api.screenFullReport('session-a');
+  h.api.renderFullReport('session-a');
   h.api.preheatPdf('session-a');
   assert.equal(h.requests.length, 1, 'A rerender must not start an automatic retry loop');
   assert.equal(h.element('pdf-status').dataset.state, 'error');
 
   const download = h.api.downloadPDFReport();
+  await flushMicrotasks();
   assert.equal(h.requests.length, 2);
   assert.equal(h.element('download-pdf-btn').disabled, true);
   h.requests[1].resolve(response());
@@ -256,7 +273,7 @@ test('a failure stays visible across report rerenders until an explicit retry su
 
 test('the long-wait message changes after two minutes and its timer stops on completion', async () => {
   const h = createHarness();
-  h.api.screenFullReport('session-a');
+  h.api.renderFullReport('session-a');
   const pending = h.api.snapshot().promise;
   const initial = h.element('pdf-status-note').textContent;
   h.advance(119_999);
@@ -277,11 +294,11 @@ test('the long-wait message changes after two minutes and its timer stops on com
 
 test('rerendering a pending report preserves its start time and shared request', async () => {
   const h = createHarness();
-  h.api.screenFullReport('session-a');
+  h.api.renderFullReport('session-a');
   const before = h.api.snapshot();
   const oldButton = h.element('download-pdf-btn');
   h.advance(60_000);
-  h.api.screenFullReport('session-a');
+  h.api.renderFullReport('session-a');
   const after = h.api.snapshot();
   assert.notEqual(h.element('download-pdf-btn'), oldButton, 'Report DOM was actually replaced');
   assert.equal(h.element('download-pdf-btn').disabled, true);
@@ -296,7 +313,7 @@ test('rerendering a pending report preserves its start time and shared request',
 
 test('a session switch cancels the old request and ignores its delayed blob and cleanup', async () => {
   const h = createHarness();
-  h.api.screenFullReport('session-a');
+  h.api.renderFullReport('session-a');
   const first = h.api.snapshot();
   const delayedBlob = deferred();
   const oldResponse = response();
@@ -305,11 +322,11 @@ test('a session switch cancels the old request and ignores its delayed blob and 
   await flushMicrotasks();
 
   h.api.setSession('session-b');
-  h.api.screenFullReport('session-b');
+  h.api.renderFullReport('session-b');
   const second = h.api.snapshot();
   assert.equal(first.controller.signal.aborted, true);
   assert.equal(h.requests.length, 2);
-  assert.equal(h.requests[1].url, '/api/sessions/session-b/pdf');
+  assert.equal(h.requests[1].url, '/api/sessions/session-b/pdf?revisionId=original');
   delayedBlob.resolve(new Blob(['%PDF-stale']));
   assert.equal(await first.promise, null);
   const afterOldCompletion = h.api.snapshot();
@@ -332,7 +349,7 @@ test('an interactive retry can reauthenticate and download after background auth
   const h = createHarness();
   let reauthCalls = 0;
   h.api.setReAuth(async () => { reauthCalls++; });
-  h.api.screenFullReport('session-a');
+  h.api.renderFullReport('session-a');
   const background = h.api.snapshot().promise;
   h.requests[0].resolve(response(401, { error: 'unauthorized' }));
   await background;
@@ -340,11 +357,12 @@ test('an interactive retry can reauthenticate and download after background auth
   assert.equal(h.element('pdf-status').dataset.state, 'error');
 
   const download = h.api.downloadPDFReport();
+  await flushMicrotasks();
   h.requests[1].resolve(response(401, { error: 'unauthorized' }));
   await flushMicrotasks();
   assert.equal(reauthCalls, 1);
   assert.equal(h.requests.length, 3);
-  assert.equal(h.requests[2].url, '/api/sessions/session-a/pdf');
+  assert.equal(h.requests[2].url, '/api/sessions/session-a/pdf?revisionId=original');
   h.requests[2].resolve(response());
   await download;
   assert.equal(h.element('pdf-status').dataset.state, 'ready');
@@ -357,6 +375,7 @@ for (const error of ['forbidden_session_owner', 'terms_required']) {
     let reauthCalls = 0;
     h.api.setReAuth(async () => { reauthCalls++; });
     const download = h.api.downloadPDFReport();
+    await flushMicrotasks();
     h.requests[0].resolve(response(403, { error }));
     await flushMicrotasks();
     assert.equal(reauthCalls, 1);
@@ -374,7 +393,7 @@ test('payment failures prompt for payment only on an interactive attempt and nev
   let reauthCalls = 0;
   h.api.setPaymentPrompt(sessionId => paymentPrompts.push(sessionId));
   h.api.setReAuth(async () => { reauthCalls++; });
-  h.api.screenFullReport('session-a');
+  h.api.renderFullReport('session-a');
   const background = h.api.snapshot().promise;
   h.requests[0].resolve(response(403, { error: 'payment_required' }));
   await background;
@@ -382,6 +401,7 @@ test('payment failures prompt for payment only on an interactive attempt and nev
   assert.equal(h.element('pdf-status').dataset.state, 'error');
 
   const download = h.api.downloadPDFReport();
+  await flushMicrotasks();
   h.requests[1].resolve(response(403, { error: 'payment_required' }));
   await download;
   assert.deepEqual(paymentPrompts, ['session-a']);
@@ -393,7 +413,7 @@ test('payment failures prompt for payment only on an interactive attempt and nev
 
 test('a network rejection releases the disabled state and wait timer', async () => {
   const h = createHarness();
-  h.api.screenFullReport('session-a');
+  h.api.renderFullReport('session-a');
   const pending = h.api.snapshot().promise;
   h.requests[0].reject(new TypeError('Failed to fetch'));
   assert.equal(await pending, null);
@@ -406,7 +426,7 @@ test('a network rejection releases the disabled state and wait timer', async () 
 
 test('cancellation resets preparation and an abort rejection does not resurrect an error', async () => {
   const h = createHarness();
-  h.api.screenFullReport('session-a');
+  h.api.renderFullReport('session-a');
   const before = h.api.snapshot();
   h.api.cancelInFlightPdfFetch();
   assert.equal(before.controller.signal.aborted, true);
@@ -422,5 +442,161 @@ test('cancellation resets preparation and an abort rejection does not resurrect 
   h.requests[0].reject(abortError);
   assert.equal(await before.promise, null);
   assert.equal(h.api.snapshot().preparation.status, 'initial');
+  assert.equal(h.api.snapshot().cachedBlob, null);
+});
+
+
+test('opening a report revalidates its published revision and discards an older cached PDF', async () => {
+  const h = createHarness();
+  const initial = h.api.startPdfPreparation('session-a');
+  const oldBlob = new Blob(['%PDF-original']);
+  h.requests[0].resolve(response(200, oldBlob));
+  await initial;
+  h.setServerResult('session-a', h.resultData('revision-1', 86));
+
+  await h.api.screenFullReport('session-a');
+  assert.equal(h.resultRequests.length, 1);
+  assert.equal(h.api.snapshot().revisionId, 'revision-1');
+  assert.equal(h.api.snapshot().result.overall, 86);
+  assert.equal(h.api.snapshot().cachedBlob, null);
+  assert.equal(h.requests[1].url, '/api/sessions/session-a/pdf?revisionId=revision-1');
+  const current = h.api.snapshot().promise;
+  h.requests[1].resolve(response());
+  await current;
+  assert.equal(h.api.snapshot().cachedRevisionId, 'revision-1');
+});
+
+test('downloading after publication never reuses the previous revision from the open tab', async () => {
+  const h = createHarness();
+  h.api.renderFullReport('session-a');
+  const oldPreparation = h.api.snapshot().promise;
+  const oldBlob = new Blob(['%PDF-original']);
+  h.requests[0].resolve(response(200, oldBlob));
+  await oldPreparation;
+  h.setServerResult('session-a', h.resultData('revision-2', 91));
+
+  const download = h.api.downloadPDFReport();
+  await flushMicrotasks();
+  assert.equal(h.resultRequests.length, 1);
+  assert.equal(h.requests[1].url, '/api/sessions/session-a/pdf?revisionId=revision-2');
+  assert.equal(h.downloads.length, 0);
+  const correctedBlob = new Blob(['%PDF-corrected']);
+  h.requests[1].resolve(response(200, correctedBlob));
+  await download;
+  assert.equal(h.downloads.length, 1);
+  assert.equal(h.objectUrls[0], correctedBlob);
+  assert.equal(h.api.snapshot().cachedRevisionId, 'revision-2');
+  assert.equal(h.api.snapshot().result.overall, 91);
+});
+
+test('publication during preparation refreshes the result and retries the new PDF revision', async () => {
+  const h = createHarness();
+  const download = h.api.downloadPDFReport();
+  await flushMicrotasks();
+  assert.equal(h.requests[0].url, '/api/sessions/session-a/pdf?revisionId=original');
+  h.setServerResult('session-a', h.resultData('revision-live', 93));
+  h.requests[0].resolve(response(409, { error: 'report_revision_changed' }));
+  await flushMicrotasks();
+  assert.equal(h.resultRequests.length, 2);
+  assert.equal(h.requests.length, 2);
+  assert.equal(h.requests[1].url, '/api/sessions/session-a/pdf?revisionId=revision-live');
+  const revised = new Blob(['%PDF-live']);
+  h.requests[1].resolve(response(200, revised));
+  await download;
+  assert.equal(h.objectUrls[0], revised);
+  assert.equal(h.downloads.length, 1);
+  assert.equal(h.api.snapshot().cachedRevisionId, 'revision-live');
+});
+
+test('a response identifying a different PDF revision cannot populate the cache', async () => {
+  const h = createHarness();
+  h.api.renderFullReport('session-a');
+  const old = h.api.snapshot().promise;
+  h.setServerResult('session-a', h.resultData('revision-header', 88));
+  const mismatched = response();
+  mismatched.headers = { get: name => name === 'X-Report-Revision-Id' ? 'revision-header' : null };
+  h.requests[0].resolve(mismatched);
+  assert.equal(await old, null);
+  assert.equal(h.api.snapshot().cachedBlob, null);
+  assert.equal(h.requests[1].url, '/api/sessions/session-a/pdf?revisionId=revision-header');
+  const current = h.api.snapshot().promise;
+  h.requests[1].resolve(response());
+  await current;
+});
+
+test('a delayed previous-revision blob cannot clear or overwrite the new preparation', async () => {
+  const h = createHarness();
+  h.api.renderFullReport('session-a');
+  const previous = h.api.snapshot();
+  const delayedBlob = deferred();
+  const oldResponse = response();
+  oldResponse.blob = () => delayedBlob.promise;
+  h.requests[0].resolve(oldResponse);
+  await flushMicrotasks();
+  h.api.acceptReportResult('session-a', h.resultData('revision-next', 84));
+  h.api.renderFullReport('session-a');
+  const current = h.api.snapshot();
+  assert.equal(previous.controller.signal.aborted, true);
+  delayedBlob.resolve(new Blob(['%PDF-stale']));
+  assert.equal(await previous.promise, null);
+  assert.equal(h.api.snapshot().promise, current.promise);
+  assert.equal(h.api.snapshot().controller, current.controller);
+  assert.equal(h.api.snapshot().cachedBlob, null);
+  const corrected = new Blob(['%PDF-next']);
+  h.requests[1].resolve(response(200, corrected));
+  await current.promise;
+  assert.equal(h.api.snapshot().cachedRevisionId, 'revision-next');
+  assert.equal(h.api.snapshot().cachedBlob, corrected);
+});
+
+test('the report URL selects its session and late results from another session are ignored', async () => {
+  const h = createHarness({ deferResults: true });
+  const openingA = h.api.screenFullReport('session-a');
+  h.setHash('#/report/session-b');
+  await h.api.route();
+  await flushMicrotasks();
+  assert.equal(h.api.snapshot().sessionId, 'session-b');
+  assert.equal(h.api.snapshot().result, null);
+  h.resultRequests[0].resolve(response(200, h.resultData('revision-a', 12)));
+  await openingA;
+  assert.equal(h.api.snapshot().result, null);
+  h.resultRequests[1].resolve(response(200, h.resultData('revision-b', 82)));
+  await flushMicrotasks();
+  assert.equal(h.api.snapshot().resultSessionId, 'session-b');
+  assert.equal(h.api.snapshot().result.overall, 82);
+  assert.equal(h.api.snapshot().revisionId, 'revision-b');
+  assert.equal(h.requests[0].url, '/api/sessions/session-b/pdf?revisionId=revision-b');
+  const current = h.api.snapshot().promise;
+  h.requests[0].resolve(response());
+  await current;
+});
+
+test('a failed publication-pointer check blocks downloading a previously cached PDF', async () => {
+  const h = createHarness({ deferResults: true });
+  h.api.renderFullReport('session-a');
+  const initial = h.api.snapshot().promise;
+  h.requests[0].resolve(response());
+  await initial;
+  const download = h.api.downloadPDFReport();
+  assert.equal(h.resultRequests.length, 1);
+  h.resultRequests[0].reject(new TypeError('Failed to fetch'));
+  await download;
+  assert.equal(h.downloads.length, 0);
+  assert.equal(h.requests.length, 1);
+  assert.equal(h.api.snapshot().preparation.status, 'error');
+});
+
+
+test('publication recovery does not reopen a report after the user leaves its page', async () => {
+  const h = createHarness();
+  h.api.renderFullReport('session-a');
+  const background = h.api.snapshot().promise;
+  h.setHash('#/');
+  h.element('app').innerHTML = '<p>Главная страница</p>';
+  h.setServerResult('session-a', h.resultData('revision-while-away', 90));
+  h.requests[0].resolve(response(409, { error: 'report_revision_changed' }));
+  await background;
+  assert.equal(h.element('app').innerHTML, '<p>Главная страница</p>');
+  assert.equal(h.requests.length, 1);
   assert.equal(h.api.snapshot().cachedBlob, null);
 });

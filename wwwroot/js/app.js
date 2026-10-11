@@ -29,14 +29,21 @@
   let bank = null; // { sections, questions, versions }
   let state = loadState(); // { sessionId, answers, currentQuestionId }
   let lastResult = null;
+  let lastResultSessionId = null;
+  let reportRevisionId = null;
+  let reportRevisionNumber = 0;
+  let resultLoadEpoch = 0;
+  let resultLoad = null;
   let unlocked = false;
   let isPaid = false;
   var serverNav = null;
   let cachedPdfBlob = null;
   let cachedPdfSessionId = null;
+  let cachedPdfRevisionId = null;
   let pdfFetchPromise = null;
   let pdfAbortController = null;
   let pdfFetchSessionId = null;
+  let pdfFetchRevisionId = null;
   let pdfWaitTimer = null;
   let pdfPreparation = { sessionId: null, status: 'initial', startedAt: null };
   const PDF_EXPECTED_WAIT_MS = 2 * 60 * 1000;
@@ -50,6 +57,7 @@
     }
     pdfFetchPromise = null;
     pdfFetchSessionId = null;
+    pdfFetchRevisionId = null;
     clearTimeout(pdfWaitTimer);
     pdfWaitTimer = null;
     pdfPreparation = { sessionId: null, status: 'initial', startedAt: null };
@@ -81,10 +89,16 @@
     state.currentQuestionId = null;
     serverNav = null;
     lastResult = null;
+    lastResultSessionId = null;
+    reportRevisionId = null;
+    reportRevisionNumber = 0;
+    resultLoadEpoch++;
+    resultLoad = null;
     unlocked = false;
     isPaid = false;
     cachedPdfBlob = null;
     cachedPdfSessionId = null;
+    cachedPdfRevisionId = null;
     saveState();
   }
 
@@ -569,16 +583,7 @@
 
           closeCab();
 
-          if (state.sessionId !== sid) {
-            state.sessionId = sid;
-            state.answers = {};
-            state.currentQuestionId = null;
-            serverNav = null;
-            lastResult = null;
-            unlocked = false;
-            isPaid = false;
-            saveState();
-          }
+          selectReportSession(sid);
 
           if (thash === '#/diagnostic') {
             loadSessionAnswersAndResume(sid);
@@ -701,6 +706,7 @@
       method,
       headers,
       credentials: 'same-origin',
+      cache: method === 'GET' ? 'no-store' : 'default',
       body: body ? JSON.stringify(body) : undefined,
     });
     if (!res.ok) {
@@ -1671,9 +1677,8 @@
       }
       await api('PUT', '/api/sessions/' + state.sessionId + '/answers', { answers: state.answers });
       const data = await api('POST', '/api/sessions/' + state.sessionId + '/complete', { answers: state.answers });
-      lastResult = data.result;
+      acceptReportResult(state.sessionId, data);
       unlocked = false;
-      isPaid = Boolean(data.paid);
       if (location.hash === '#/results') {
         screenResults();
       } else {
@@ -2117,7 +2122,7 @@
   }
 
   async function screenResults() {
-    if (!lastResult) { loadResultFromServer(state.sessionId, '#/results'); return; }
+    if (!lastResult || lastResultSessionId !== state.sessionId) { loadResultFromServer(state.sessionId, '#/results'); return; }
     if (isPaid) {
       screenFullReport(state.sessionId);
       return;
@@ -2198,20 +2203,69 @@
   }
 
 
+  function selectReportSession(sessionId) {
+    if (state.sessionId === sessionId) return;
+    clearDiagnosticAndPdfState();
+    state.sessionId = sessionId;
+    saveState();
+  }
+
+  function acceptReportResult(sessionId, data) {
+    if (!data || !data.result) throw new Error('invalid_result_response');
+    const revisionId = data.reportRevisionId || null;
+    if (lastResultSessionId !== sessionId || reportRevisionId !== revisionId) {
+      cancelInFlightPdfFetch();
+      cachedPdfBlob = null;
+      cachedPdfSessionId = null;
+      cachedPdfRevisionId = null;
+    }
+    lastResult = data.result;
+    lastResultSessionId = sessionId;
+    reportRevisionId = revisionId;
+    reportRevisionNumber = data.reportRevisionNumber || 0;
+    unlocked = Boolean(data.unlocked);
+    isPaid = Boolean(data.paid);
+  }
+
+  // The server publication pointer is authoritative, including in an already open tab.
+  function refreshReportResult(sessionId) {
+    if (!sessionId || state.sessionId !== sessionId) return Promise.resolve(null);
+    if (resultLoad && resultLoad.sessionId === sessionId) return resultLoad.promise;
+    const request = { sessionId: sessionId, epoch: resultLoadEpoch, promise: null };
+    request.promise = (async function () {
+      const data = await api('GET', '/api/sessions/' + sessionId + '/result');
+      if (state.sessionId !== sessionId || resultLoadEpoch !== request.epoch) return null;
+      acceptReportResult(sessionId, data);
+      return data;
+    })().finally(function () {
+      if (resultLoad === request) resultLoad = null;
+    });
+    resultLoad = request;
+    return request.promise;
+  }
+
   async function loadResultFromServer(sessionId, backHash) {
     if (!sessionId) { location.hash = '#/'; return; }
+    selectReportSession(sessionId);
+    const expectedHash = location.hash;
     render('<section class="q-screen"><h1 class="q-title">Загружаем отчёт…</h1></section>');
     try {
-      const data = await api('GET', '/api/sessions/' + sessionId + '/result');
-      lastResult = data.result;
-      unlocked = data.unlocked;
-      isPaid = Boolean(data.paid);
-      route();
+      const data = await refreshReportResult(sessionId);
+      if (!data || state.sessionId !== sessionId || location.hash !== expectedHash) return;
+      if (backHash && backHash.indexOf('#/report/') === 0 && isPaid) renderFullReport(sessionId);
+      else screenResults();
     } catch (e) {
-      location.hash = '#/';
+      if (state.sessionId === sessionId && location.hash === expectedHash) renderReportLoadError(sessionId, backHash);
     }
   }
 
+  function renderReportLoadError(sessionId, backHash) {
+    render('<section class="q-screen"><h1 class="q-title">Не удалось загрузить отчёт</h1>' +
+      '<p class="sub">Проверьте соединение и попробуйте ещё раз.</p>' +
+      '<div class="q-nav"><button class="btn" id="retry-report-btn">Повторить</button></div></section>');
+    const retry = document.getElementById('retry-report-btn');
+    if (retry) retry.addEventListener('click', function () { loadResultFromServer(sessionId, backHash); });
+  }
 
   function updatePdfButtonState(status, sessionId = state.sessionId) {
     if (sessionId !== state.sessionId) return;
@@ -2264,8 +2318,9 @@
   // All preparation requests share one promise, including manual retry and navigation back to the report.
   function startPdfPreparation(sessionId, interactive = false) {
     if (!sessionId || sessionId !== state.sessionId || !isPaid) return Promise.resolve(null);
-    if (pdfFetchPromise && pdfFetchSessionId !== sessionId) cancelInFlightPdfFetch();
-    if (cachedPdfBlob && cachedPdfSessionId === sessionId) {
+    const revisionId = reportRevisionId;
+    if (pdfFetchPromise && (pdfFetchSessionId !== sessionId || pdfFetchRevisionId !== revisionId)) cancelInFlightPdfFetch();
+    if (cachedPdfBlob && cachedPdfSessionId === sessionId && cachedPdfRevisionId === revisionId) {
       updatePdfButtonState('ready', sessionId);
       return Promise.resolve(cachedPdfBlob);
     }
@@ -2277,15 +2332,16 @@
     const currentController = new AbortController();
     pdfAbortController = currentController;
     pdfFetchSessionId = sessionId;
+    pdfFetchRevisionId = revisionId;
     updatePdfButtonState('generating', sessionId);
     const isCurrent = function () {
-      return !currentController.signal.aborted && pdfAbortController === currentController && state.sessionId === sessionId;
+      return !currentController.signal.aborted && pdfAbortController === currentController && state.sessionId === sessionId && reportRevisionId === revisionId;
     };
 
     const thisFetchPromise = (async function () {
       try {
         const fetchPdf = function () {
-          return fetch('/api/sessions/' + sessionId + '/pdf', {
+          return fetch('/api/sessions/' + sessionId + '/pdf?revisionId=' + encodeURIComponent(revisionId || 'original'), {
             credentials: 'same-origin', signal: currentController.signal
           });
         };
@@ -2295,6 +2351,7 @@
           let errData = null;
           try { errData = await res.json(); } catch (e) { /* response may not be JSON */ }
           if (!isCurrent()) return null;
+          if (errData && errData.error === 'report_revision_changed') throw new Error('report_revision_changed');
           if (errData && errData.error === 'payment_required') {
             if (interactive) showPaymentPrompt(sessionId);
             throw new Error('payment_required');
@@ -2316,19 +2373,35 @@
               let retryError = null;
               try { retryError = await res.json(); } catch (e) { /* ignore */ }
               if (!isCurrent()) return null;
+              if (retryError && retryError.error === 'report_revision_changed') throw new Error('report_revision_changed');
               if (retryError && retryError.error === 'payment_required') showPaymentPrompt(sessionId);
             }
           }
         }
         if (!res.ok) throw new Error('pdf_error_' + res.status);
+        const responseRevision = res.headers && res.headers.get('X-Report-Revision-Id');
+        if (responseRevision && responseRevision !== (revisionId || 'original')) throw new Error('report_revision_changed');
         const blob = await res.blob();
         if (!isCurrent()) return null;
         cachedPdfBlob = blob;
         cachedPdfSessionId = sessionId;
+        cachedPdfRevisionId = revisionId;
         updatePdfButtonState('ready', sessionId);
         return blob;
       } catch (err) {
-        if (isCurrent()) updatePdfButtonState('error', sessionId);
+        if (isCurrent() && err.message === 'report_revision_changed') {
+          // A publication during PDF preparation must not put the previous revision in the cache.
+          try {
+            const data = await refreshReportResult(sessionId);
+            if (data && state.sessionId === sessionId) {
+              const panel = document.getElementById('pdf-status');
+              if (reportRevisionId === revisionId) updatePdfButtonState('error', sessionId);
+              else if (panel && panel.dataset.sessionId === sessionId) renderFullReport(sessionId);
+            }
+          } catch (refreshError) {
+            if (isCurrent()) updatePdfButtonState('error', sessionId);
+          }
+        } else if (isCurrent()) updatePdfButtonState('error', sessionId);
         return null;
       }
     })().finally(function () {
@@ -2336,6 +2409,7 @@
       if (pdfFetchPromise === thisFetchPromise) {
         pdfFetchPromise = null;
         pdfFetchSessionId = null;
+        pdfFetchRevisionId = null;
       }
     });
     pdfFetchPromise = thisFetchPromise;
@@ -2353,8 +2427,27 @@
   async function downloadPDFReport() {
     if (!state.sessionId) return;
     const sessionId = state.sessionId;
-    const blob = await startPdfPreparation(sessionId, true);
-    if (blob && state.sessionId === sessionId) downloadBlob(blob, 'Fenix_SLS_Report_' + sessionId + '.pdf');
+    const expectedHash = location.hash;
+    try {
+      const previousRevisionId = reportRevisionId;
+      const data = await refreshReportResult(sessionId);
+      if (!data || state.sessionId !== sessionId || location.hash !== expectedHash) return;
+      if (!isPaid) { showPaymentPrompt(sessionId); return; }
+      if (previousRevisionId !== reportRevisionId) renderFullReport(sessionId);
+      // One retry covers an administrator publishing while this request was in flight.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const revisionId = reportRevisionId;
+        const blob = await startPdfPreparation(sessionId, true);
+        if (state.sessionId !== sessionId || location.hash !== expectedHash) return;
+        if (blob && reportRevisionId === revisionId) {
+          downloadBlob(blob, 'Fenix_SLS_Report_' + sessionId + '.pdf');
+          return;
+        }
+        if (reportRevisionId === revisionId) return;
+      }
+    } catch (e) {
+      if (state.sessionId === sessionId) updatePdfButtonState('error', sessionId);
+    }
   }
 
   function downloadBlob(blob, filename) {
@@ -2399,8 +2492,21 @@
     );
   }
 
-  function screenFullReport(sessionId) {
-    if (!lastResult) {
+  async function screenFullReport(sessionId) {
+    selectReportSession(sessionId);
+    const expectedHash = location.hash;
+    render('<section class="q-screen"><h1 class="q-title">Загружаем отчёт…</h1></section>');
+    try {
+      const data = await refreshReportResult(sessionId);
+      if (!data || state.sessionId !== sessionId || location.hash !== expectedHash) return;
+      renderFullReport(sessionId);
+    } catch (e) {
+      if (state.sessionId === sessionId && location.hash === expectedHash) renderReportLoadError(sessionId, '#/report/' + sessionId);
+    }
+  }
+
+  function renderFullReport(sessionId) {
+    if (!lastResult || lastResultSessionId !== sessionId) {
       loadResultFromServer(sessionId, '#/report/' + sessionId);
       return;
     }
@@ -2554,7 +2660,7 @@
     const hash = location.hash || '#/';
     const reportMatch = /^#\/report\/([A-Za-z0-9-]+)$/.exec(hash);
     if (reportMatch) {
-      if (!state.sessionId) { state.sessionId = reportMatch[1]; saveState(); }
+      selectReportSession(reportMatch[1]);
       screenFullReport(reportMatch[1]);
       return;
     }

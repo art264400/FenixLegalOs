@@ -212,8 +212,8 @@ public class UserRepository
         var sessions = conn.Query<DiagnosticSession>(@"
             SELECT id AS Id, created_at AS CreatedAt, updated_at AS UpdatedAt,
                    answers AS AnswersJson, completed_at AS CompletedAt,
-                   result AS ResultJson, paid AS Paid, paid_at AS PaidAt,
-                   user_id AS UserId, (pdf_bytes IS NOT NULL AND length(pdf_bytes) > 0) AS TermsAccepted
+                   COALESCE((SELECT result FROM report_revisions WHERE id=sessions.published_revision_id AND session_id=sessions.id AND status='published'), result) AS ResultJson, paid AS Paid, paid_at AS PaidAt,
+                   user_id AS UserId, (CASE WHEN published_revision_id IS NULL THEN length(pdf_bytes) ELSE (SELECT length(pdf_bytes) FROM report_revisions WHERE id=sessions.published_revision_id AND session_id=sessions.id AND status='published') END > 0) AS TermsAccepted
             FROM sessions
             WHERE user_id = @userId
             ORDER BY created_at DESC
@@ -273,4 +273,3 @@ public class UserRepository
         return list;
     }
 }
-

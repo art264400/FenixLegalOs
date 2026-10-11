@@ -34,7 +34,7 @@ public class SessionRepository
         return id;
     }
 
-    public DiagnosticSession? GetSession(string id)
+    public DiagnosticSession? GetOriginalSession(string id)
     {
         using var conn = GetConn();
         var session = conn.QuerySingleOrDefault<DiagnosticSession>(@"
@@ -45,8 +45,28 @@ public class SessionRepository
                     payment_method AS PaymentMethod, user_id AS UserId,
                     terms_accepted AS TermsAccepted, terms_accepted_at AS TermsAcceptedAt,
                     pdf_bytes AS PdfBytes, pdf_generated_at AS PdfGeneratedAt,
-                    current_question_id AS CurrentQuestionId
+                    current_question_id AS CurrentQuestionId, published_revision_id AS ReportRevisionId
              FROM sessions WHERE id = @id", new { id });
+        return session;
+    }
+
+    public DiagnosticSession? GetSession(string id)
+    {
+        var session = GetOriginalSession(id);
+        if (session?.ReportRevisionId == null) return session;
+        using var conn = GetConn();
+        var revision = conn.QuerySingleOrDefault<ReportRevision>(@"
+            SELECT id AS Id, number AS Number, answers AS AnswersJson, result AS ResultJson,
+                pdf_bytes AS PdfBytes, published_at AS PublishedAt
+            FROM report_revisions WHERE id=@revisionId AND session_id=@id AND status IN ('published','superseded')",
+            new { id, revisionId = session.ReportRevisionId });
+        if (revision == null || revision.PdfBytes is not { Length: > 0 } || string.IsNullOrWhiteSpace(revision.ResultJson))
+            throw new InvalidOperationException("Published report revision is incomplete.");
+        session.AnswersJson = revision.AnswersJson;
+        session.ResultJson = revision.ResultJson;
+        session.PdfBytes = revision.PdfBytes;
+        session.PdfGeneratedAt = revision.PublishedAt;
+        session.ReportRevisionNumber = revision.Number;
         return session;
     }
 
@@ -128,7 +148,7 @@ public class SessionRepository
     {
         using var conn = GetConn();
         return conn.QuerySingleOrDefault<byte[]?>(
-            "SELECT pdf_bytes FROM sessions WHERE id = @id AND pdf_bytes IS NOT NULL",
+            "SELECT CASE WHEN s.published_revision_id IS NULL THEN s.pdf_bytes ELSE r.pdf_bytes END FROM sessions s LEFT JOIN report_revisions r ON r.id=s.published_revision_id AND r.session_id=s.id AND r.status='published' WHERE s.id=@id",
             new { id });
     }
 

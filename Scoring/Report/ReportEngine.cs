@@ -291,9 +291,9 @@ public static class ReportEngine
                 var fullReason = string.IsNullOrWhiteSpace(reasonIfNa)
                     ? "Раздел не применим на текущем этапе развития компании."
                     : reasonIfNa;
-                if (!fullReason.Contains("не влияет на общий Score", StringComparison.OrdinalIgnoreCase))
+                if (!fullReason.Contains("не влияет на результат юридической оценки", StringComparison.OrdinalIgnoreCase))
                 {
-                    fullReason = $"{fullReason.TrimEnd('.')} (не влияет на общий Score).";
+                    fullReason = $"{fullReason.TrimEnd('.')} (не влияет на результат юридической оценкий).";
                 }
 
                 ctx.NotApplicableModules.Add(new NotApplicableModuleDto

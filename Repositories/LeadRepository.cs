@@ -70,8 +70,8 @@ public class LeadRepository
                 l.terms_accepted AS TermsAccepted,
                 l.terms_accepted_at AS TermsAcceptedAt,
                 l.created_at AS CreatedAt, 
-                s.result AS SessionResult,
-                s.answers AS SessionAnswers
+                COALESCE((SELECT result FROM report_revisions WHERE id=s.published_revision_id AND session_id=s.id AND status='published'), s.result) AS SessionResult,
+                COALESCE((SELECT answers FROM report_revisions WHERE id=s.published_revision_id AND session_id=s.id AND status='published'), s.answers) AS SessionAnswers
             FROM leads l 
             LEFT JOIN sessions s ON s.id = l.session_id
 
@@ -96,8 +96,8 @@ public class LeadRepository
                 s.terms_accepted AS TermsAccepted,
                 s.terms_accepted_at AS TermsAcceptedAt,
                 s.created_at AS CreatedAt,
-                s.result AS SessionResult,
-                s.answers AS SessionAnswers
+                COALESCE((SELECT result FROM report_revisions WHERE id=s.published_revision_id AND session_id=s.id AND status='published'), s.result) AS SessionResult,
+                COALESCE((SELECT answers FROM report_revisions WHERE id=s.published_revision_id AND session_id=s.id AND status='published'), s.answers) AS SessionAnswers
             FROM sessions s
             WHERE s.id NOT IN (SELECT session_id FROM leads WHERE session_id IS NOT NULL)
               AND (s.completed_at IS NOT NULL OR LENGTH(s.answers) > 2)
@@ -135,8 +135,8 @@ public class LeadRepository
                     s.terms_accepted AS TermsAccepted,
                     s.terms_accepted_at AS TermsAcceptedAt,
                     s.created_at AS CreatedAt,
-                    s.answers AS SessionAnswers, 
-                    s.result AS SessionResult, 
+                    COALESCE((SELECT answers FROM report_revisions WHERE id=s.published_revision_id AND session_id=s.id AND status='published'), s.answers) AS SessionAnswers,
+                    COALESCE((SELECT result FROM report_revisions WHERE id=s.published_revision_id AND session_id=s.id AND status='published'), s.result) AS SessionResult,
                     s.created_at AS SessionCreatedAt
                 FROM sessions s
                 WHERE s.id = @sessId
@@ -166,8 +166,8 @@ public class LeadRepository
                 l.terms_accepted AS TermsAccepted,
                 l.terms_accepted_at AS TermsAcceptedAt,
                 l.created_at AS CreatedAt,
-                s.answers AS SessionAnswers, 
-                s.result AS SessionResult, 
+                COALESCE((SELECT answers FROM report_revisions WHERE id=s.published_revision_id AND session_id=s.id AND status='published'), s.answers) AS SessionAnswers,
+                COALESCE((SELECT result FROM report_revisions WHERE id=s.published_revision_id AND session_id=s.id AND status='published'), s.result) AS SessionResult,
                 s.created_at AS SessionCreatedAt
             FROM leads l LEFT JOIN sessions s ON s.id = l.session_id
             WHERE l.id = @id

@@ -227,6 +227,8 @@ public class DiagnosticSession
     public byte[]? PdfBytes { get; set; }
     public string? PdfGeneratedAt { get; set; }
     public string? CurrentQuestionId { get; set; }
+    public string? ReportRevisionId { get; set; }
+    public int ReportRevisionNumber { get; set; }
 }
 
 

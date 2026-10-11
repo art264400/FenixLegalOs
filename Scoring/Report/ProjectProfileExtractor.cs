@@ -1,3 +1,4 @@
+using System.Globalization;
 using FenixLegalOs.Models;
 using FenixLegalOs.Models.Report;
 using FenixLegalOs.Scoring.Core;
@@ -15,30 +16,35 @@ public static class ProjectProfileExtractor
         var isUnincorporated = entityStatus is "not_incorporated" or "none" or "no_entity" or "";
         var isInProcess = entityStatus is "registering" or "in_process";
 
+        var entityCount = GetStringVal(facts, "company.entityCount");
+        var isGroup = (facts.Facts.TryGetValue("company.groupStructure", out var group) && group is true)
+            || entityStatus is "multiple" or "holding";
+        var groupCountText = entityCount switch
+        {
+            "2" => "2 юрлица",
+            "3" => "3 юрлица",
+            "4" => "4 и более юрлиц",
+            _ => "число не указано"
+        };
         var entityVal = isUnincorporated ? "Не зарегистрировано"
             : isInProcess ? "В процессе регистрации"
-            : entityStatus is "multiple" or "holding" ? "Группа / холдинг"
+            : isGroup ? $"Группа компаний ({groupCountText})"
             : "Зарегистрировано (одно юрлицо)";
+        var structureNarrative = GetStringVal(facts, "company.structureNarrative")
+            .Replace("\r", "").Replace(":\n- ", ": ").Replace("\n- ", "; ").Replace("\n", " ").Trim().TrimEnd('.');
 
         keyFacts.Add(new FactItemDto { Key = "entity", Label = "Юридическое лицо", Value = entityVal, Icon = "building" });
 
         var jur = GetStringVal(facts, "company.primaryJurisdiction");
-        if (string.IsNullOrEmpty(jur)) jur = GetStringVal(facts, "company.jurisdictions");
-
-        var jurVal = jur switch
-        {
-            "kz" => "Казахстан",
-            "aifc" => "МФЦА",
-            "us" => "США (Делавэр)",
-            "uae" => "ОАЭ",
-            "uk" => "Великобритания",
-            _ => "Не указана"
-        };
+        var jurisdictions = GetListVal(facts, "company.jurisdictions").ToList();
+        if (!string.IsNullOrEmpty(jur)) jurisdictions.Insert(0, jur);
+        jurisdictions = jurisdictions.Where(value => !string.IsNullOrWhiteSpace(value)).Distinct().ToList();
+        var jurVal = jurisdictions.Count == 0 ? "Не указана" : string.Join(", ", jurisdictions.Select(FormatJurisdiction));
         keyFacts.Add(new FactItemDto { Key = "jurisdiction", Label = "Юрисдикция", Value = jurVal, Icon = "globe" });
-
         // 2. Founders & Equity
         var fCount = GetStringVal(facts, "founders.count");
-        var equityShareCount = GetListVal(facts, "founders.equityShares").Count;
+        var equityShares = GetEquityShares(facts);
+        var equityShareCount = equityShares.Count;
         var fVal = fCount switch
         {
             "1" or "solo" => "1 основатель",
@@ -56,12 +62,13 @@ public static class ProjectProfileExtractor
         var eqDist = GetStringVal(facts, "founders.equityDistribution");
         var is5050 = facts.Facts.TryGetValue("founders.isEqual5050", out var eq) && eq is true;
         var eqVal = fCount is "1" or "solo" ? "100% (единственный основатель)"
+            : equityShares.Count >= 2 ? string.Join(" / ", equityShares.Select(share => share.ToString("0.##", CultureInfo.InvariantCulture)))
             : is5050 ? "50 / 50" : eqDist switch
             {
                 "equal" or "equal_50_50" => "Равные доли",
                 "majority" => "Мажоритарная доля",
                 "minority_pool" => "С пулом опционов",
-                _ => is5050 ? "50 / 50" : "Распределены"
+                _ => "Не указано"
             };
         keyFacts.Add(new FactItemDto { Key = "equity", Label = "Распределение долей", Value = eqVal, Icon = "scale" });
 
@@ -143,16 +150,21 @@ public static class ProjectProfileExtractor
         keyFacts.Add(new FactItemDto { Key = "ip_rights", Label = "Права на продукт", Value = rightsVal, Icon = "shield" });
 
         // 4. Team, Audience & Investment
+        var userTypes = GetListVal(facts, "product.userTypes");
         var users = GetStringVal(facts, "product.targetAudience");
-        var usersVal = users switch
-        {
-            "b2b" => "B2B-клиенты",
-            "b2c" => "Физические лица (B2C)",
-            "both" => "B2B и B2C",
-            _ => "Физические лица и бизнес"
-        };
+        var noLiveUsers = facts.Facts.TryGetValue("product.liveUsers", out var liveUsers) && liveUsers is false;
+        var userOptions = Data.DataBank.Questions.FirstOrDefault(q => q.Id == "PROD-02")?.Options;
+        var usersVal = userTypes.Count > 0
+            ? string.Join(", ", userTypes.Select(type => userOptions?.FirstOrDefault(option => option.Id == type)?.Label ?? "Другая категория"))
+            : noLiveUsers ? "Пользователей пока нет"
+            : users switch
+            {
+                "b2b" => "B2B-клиенты",
+                "b2c" => "Физические лица (B2C)",
+                "both" => "B2B и B2C",
+                _ => "Не указана"
+            };
         keyFacts.Add(new FactItemDto { Key = "users", Label = "Пользователи", Value = usersVal, Icon = "user_check" });
-
         var invTiming = GetStringVal(facts, "investment.timing");
         var invVal = invTiming switch
         {
@@ -168,18 +180,20 @@ public static class ProjectProfileExtractor
 
         // Build deterministic configuration narrative (2-4 neutral sentences)
         var name = string.IsNullOrWhiteSpace(projectName) ? "Проект" : projectName;
-        var jurisdictionSuffix = string.IsNullOrEmpty(jur)
+        var jurisdictionSuffix = jurisdictions.Count == 0
             ? " Юрисдикция проекта не указана."
             : $" в юрисдикции {jurVal}.";
         var p1 = isUnincorporated
             ? $"{name} находится на ранней стадии и работает без зарегистрированного юридического лица.{jurisdictionSuffix}"
             : isInProcess
             ? $"{name} находится в процессе регистрации юридического лица.{jurisdictionSuffix}"
+            : isGroup && !string.IsNullOrEmpty(structureNarrative)
+            ? $"{name}: {structureNarrative}."
             : $"{name} осуществляет деятельность через зарегистрированную структуру.{jurisdictionSuffix}";
 
         var p2 = fCount is "1" or "solo"
             ? "В проекте один ключевой основатель, осуществляющий единоличное управление."
-            : $"В проекте {fVal} с распределением долей {eqVal}.";
+            : $"В проекте {fVal}. Распределение долей: {eqVal}.";
 
         var rightsDesc = rightsVal.StartsWith("права ", StringComparison.OrdinalIgnoreCase) 
             ? rightsVal.Substring(6).Trim() 
@@ -195,9 +209,9 @@ public static class ProjectProfileExtractor
         {
             ConfigurationBlocks = new List<FactItemDto>
             {
-                new() { Label = "Компания и юрисдикция", Value = $"Название: {name}. Юридическое лицо: {(string.IsNullOrEmpty(entityStatus) ? "не указано" : entityVal)}. Юрисдикция: {jurVal}." },
-                new() { Label = "Основатели и управление", Value = $"Состав: {fVal}. Распределение долей: {(string.IsNullOrEmpty(eqDist) && !is5050 && fCount is not ("1" or "solo") ? "не указано" : eqVal)}." },
-                new() { Label = "Продукт и стадия", Value = $"Стадия: {(string.IsNullOrEmpty(stage) ? "не указана" : stageVal)}. Аудитория: {(string.IsNullOrEmpty(users) ? "не указана" : usersVal)}." },
+                new() { Label = "Компания и юрисдикция", Value = $"Название: {name}. Юридическое лицо: {(string.IsNullOrEmpty(entityStatus) ? "не указано" : entityVal)}. Юрисдикции: {jurVal}.{(isGroup && !string.IsNullOrEmpty(structureNarrative) ? " " + structureNarrative : "")}" },
+                new() { Label = "Основатели и управление", Value = $"Состав: {fVal}. Распределение долей: {eqVal}." },
+                new() { Label = "Продукт и стадия", Value = $"Стадия: {(string.IsNullOrEmpty(stage) ? "не указана" : stageVal)}. Аудитория: {usersVal}." },
                 new() { Label = "Команда и права на разработки", Value = $"Создатели продукта: {(ipCreatorsList.Count == 0 ? "не указаны" : creatorsVal)}. Права на результаты: {(string.IsNullOrEmpty(ipRights) ? "сведения не указаны" : rightsVal)}." },
                 new() { Label = "Данные и ИИ", Value = $"Персональные данные: {DescribeFlag(facts, "data.personalDataProcessed", "обрабатываются", "не обрабатываются по ответам анкеты")}. ИИ: {DescribeFlag(facts, "ai.used", "используется", "не используется")}." },
                 new() { Label = "Договоры и инвестиции", Value = $"B2B-отношения: {DescribeFlag(facts, "contracts.b2bRelevant", "присутствуют", "не заявлены")}. Инвестиционные планы: {(string.IsNullOrEmpty(invTiming) ? "не указаны" : invVal)}." }
@@ -205,6 +219,35 @@ public static class ProjectProfileExtractor
             KeyFacts = keyFacts,
             ConfigurationNarrative = narrative
         };
+    }
+
+    private static string FormatJurisdiction(string code) => code switch
+    {
+        "kz" => "Казахстан",
+        "aifc" => "МФЦА",
+        "us" => "США (Делавэр)",
+        "uae" => "ОАЭ",
+        "uk" => "Великобритания",
+        "cy" => "Кипр",
+        "sg" => "Сингапур",
+        "eu" => "Европейский союз",
+        "kg" => "Кыргызстан",
+        "uz" => "Узбекистан",
+        "other" => "Другая юрисдикция",
+        _ => "Не указана"
+    };
+
+    private static List<double> GetEquityShares(SharedFactStore facts)
+    {
+        var shares = new List<double>();
+        foreach (var value in GetListVal(facts, "founders.equityShares"))
+        {
+            if (!double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var share) &&
+                !double.TryParse(value, NumberStyles.Float, CultureInfo.CurrentCulture, out share)) return new();
+            if (!double.IsFinite(share) || share <= 0 || share > 100) return new();
+            shares.Add(share);
+        }
+        return shares;
     }
 
     private static string DescribeFlag(SharedFactStore facts, string key, string yes, string no)
@@ -217,6 +260,7 @@ public static class ProjectProfileExtractor
     private static List<string> GetListVal(SharedFactStore facts, string key)
     {
         if (!facts.Facts.TryGetValue(key, out var val) || val == null) return new List<string>();
+        if (val is string text) return new List<string> { text };
         if (val is List<string> ls) return ls;
         if (val is IEnumerable<string> ies) return ies.ToList();
         if (val is System.Collections.IEnumerable en)

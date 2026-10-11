@@ -20,6 +20,7 @@ public class AdminController : ControllerBase
     private readonly SettingsRepository _settings;
     private readonly TypstPdfService _pdfService;
     private readonly AdminSessionService _sessionService;
+    private readonly SessionRepository? _sessions;
 
     // Для обратной совместимости с существующими тестами, читающими AdminTokens через reflection
     internal static HashSet<string> AdminTokens => new(AdminSessionService.ActiveTokens.Keys);
@@ -32,7 +33,8 @@ public class AdminController : ControllerBase
         AiReportService aiReportService,
         SettingsRepository settings,
         TypstPdfService pdfService,
-        AdminSessionService? sessionService = null)
+        AdminSessionService? sessionService = null,
+        SessionRepository? sessions = null)
     {
         _leads = leads;
         _questionRepo = questionRepo;
@@ -42,6 +44,7 @@ public class AdminController : ControllerBase
         _settings = settings;
         _pdfService = pdfService;
         _sessionService = sessionService ?? new AdminSessionService();
+        _sessions = sessions;
     }
 
     private bool IsAdmin() => _sessionService.IsAdmin(HttpContext);
@@ -829,26 +832,31 @@ public class AdminController : ControllerBase
         if (!IsAdmin()) return Unauthorized();
         var lead = _leads.GetLead(id);
         if (lead == null) return NotFound(new { error = "lead_not_found" });
-
-        var answersDict = lead.SessionAnswers != null
-            ? JsonSerializer.Deserialize<Dictionary<string, object>>((string)lead.SessionAnswers) ?? new()
-            : new();
-
-        var result = answersDict.Count > 0
-            ? _scoringEngine.ComputeResult(answersDict)
-            : (lead.SessionResult != null ? JsonSerializer.Deserialize<ScoreResult>((string)lead.SessionResult) : null);
-
-        if (result == null) return NotFound(new { error = "invalid_result" });
-
-        var facts = FenixLegalOs.Scoring.Core.FactNormalizer.NormalizeFacts(answersDict);
-        string companyName = !string.IsNullOrWhiteSpace((string)lead.Company) ? (string)lead.Company : "Стартап";
-
-        var pdfBytes = await _pdfService.GeneratePdfAsync(result, facts, lead.SessionId ?? id, companyName);
-        if (pdfBytes == null) return Problem("PDF generation failed");
-
-        return File(pdfBytes, "application/pdf", $"Fenix_SLS_Report_{lead.SessionId ?? id}.pdf");
+        var sessions = _sessions ?? HttpContext.RequestServices.GetService<SessionRepository>();
+        if (sessions == null) return StatusCode(503, new { error = "session_repository_unavailable" });
+        string sessionId = (string)lead.SessionId;
+        var session = sessions.GetSession(sessionId);
+        if (session == null || string.IsNullOrEmpty(session.CompletedAt) || string.IsNullOrEmpty(session.ResultJson))
+            return NotFound(new { error = "report_not_completed" });
+        if (session.PdfBytes is not { Length: > 0 })
+        {
+            ScoreResult? result;
+            try { result = JsonSerializer.Deserialize<ScoreResult>(session.ResultJson); }
+            catch (JsonException) { return StatusCode(500, new { error = "unreadable_saved_result" }); }
+            if (result == null) return StatusCode(500, new { error = "unreadable_saved_result" });
+            var answers = JsonSerializer.Deserialize<Dictionary<string, object>>(session.AnswersJson) ?? new();
+            var (_, _, facts) = ScoringEngine.ResolveEffectiveState(_questionRepo.GetQuestions(), answers);
+            string companyName = !string.IsNullOrWhiteSpace((string)lead.Company) ? (string)lead.Company : "Стартап";
+            var generated = await _pdfService.GeneratePdfAsync(result, facts, sessionId, companyName);
+            if (generated is not { Length: > 0 }) return Problem("PDF generation failed");
+            sessions.SavePdf(sessionId, generated);
+            session = sessions.GetSession(sessionId);
+        }
+        if (session?.PdfBytes is not { Length: > 0 }) return StatusCode(500, new { error = "pdf_persistence_failed" });
+        Response.Headers["X-Report-Revision-Id"] = session.ReportRevisionId ?? "original";
+        Response.Headers["X-Report-Revision-Number"] = session.ReportRevisionNumber.ToString();
+        return File(session.PdfBytes, "application/pdf", $"Fenix_SLS_Report_{sessionId}.pdf");
     }
-
     // ─── Risk Management Endpoints ─────────────────────────────────────────
 
     [HttpGet("risks")]
