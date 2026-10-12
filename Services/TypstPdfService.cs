@@ -58,10 +58,15 @@ public class TypstPdfService
             if (!string.IsNullOrWhiteSpace(sanitizedNarratives.ExecutiveConclusion))
                 reportCtx.ExecutiveConclusion = sanitizedNarratives.ExecutiveConclusion;
 
+            var groundedFindingCodes = reportCtx.ActionPlan
+                .Where(action => action.UseCanonicalRemediation)
+                .SelectMany(action => action.CoveredFindingCodes)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
             foreach (var top in reportCtx.TopFindings)
             {
-                if (sanitizedNarratives.RootCauseSummaries.TryGetValue(top.RootCauseCode, out var sum) ||
-                    sanitizedNarratives.RootCauseSummaries.TryGetValue(top.FindingCode, out sum))
+                if (!groundedFindingCodes.Contains(top.FindingCode) &&
+                    (sanitizedNarratives.RootCauseSummaries.TryGetValue(top.RootCauseCode, out var sum) ||
+                    sanitizedNarratives.RootCauseSummaries.TryGetValue(top.FindingCode, out sum)))
                 {
                     top.ShortSummary = sum;
                 }
@@ -76,7 +81,8 @@ public class TypstPdfService
 
                     foreach (var f in focus.Findings)
                     {
-                        if (mNarrative.FindingNarratives.TryGetValue(f.FindingCode, out var fNarrative))
+                        if (!groundedFindingCodes.Contains(f.FindingCode) &&
+                            mNarrative.FindingNarratives.TryGetValue(f.FindingCode, out var fNarrative))
                         {
                             if (!string.IsNullOrWhiteSpace(fNarrative.WhyFound)) f.WhyFound = fNarrative.WhyFound;
                             if (!string.IsNullOrWhiteSpace(fNarrative.WhyItMatters)) f.WhyItMatters = fNarrative.WhyItMatters;
@@ -90,15 +96,15 @@ public class TypstPdfService
 
             foreach (var action in reportCtx.ActionPlan)
             {
-                if (sanitizedNarratives.ActionNarratives.TryGetValue(action.ActionId, out var aNarrative))
+                if (!action.UseCanonicalRemediation && sanitizedNarratives.ActionNarratives.TryGetValue(action.ActionId, out var aNarrative))
                 {
                     if (!string.IsNullOrWhiteSpace(aNarrative.WhyNow)) action.WhyNow = aNarrative.WhyNow;
                     if (!string.IsNullOrWhiteSpace(aNarrative.ExpectedResult)) action.ExpectedResult = aNarrative.ExpectedResult;
                 }
             }
 
-            if (!string.IsNullOrWhiteSpace(sanitizedNarratives.FenixLawRecommendation))
-                reportCtx.FenixLaw.SummaryText = sanitizedNarratives.FenixLawRecommendation;
+            // Service scope is determined by current findings, never expanded by generated prose.
+            // Keep the source-grounded summary assembled together with the service cards.
         }
         catch (Exception ex)
         {
@@ -1028,13 +1034,17 @@ public class TypstPdfService
                         ? "Наличие и условия прошлых инвестиций требуют уточнения. Новый инвестиционный раунд не заявлен."
                         : "Оценка оформления ранее полученных инвестиций и существующих обязательств. Новый инвестиционный раунд не заявлен."
                     : "Привлечение инвестиций рассматривается как возможность; конкретный раунд пока не заявлен.";
-            var baseDetail = hasPlannedRound ? "Cap table, условия раунда, документы, метрики" : "Структура капитала, документы и существующие права";
-            var readinessLabel = hasPlannedRound ? "СЛОЙ B · ГОТОВНОСТЬ К СДЕЛКЕ" : "ИТОГОВАЯ ОЦЕНКА ИНВЕСТ-БЛОКА";
+            var baseDetail = "По применимым вопросам инвестиционного блока";
+            var readinessLabel = hasPlannedRound ? "ГОТОВНОСТЬ К ЗАЯВЛЕННОМУ РАУНДУ" : "ИТОГОВАЯ ОЦЕНКА ИНВЕСТ-БЛОКА";
             var readinessDetail = inv.RoundIsCloseOrActive
-                ? "С учетом существенных блокеров заявленного раунда"
-                : hasPlannedRound ? "Без поправки на блокеры близкого или активного раунда" : "По применимым ответам об инвестиционных отношениях";
-            var blockersHeading = hasPlannedRound ? "ЧТО МОЖЕТ ОСЛОЖНИТЬ ИНВЕСТИЦИОННУЮ ПРОВЕРКУ" : "ЧТО ТРЕБУЕТ ВНИМАНИЯ";
-            var strengthsHeading = hasPlannedRound ? "ГОТОВО К ЮРИДИЧЕСКОЙ ПРОВЕРКЕ" : "ПОДТВЕРЖДЕННЫЕ СИЛЬНЫЕ СТОРОНЫ";
+                ? inv.UnresolvedBlockersCount > 0
+                    ? "С учетом существенных блокеров заявленного раунда"
+                    : inv.ReadinessScore == inv.BaseScore
+                        ? "Без дополнительного ограничения по блокерам"
+                        : "По сохраненному расчету готовности"
+                : hasPlannedRound ? "Блокеры близкого или активного раунда не оценивались" : "По применимым ответам об инвестиционных отношениях";
+            var blockersHeading = hasPlannedRound ? "СУЩЕСТВЕННЫЕ БЛОКЕРЫ РАУНДА" : "ЧТО ТРЕБУЕТ ВНИМАНИЯ";
+            var strengthsHeading = hasPlannedRound ? "ЧТО УЖЕ ПОДГОТОВЛЕНО" : "ПОДТВЕРЖДЕННЫЕ СИЛЬНЫЕ СТОРОНЫ";
             var investmentAttentionTitles = hasPlannedRound ? inv.BlockerTitles
                 : ctx.AllFindings.Where(f => f.SectionId.Equals("investment", StringComparison.OrdinalIgnoreCase))
                     .Select(f => f.Title).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -1049,7 +1059,7 @@ public class TypstPdfService
   gutter: 12pt,
   [
     #card(fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), inset: 12pt)[
-      #text(font: sans, size: 7pt, weight: ""bold"", fill: rgb(""#94A3B8""), tracking: 0.3pt)[СЛОЙ A · БАЗОВАЯ ГОТОВНОСТЬ ИНВЕСТ-БЛОКА]
+      #text(font: sans, size: 7pt, weight: ""bold"", fill: rgb(""#94A3B8""), tracking: 0.3pt)[ПОДГОТОВКА ПО ОТВЕТАМ]
       #v(6pt)
       #grid(
         columns: (auto, 1fr),
@@ -1092,7 +1102,9 @@ public class TypstPdfService
 #card(fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), inset: 11pt)[
   #text(font: serif, size: 9.5pt, weight: ""bold"", fill: rgb(""#E5C07B""))[" + EscapeTypst(!string.IsNullOrWhiteSpace(inv.RoundVerdict) ? inv.RoundVerdict : "Оценка инвестиционного блока") + @"]
   #v(2pt)
-  #text(font: sans, size: 8pt, fill: rgb(""#CBD5E1""))[" + EscapeTypst(inv.SummaryDescription) + @"]
+  #text(font: sans, size: 8pt, fill: rgb(""#CBD5E1""))[" + EscapeTypst(!string.IsNullOrWhiteSpace(inv.ScoreExplanation) ? inv.ScoreExplanation : inv.SummaryDescription) + @"]
+  #v(4pt)
+  #text(font: sans, size: 8pt, fill: rgb(""#CBD5E1""))[" + EscapeTypst(inv.BlockerEffectExplanation) + @"]
 ]
 
 #v(0.4cm)
@@ -1101,19 +1113,29 @@ public class TypstPdfService
   gutter: 14pt,
   [
     #card(fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), inset: 12pt)[
-      #text(font: serif, size: 10pt, weight: ""bold"", fill: rgb(""#F87171""))[" + EscapeTypst(blockersHeading) + @"]
+      #text(font: serif, size: 10pt, weight: ""bold"", fill: rgb(""#F87171""))[ЧТО СНИЗИЛО БАЗОВУЮ ОЦЕНКУ]
       #v(8pt)
 ");
-            if (investmentAttentionTitles.Count > 0)
+            if (inv.MainScoreReasons.Count > 0)
             {
-                foreach (var b in investmentAttentionTitles)
+                foreach (var reason in inv.MainScoreReasons)
                 {
-                    sb.AppendLine($"      #block(breakable: false)[#text(font: sans, size: 8pt, fill: rgb(\"#FCA5A5\"))[● {EscapeTypst(b)}]#v(3pt)]");
+                    sb.AppendLine("      #block(breakable: false)[");
+                    sb.AppendLine($"        #text(font: sans, size: 8.5pt, weight: \"bold\", fill: rgb(\"#FCA5A5\"))[{EscapeTypst(reason.Title)}]");
+                    sb.AppendLine("        #v(2pt)");
+                    sb.AppendLine($"        #text(font: sans, size: 8pt, fill: rgb(\"#CBD5E1\"))[{EscapeTypst(reason.Explanation)}]");
+                    sb.AppendLine("      ]");
+                    sb.AppendLine("      #v(7pt)");
                 }
+                if (!string.IsNullOrWhiteSpace(inv.AdditionalScoreReasons))
+                    sb.AppendLine($"      #text(font: sans, size: 7.5pt, fill: rgb(\"#94A3B8\"))[{EscapeTypst(inv.AdditionalScoreReasons)}]");
             }
             else
             {
-                sb.AppendLine($"      #text(font: sans, size: 8pt, fill: rgb(\"#CBD5E1\"))[{EscapeTypst(inv.RoundIsCloseOrActive ? "Существенных блокеров заявленного раунда не выявлено." : hasPlannedRound ? "Раундовые блокеры не оценивались: близкий или активный раунд не заявлен." : "По применимым ответам отдельных вопросов инвестиционного блока не выявлено.")}]\n");
+                var explanation = inv.HasFactorBreakdown
+                    ? "По применимым факторам снижения базовой оценки нет."
+                    : "Подробная расшифровка факторов отсутствует в сохранённом результате.";
+                sb.AppendLine($"      #text(font: sans, size: 8pt, fill: rgb(\"#CBD5E1\"))[{EscapeTypst(explanation)}]");
             }
 
             sb.AppendLine(@"
@@ -1124,21 +1146,33 @@ public class TypstPdfService
       #text(font: serif, size: 10pt, weight: ""bold"", fill: rgb(""#34D399""))[" + EscapeTypst(strengthsHeading) + @"]
       #v(8pt)
 ");
-            if (inv.CatalystTitles.Count > 0)
+            if (inv.PreparedItems.Count > 0)
             {
-                foreach (var c in inv.CatalystTitles)
-                {
-                    sb.AppendLine($"      #block(breakable: false)[#text(font: sans, size: 8pt, fill: rgb(\"#86EFAC\"))[● {EscapeTypst(c)}]#v(3pt)]");
-                }
+                foreach (var item in inv.PreparedItems)
+                    sb.AppendLine($"      #block(breakable: false)[#text(font: sans, size: 8pt, fill: rgb(\"#86EFAC\"))[● {EscapeTypst(item)}]#v(5pt)]");
             }
             else
             {
-                sb.AppendLine("      #text(font: sans, size: 8pt, fill: rgb(\"#CBD5E1\"))[Базовые параметры проекта зафиксированы.]\n");
+                sb.AppendLine("      #text(font: sans, size: 8pt, fill: rgb(\"#CBD5E1\"))[Достаточных сведений для выделения сильных сторон инвестиционной подготовки нет.]");
             }
             sb.AppendLine(@"
     ]
   ]
 )
+");
+            if (investmentAttentionTitles.Count > 0)
+            {
+                sb.AppendLine(@"
+#v(0.35cm)
+#card(fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), inset: 12pt)[
+  #text(font: serif, size: 10pt, weight: ""bold"", fill: rgb(""#F87171""))[" + EscapeTypst(blockersHeading) + @"]
+  #v(7pt)
+");
+                foreach (var title in investmentAttentionTitles)
+                    sb.AppendLine($"  #block(breakable: false)[#text(font: sans, size: 8pt, fill: rgb(\"#FCA5A5\"))[● {EscapeTypst(title)}]#v(4pt)]");
+                sb.AppendLine("]");
+            }
+            sb.AppendLine(@"
 #pagebreak()
 ");
         }
@@ -1209,19 +1243,20 @@ public class TypstPdfService
         // SECTION N+4: Recommended Next Step / Fenix Law
         // =========================================================================
         var secNextSubtitle = ctx.FenixLaw.RequiresLegalWork
-            ? "Приоритетные направления юридической работы и форматы сопровождения."
-            : "Оценка необходимости привлечения профессиональных юристов и форматы самостоятельного решения.";
-
-        sb.AppendLine(@"
-#section-header(""" + secNum++.ToString("D2") + @""", ""РЕКОМЕНДОВАННЫЙ СЛЕДУЮЩИЙ ШАГ"", category: ""Юридическое сопровождение от Fenix Law"")
-#text(font: sans, size: 8.5pt, fill: rgb(""#94A3B8""))[" + secNextSubtitle + @"]
-#v(0.4cm)
-
-#card(fill: rgb(""#0D1628""), stroke: rgb(""#1E2D4A""), inset: 13pt)[
-  #text(font: sans, size: 9pt, fill: rgb(""#E2E8F0""))[" + EscapeTypst(ctx.FenixLaw.SummaryText) + @"]
+            ? "Конкретные задачи по выявленным рискам и сведениям, требующим уточнения."
+            : "Следующий шаг по результатам текущей диагностики.";
+        sb.AppendLine($$"""
+#block(breakable: false)[
+  #section-header("{{secNum++.ToString("D2")}}", "РЕКОМЕНДОВАННЫЙ СЛЕДУЮЩИЙ ШАГ", category: "Юридическое сопровождение от Fenix Law") <sec-fenix-law>
+  #text(font: sans, size: 8.5pt, fill: rgb("#94A3B8"))[{{secNextSubtitle}}]
+  #v(0.35cm)
+  #card(fill: rgb("#0D1628"), inset: 13pt, compact: true)[
+    #text(font: sans, size: 9pt, fill: rgb("#E2E8F0"))[{{EscapeTypst(ctx.FenixLaw.SummaryText)}}]
+  ]
 ]
-#v(0.4cm)
-");
+#v(0.3cm)
+""");
+
         var tgUser = string.IsNullOrWhiteSpace(ctx.FenixLaw.Telegram) ? "@fenixlaw" : ctx.FenixLaw.Telegram.Trim();
         var tgLink = "https://t.me/" + tgUser.TrimStart('@');
         var webUrl = string.IsNullOrWhiteSpace(ctx.FenixLaw.Website) ? "www.fenixlaw.org" : ctx.FenixLaw.Website.Trim();
@@ -1232,63 +1267,80 @@ public class TypstPdfService
 
         if (ctx.FenixLaw.RequiresLegalWork && ctx.FenixLaw.ServiceCards.Count > 0)
         {
-            sb.AppendLine(@"
-#text(font: serif, size: 11pt, weight: ""bold"", fill: rgb(""#FFFFFF""))[Для вашего проекта Fenix Law может помочь с:]
-#v(0.2cm)
-#grid(
-  columns: (1fr, 1fr),
-  gutter: 12pt,
-");
+            // Keep each full-width domain together when it fits on a fresh A4 page.
+            // Oversized domains may break only between complete findings.
+            sb.AppendLine("""
+#let fenix-domain-card(body) = layout(size => {
+  let whole = card(body, fill: rgb("#0D1628"), inset: 11pt, compact: true, breakable: false)
+  // A4 height minus the document's top and bottom margins.
+  let available-height = 29.7cm - 2.2cm - 1.6cm
+  if measure(block(width: size.width, whole)).height <= available-height {
+    whole
+  } else {
+    card(body, fill: rgb("#0D1628"), inset: 11pt, compact: true, breakable: true)
+  }
+})
+""");
             foreach (var card in ctx.FenixLaw.ServiceCards)
             {
-                sb.AppendLine($@"
-  card(fill: rgb(""#0D1628""), inset: 11pt)[
-    #text(font: serif, size: 10pt, weight: ""bold"", fill: rgb(""#E5C07B""))[{EscapeTypst(card.Title)}]
-    #v(4pt)
-    #text(font: sans, size: 8pt, fill: rgb(""#E2E8F0""))[{EscapeTypst(card.Description)}]
-  ],");
+                sb.AppendLine("""
+#fenix-domain-card[
+  #block(breakable: false, above: 0pt, below: 0pt)[
+""");
+                sb.AppendLine($$"""
+    #text(font: serif, size: 10pt, weight: "bold", fill: rgb("#E5C07B"))[{{EscapeTypst(card.Title)}}]
+    #v(5pt)
+""");
+                for (var index = 0; index < card.Items.Count; index++)
+                {
+                    var item = card.Items[index];
+                    if (index > 0)
+                        sb.AppendLine("  #block(breakable: false, above: 0pt, below: 0pt)[");
+                    if (item.RequiresClarification)
+                        sb.AppendLine("""    #text(font: sans, size: 7pt, weight: "bold", fill: rgb("#38BDF8"))[ТРЕБУЕТ УТОЧНЕНИЯ]#v(2pt)""");
+                    sb.AppendLine($$"""
+    #text(font: sans, size: 8pt, weight: "bold", fill: rgb("#FFFFFF"))[{{EscapeTypst(item.Title)}}]
+    #v(2pt)
+    #text(font: sans, size: 8pt, fill: rgb("#CBD5E1"))[{{EscapeTypst(item.Recommendation)}}]
+  ]
+  #v(4pt)
+""");
+                }
+                if (card.Items.Count == 0)
+                {
+                    sb.AppendLine($$"""    #text(font: sans, size: 8pt, fill: rgb("#CBD5E1"))[{{EscapeTypst(card.Description)}}]""");
+                    sb.AppendLine("  ]");
+                }
+                sb.AppendLine("]\n#v(0.3cm)");
             }
-            sb.AppendLine(@"
-)
-");
+            sb.AppendLine($$"""
+#card(fill: rgb("#0D1628"), stroke: rgb("#E5C07B"), inset: 13pt, breakable: false)[
+  #text(font: serif, size: 10.5pt, weight: "bold", fill: rgb("#E5C07B"))[{{EscapeTypst(ctx.FenixLaw.CtaTitle.ToUpperInvariant())}}]
+  #v(3pt)
+  #text(font: sans, size: 8.5pt, fill: rgb("#94A3B8"))[{{EscapeTypst(ctx.FenixLaw.CtaSubtext)}}]
+  #v(0.25cm)
+  #grid(
+    columns: (1fr, 1fr, 1fr), gutter: 12pt,
+    [#text(font: sans, size: 7.5pt, fill: rgb("#94A3B8"))[Телеграм]#v(2pt)
+     #link("{{tgLink}}")[#text(font: sans, size: 9pt, weight: "bold", fill: rgb("#38BDF8"))[{{EscapeTypst(tgUser)}}]]],
+    [#text(font: sans, size: 7.5pt, fill: rgb("#94A3B8"))[Сайт]#v(2pt)
+     #link("{{webLink}}")[#text(font: sans, size: 9pt, weight: "bold", fill: rgb("#E2E8F0"))[{{EscapeTypst(webUrl)}}]]],
+    [#text(font: sans, size: 7.5pt, fill: rgb("#94A3B8"))[Телефон]#v(2pt)
+     #link("{{phoneLink}}")[#text(font: sans, size: 9pt, weight: "bold", fill: rgb("#E2E8F0"))[{{EscapeTypst(phoneVal)}}]]]
+  )
+]
+""");
         }
         else
         {
-            sb.AppendLine(@"
-#card(fill: rgb(""#0D1628""), inset: 11pt)[
-  #text(font: sans, size: 8.5pt, fill: rgb(""#94A3B8""))[Все выявленные рекомендации носят характер базовой правовой гигиены и могут быть закрыты силами команды без привлечения внешних юристов.]
+            sb.AppendLine($$"""
+#card(fill: rgb("#0D1628"), inset: 13pt, breakable: false)[
+  #text(font: serif, size: 10.5pt, weight: "bold", fill: rgb("#E5C07B"))[{{EscapeTypst(ctx.FenixLaw.CtaTitle.ToUpperInvariant())}}]
+  #v(4pt)
+  #text(font: sans, size: 8.5pt, fill: rgb("#CBD5E1"))[{{EscapeTypst(ctx.FenixLaw.CtaSubtext)}}]
 ]
-");
+""");
         }
-
-        sb.AppendLine($@"
-#v(0.4cm)
-#card(fill: rgb(""#0D1628""), stroke: rgb(""#E5C07B""), inset: 13pt)[
-  #text(font: serif, size: 10.5pt, weight: ""bold"", fill: rgb(""#E5C07B""))[СВЯЗАТЬСЯ С FENIX LAW]
-  #v(3pt)
-  #text(font: sans, size: 8.5pt, fill: rgb(""#94A3B8""))[Для обсуждения устранения выявленных рисков, подготовки документов и индивидуального сопровождения:]
-  #v(0.35cm)
-  #grid(
-    columns: (1fr, 1fr, 1fr),
-    gutter: 12pt,
-    [
-      #text(font: sans, size: 7.5pt, fill: rgb(""#94A3B8""))[Телеграм]\
-      #v(2pt)
-      #link(""{tgLink}"")[#text(font: sans, size: 9pt, weight: ""bold"", fill: rgb(""#38BDF8""))[{EscapeTypst(tgUser)}]]
-    ],
-    [
-      #text(font: sans, size: 7.5pt, fill: rgb(""#94A3B8""))[Сайт]\
-      #v(2pt)
-      #link(""{webLink}"")[#text(font: sans, size: 9pt, weight: ""bold"", fill: rgb(""#E2E8F0""))[{EscapeTypst(webUrl)}]]
-    ],
-    [
-      #text(font: sans, size: 7.5pt, fill: rgb(""#94A3B8""))[Телефон]\
-      #v(2pt)
-      #link(""{phoneLink}"")[#text(font: sans, size: 9pt, weight: ""bold"", fill: rgb(""#E2E8F0""))[{EscapeTypst(phoneVal)}]]
-    ]
-  )
-]
-");
         sb.AppendLine("#pagebreak()\n");
 
         // =========================================================================

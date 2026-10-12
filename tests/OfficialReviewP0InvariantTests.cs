@@ -199,9 +199,14 @@ public class OfficialReviewP0InvariantTests
             InvestmentReadiness = new InvestmentReadinessReportDto
             {
                 IsApplicable = true,
-                ReadinessScore = 45,
+                InvestmentTiming = "3_6m",
+                NewRoundPlanned = true,
+                RoundIsCloseOrActive = true,
+                BaseScore = 78,
+                ReadinessScore = 39,
+                UnresolvedBlockersCount = 2,
                 Category = "Сквозные юридические блокеры",
-                SummaryDescription = "Базовая готовность инвест-блока составляет 78/100, однако общая готовность к сделке ограничена 2 критическими блокерами.",
+                SummaryDescription = "Базовая готовность инвест-блока составляет 78/100, однако общая готовность к сделке ограничена двумя независимыми блокерами до 39/100.",
                 BlockerTitles = new List<string> { "Сооснователи: Риск тупика", "IP: Принадлежность продукта" }
             }
         };
@@ -413,11 +418,21 @@ public class OfficialReviewP0InvariantTests
     [Fact(DisplayName = "11. Prohibited hyperbolic phrases are filtered in QualityGate")]
     public void QualityGate_FiltersHyperbolicPhrases()
     {
-        var ctx = new ReportContext();
+        var ctx = new ReportContext
+        {
+            InvestmentReadiness = new InvestmentReadinessReportDto
+            {
+                IsApplicable = true,
+                InvestmentTiming = "3_6m",
+                NewRoundPlanned = true,
+                RoundIsCloseOrActive = true
+            }
+        };
 
         Assert.False(ReportQualityGate.IsFactuallyGrounded("Инвестор приостановит сделку и откажется от раунда.", ctx));
         Assert.False(ReportQualityGate.IsFactuallyGrounded("Гарантированный отказ инвесторов.", ctx));
         Assert.False(ReportQualityGate.IsFactuallyGrounded("100% срыв сделки.", ctx));
         Assert.True(ReportQualityGate.IsFactuallyGrounded("Наличие неурегулированных вопросов может осложнить инвестиционную проверку.", ctx));
+        Assert.False(ReportQualityGate.IsFactuallyGrounded("Наличие неурегулированных вопросов может осложнить инвестиционную проверку.", new ReportContext()));
     }
 }

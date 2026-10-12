@@ -108,7 +108,7 @@ public static class ReportEngine
             RoundIsCloseOrActive = InvestmentTimingClassifier.IsCloseOrActiveRound(facts),
             HasPriorInvestment = priorInvestment is true || priorInvestment?.ToString() == "unknown"
         };
-        var reportFindings = result.Risks.Select(r => CopyFindingForReport(r, ctx.InvestmentReadiness.NewRoundPlanned)).ToList();
+        var reportFindings = result.Risks.Select(r => CopyFindingForReport(r, ctx.InvestmentReadiness.NewRoundPlanned, facts)).ToList();
         ctx.AllFindings = reportFindings;
         ctx.TopFindings = RootCauseMerger.ExtractTopRootCauses(reportFindings, maxCount: 8);
 
@@ -316,7 +316,7 @@ public static class ReportEngine
         }
 
         // Populate vNext Collections
-        ctx.RootCauses = result.Risks
+        ctx.RootCauses = reportFindings
             .GroupBy(r => !string.IsNullOrWhiteSpace(r.RootCauseGroup) ? r.RootCauseGroup : "GENERAL", StringComparer.OrdinalIgnoreCase)
             .Select(g =>
             {
@@ -416,12 +416,13 @@ public static class ReportEngine
         investment.CatalystTitles = isInvApplicable ? result.Strengths : new List<string>();
         investment.CrossModuleBlockers = crossBlockers;
         investment.SummaryDescription = summaryDesc;
+        InvestmentScoreExplanationBuilder.Populate(investment, invSec, facts);
 
         // 8. Unified Action Plan (Section 11)
         ctx.ActionPlan = UnifiedActionPlanBuilder.BuildUnifiedActionPlan(result.Risks, facts);
 
         // 9. Fenix Law Recommendation (Section 12)
-        ctx.FenixLaw = FenixLawRecommendationEvaluator.EvaluateRecommendation(result.Risks, result, ctx.ActionPlan, ctx.InvestmentReadiness);
+        ctx.FenixLaw = FenixLawRecommendationEvaluator.EvaluateRecommendation(result.Risks, result, ctx.ActionPlan, ctx.InvestmentReadiness, facts);
 
         // 10. Legal Terms & Methodology (Sections 13-14)
         ctx.LegalTerms = ReportStaticContent.GetLegalTerms();
@@ -436,30 +437,45 @@ public static class ReportEngine
         return ctx;
     }
 
-    private static RiskFinding CopyFindingForReport(RiskFinding finding, bool newRoundPlanned) => new()
+    private static RiskFinding CopyFindingForReport(RiskFinding finding, bool newRoundPlanned, SharedFactStore facts)
     {
-        Code = finding.Code,
-        RootCauseGroup = finding.RootCauseGroup,
-        Severity = finding.Severity,
-        Priority = finding.Priority,
-        SectionId = finding.SectionId,
-        Modules = finding.Modules.ToList(),
-        Title = finding.Title,
-        Finding = finding.Finding,
-        WhyItMatters = InvestmentNarrativePresentation.GetWhyItMatters(finding.Code, finding.WhyItMatters, newRoundPlanned),
-        Recommendations = InvestmentNarrativePresentation.GetRecommendations(finding.Code, finding.Recommendations, newRoundPlanned),
-        Recommendation = InvestmentNarrativePresentation.GetRecommendation(finding.Code, finding.Recommendation, newRoundPlanned),
-        Basis = finding.Basis.ToList(),
-        LawyerRequired = finding.LawyerRequired,
-        Resolution = finding.Resolution,
-        ResolutionMode = finding.ResolutionMode,
-        RecommendedActionId = finding.RecommendedActionId,
-        Facts = finding.Facts.ToList(),
-        BusinessImpact = finding.BusinessImpact.ToList(),
-        ServiceCode = finding.ServiceCode,
-        Cta = finding.Cta,
-        AffectedDimensions = finding.AffectedDimensions.ToList()
-    };
+        var copy = new RiskFinding()
+        {
+            Code = finding.Code,
+            RootCauseGroup = finding.RootCauseGroup,
+            Severity = finding.Severity,
+            Priority = finding.Priority,
+            SectionId = finding.SectionId,
+            Modules = finding.Modules.ToList(),
+            Title = finding.Title,
+            Finding = finding.Finding,
+            WhyItMatters = InvestmentNarrativePresentation.GetWhyItMatters(finding.Code, finding.WhyItMatters, newRoundPlanned),
+            Recommendations = InvestmentNarrativePresentation.GetRecommendations(finding.Code, finding.Recommendations, newRoundPlanned),
+            Recommendation = InvestmentNarrativePresentation.GetRecommendation(finding.Code, finding.Recommendation, newRoundPlanned),
+            Basis = finding.Basis.ToList(),
+            LawyerRequired = finding.LawyerRequired,
+            Resolution = finding.Resolution,
+            ResolutionMode = finding.ResolutionMode,
+            RecommendedActionId = finding.RecommendedActionId,
+            Facts = finding.Facts.ToList(),
+            BusinessImpact = finding.BusinessImpact.ToList(),
+            ServiceCode = finding.ServiceCode,
+            Cta = finding.Cta,
+            AffectedDimensions = finding.AffectedDimensions.ToList()
+        };
+        var remediation = FindingRemediationBuilder.Build(finding, facts);
+        if (remediation.RequiresClarification && !remediation.HasConfirmedIssue)
+        {
+            // Preserve the diagnostic identity and score, while presenting unknown answers
+            // as uncertainty instead of proof that a document or mechanism is absent.
+            copy.Title = remediation.Title;
+            copy.Finding = "По этому вопросу сведения не подтверждены. Состояние документов или процесса требует проверки; неопределенный ответ сам по себе не доказывает их отсутствие.";
+            copy.WhyItMatters = remediation.WhyNow;
+            copy.Recommendation = remediation.WhatToDo;
+            copy.Recommendations = new() { remediation.WhatToDo };
+        }
+        return copy;
+    }
 
     private static string GetSectionIcon(string sectionId) => sectionId switch
     {

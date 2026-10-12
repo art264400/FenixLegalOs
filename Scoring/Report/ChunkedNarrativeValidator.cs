@@ -140,13 +140,17 @@ public static class ChunkedNarrativeValidator
             }
         }
 
+        // Preserve the selected list's length; fallback sources must not pad it to three items.
         AddDistinct(generated);
-        AddDistinct(canonical);
-        if (result.Count < 3 && !string.IsNullOrWhiteSpace(legacyPrimary))
+        if (result.Count == 0)
+        {
+            AddDistinct(canonical);
+        }
+        if (result.Count == 0 && !string.IsNullOrWhiteSpace(legacyPrimary))
         {
             AddDistinct(new[] { legacyPrimary });
         }
-        return result.Take(3).ToList();
+        return result;
     }
 
     private static bool IsSubstantialDuplicate(string a, string b)
@@ -280,20 +284,8 @@ public static class ChunkedNarrativeValidator
             }
         }
 
-        string fenixLawRec;
-        if (ctx.FenixLaw.RequiresLegalWork)
-        {
-            var flText = raw.FenixLawRecommendation?.Trim();
-            fenixLawRec = !string.IsNullOrWhiteSpace(flText) &&
-                          !ContainsProhibitedContent(flText) &&
-                          ReportQualityGate.IsFactuallyGrounded(flText, ctx)
-                ? SanitizeText(flText)
-                : fallback.FenixLawRecommendation;
-        }
-        else
-        {
-            fenixLawRec = fallback.FenixLawRecommendation;
-        }
+        // Generated executive prose cannot introduce additional legal services.
+        var fenixLawRec = ctx.FenixLaw.SummaryText;
 
         var result = new ExecutiveSynthesisResponseDto
         {

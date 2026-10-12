@@ -118,6 +118,7 @@ public static class UnifiedActionPlanBuilder
             };
 
             // Tailor WhatToDo / ExpectedResult for pre-incorporation context if needed
+            string title = def.Title;
             string whatToDo = def.WhatToDo;
             string expectedResult = def.RequiredOutcome;
             string businessReason = def.BusinessReason;
@@ -136,6 +137,26 @@ public static class UnifiedActionPlanBuilder
                 }
             }
 
+            // Preserve the action identity and ordering, but do not let a broad library
+            // package invent work for a targeted document finding or an unknown answer.
+            var remediations = item.CoveredFindings.Select(f => FindingRemediationBuilder.Build(f, facts)).ToList();
+            var useCanonicalRemediation = remediations.Any(r => r.RequiresClarification) ||
+                item.CoveredFindings.Any(f => f.Code.StartsWith("PROD_", StringComparison.OrdinalIgnoreCase) ||
+                    newRoundPlanned && f.Code is ("INVEST_PRIOR_INVESTMENT_UNCLEAR" or "INVEST_FUTURE_CAP_TABLE_UNCLEAR" or
+                        "INVEST_DILUTION_NOT_MODELED" or "INVEST_DD_DOCS_NOT_READY" or "INVEST_SELF_AWARENESS_GAP") ||
+                    f.Code is "DATA_PRIVACY_NOTICE_MISSING" or "DATA_PRIVACY_NOTICE_OUTDATED" or
+                        "DATA_NO_PRIVACY_POLICY" or "DATA_PRIVACY_POLICY_INADEQUATE" or "DATA_PRIVACY_MISSING");
+            if (useCanonicalRemediation)
+            {
+                static string Merge(IEnumerable<string> values, string separator = " ") =>
+                    string.Join(separator, values.Where(v => !string.IsNullOrWhiteSpace(v))
+                        .Distinct(StringComparer.OrdinalIgnoreCase));
+                title = Merge(remediations.Select(r => r.Title), "; ");
+                whatToDo = Merge(remediations.Select(r => r.WhatToDo));
+                businessReason = Merge(remediations.Select(r => r.WhyNow));
+                expectedResult = Merge(remediations.Select(r => r.ExpectedResult));
+            }
+
             var coveredCodes = item.CoveredFindings.Select(f => f.Code).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
             var action = new UnifiedActionItemDto
@@ -146,7 +167,8 @@ public static class UnifiedActionPlanBuilder
                 ResolutionMode = def.ResolutionMode,
                 Priority = item.Priority,
                 PriorityGroup = pGroup,
-                Title = def.Title,
+                Title = title,
+                UseCanonicalRemediation = useCanonicalRemediation,
                 WhatToDo = whatToDo,
                 WhyNow = businessReason,
                 ExpectedResult = expectedResult,
@@ -154,7 +176,12 @@ public static class UnifiedActionPlanBuilder
                 Dependencies = def.Dependencies.ToList(),
                 CoveredFindingCodes = coveredCodes
             };
-            InvestmentNarrativePresentation.ApplyToAction(action, newRoundPlanned);
+            if (!useCanonicalRemediation)
+                InvestmentNarrativePresentation.ApplyToAction(action, newRoundPlanned);
+            else if (!newRoundPlanned && action.Priority == RiskPriority.BeforeRound)
+                // The helper already adapts canonical text. Do not replace a check
+                // or a targeted remediation with the broader action-library package.
+                action.PriorityGroup = "ПЛАНОВОЕ УЛУЧШЕНИЕ";
             actionList.Add(action);
         }
 

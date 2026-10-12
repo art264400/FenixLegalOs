@@ -108,7 +108,7 @@ Return ONLY a JSON object with this exact structure:
     ""FINDING_CODE"": {
       ""whyFound"": ""Почему система это выявила"",
       ""whyItMatters"": ""Бизнес-последствия"",
-      ""recommendations"": [""Главный приоритетный шаг"", ""Следующий конкретный шаг"", ""Третий конкретный шаг""]
+      ""recommendations"": [""Главный приоритетный шаг"", ""Следующий конкретный шаг, если он нужен""]
     }
   }
 CRITICAL FOR practicalMeaning:
@@ -121,8 +121,9 @@ Example of required quality:
 'Пока права на ключевые результаты находятся у нескольких лиц, при лицензировании продукта или споре с разработчиком компании придется отдельно подтверждать право использования и оформлять недостающие передачи прав. Чем дольше продукт развивается в текущей конструкции, тем больше объем документов придется восстанавливать позднее.'
 
 CRITICAL: Every key in findingNarratives MUST strictly match a FindingCode provided in the request. Never inject new FindingCodes.
-For every finding return one ordered recommendations array containing exactly 3 concise, actionable and non-overlapping items.
-The first item is the primary recommendation. The second and third items are subsequent steps and MUST NOT repeat or paraphrase the first item or each other.
+For every finding return one ordered recommendations array containing 1 to 3 concise, actionable and non-overlapping items.
+The first item is the primary recommendation. Include subsequent steps only when they add a distinct necessary action; they MUST NOT repeat or paraphrase another item.
+Use only as many items as the finding requires. If one or two items are sufficient, return one or two; never pad the array to reach 3 items or invent extra actions.
 Never return more than 3 items in recommendations array for any finding.
 No Markdown markdown backticks around JSON. Return pure JSON.";
 

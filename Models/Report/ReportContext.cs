@@ -197,6 +197,22 @@ public class InvestmentReadinessReportDto
     public bool HasCrossModuleBlockers => CrossModuleBlockers.Count > 0;
     public string RoundVerdict { get; set; } = string.Empty;
     public string SummaryDescription { get; set; } = string.Empty;
+    public bool HasFactorBreakdown { get; set; }
+    public string ScoreExplanation { get; set; } = string.Empty;
+    public List<InvestmentScoreReasonDto> MainScoreReasons { get; set; } = new();
+    public string AdditionalScoreReasons { get; set; } = string.Empty;
+    public List<string> PreparedItems { get; set; } = new();
+    public string BlockerEffectExplanation { get; set; } = string.Empty;
+}
+
+public class InvestmentScoreReasonDto
+{
+    public string DimensionId { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Explanation { get; set; } = string.Empty;
+    public int Score { get; set; }
+    public double Weight { get; set; }
+    public double Impact { get; set; }
 }
 
 public class CrossModuleInvestmentBlockerDto
@@ -225,6 +241,7 @@ public class UnifiedActionItemDto
     public List<string> Dependencies { get; set; } = new();
     public List<string> CoveredFindingCodes { get; set; } = new();
     public List<string> CoveredFindingIds => CoveredFindingCodes;
+    public bool UseCanonicalRemediation { get; set; }
 }
 
 public class FenixLawRecommendationReportDto
@@ -246,6 +263,18 @@ public class FenixLawServiceCardDto
     public string Title { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public string? Icon { get; set; }
+    public List<string> SourceFindingCodes { get; set; } = new();
+    public List<FenixLawServiceItemDto> Items { get; set; } = new();
+}
+
+public class FenixLawServiceItemDto
+{
+    public string FindingCode { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Recommendation { get; set; } = string.Empty;
+    public bool RequiresClarification { get; set; }
+    public bool HasConfirmedIssue { get; set; } = true;
+    public List<FenixLegalOs.Models.RiskFindingBasis> SourceAnswers { get; set; } = new();
 }
 
 public class MethodologyAndDisclaimerDto

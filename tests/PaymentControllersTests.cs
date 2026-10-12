@@ -1013,23 +1013,34 @@ public sealed class PaymentControllersTests : IDisposable
         Assert.DoesNotContain(macKey, entry.Properties.Values.Select(v => v?.ToString() ?? ""));
     }
 
-    [Fact(DisplayName = "BCC test logging writes the complete purchase request as cURL")]
-    public async Task BccPaymentGateway_TestPayloadLogging_WritesCompletePurchaseCurl()
+    [Theory(DisplayName = "BCC request logging requires an explicit flag in test and production")]
+    [InlineData("test", true)]
+    [InlineData("production", true)]
+    [InlineData("test", false)]
+    [InlineData("production", false)]
+    public async Task BccPaymentGateway_TestPayloadLogging_WritesCompletePurchaseCurl(string environment, bool logPayloads)
     {
         const string macKey = "6BB0AC02E47BDF73D98FEB777F3B5294";
+        const string notifyUsername = "diagnostic-notify-user";
+        const string notifyPassword = "diagnostic-notify-password";
+        string gatewayUrl = environment == "production"
+            ? "https://3dsecure.bcc.kz/webview"
+            : "https://test3ds.bcc.kz:5445/cgi-bin/cgi_link";
         var logger = new ListLogger<BccPaymentGateway>();
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["BCC_ENVIRONMENT"] = "test",
+                ["BCC_ENVIRONMENT"] = environment,
                 ["BCC_TERMINAL_ID"] = "88888881",
-                ["BCC_GATEWAY_URL"] = "https://test3ds.bcc.kz:5445/cgi-bin/cgi_link",
+                ["BCC_GATEWAY_URL"] = gatewayUrl,
                 ["BCC_NOTIFY_URL"] = "https://example.com:443/api/payments/bcc/notify",
                 ["BCC_RETURN_URL"] = "https://example.com:443/api/payments/bcc/return",
                 ["BCC_MERCHANT_ID"] = "00000001",
                 ["BCC_MERCHANT_NAME"] = "TOO MERCHANT",
                 ["BCC_MAC_KEY"] = macKey,
-                ["BCC_LOG_TEST_PAYLOADS"] = "true"
+                ["BCC_NOTIFY_USERNAME"] = notifyUsername,
+                ["BCC_NOTIFY_PASSWORD"] = notifyPassword,
+                ["BCC_LOG_TEST_PAYLOADS"] = logPayloads.ToString()
             })
             .Build();
 
@@ -1048,11 +1059,18 @@ public sealed class PaymentControllersTests : IDisposable
         });
 
         Assert.True(result.Success);
-        var entry = Assert.Single(logger.Entries.Where(e =>
-            e.Message.Contains("Полный тестовый запрос BCC", StringComparison.Ordinal)));
+        var requestLogs = logger.Entries.Where(e =>
+            e.Message.Contains("Полный тестовый запрос BCC", StringComparison.Ordinal)).ToList();
+        if (!logPayloads)
+        {
+            Assert.Empty(requestLogs);
+            return;
+        }
+
+        var entry = Assert.Single(requestLogs);
         string curl = entry.Properties["CurlRequest"]?.ToString() ?? "";
 
-        Assert.StartsWith("curl --location 'https://test3ds.bcc.kz:5445/cgi-bin/cgi_link'", curl);
+        Assert.StartsWith($"curl --location '{gatewayUrl}'", curl);
         foreach (string field in new[]
         {
             "AMOUNT", "CURRENCY", "ORDER", "MERCH_RN_ID", "DESC", "MERCHANT",
@@ -1062,8 +1080,15 @@ public sealed class PaymentControllersTests : IDisposable
         {
             Assert.Contains($"--data-urlencode '{field}=", curl, StringComparison.Ordinal);
         }
+        foreach (var field in result.FormFields)
+        {
+            Assert.Contains($"--data-urlencode '{field.Key}={field.Value}'", curl, StringComparison.Ordinal);
+        }
 
         Assert.DoesNotContain(macKey, curl, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(notifyUsername, curl, StringComparison.Ordinal);
+        Assert.DoesNotContain(notifyPassword, curl, StringComparison.Ordinal);
+        Assert.DoesNotContain("Authorization", curl, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact(DisplayName = "CreatePaymentAsync returns error if gateway is not configured")]

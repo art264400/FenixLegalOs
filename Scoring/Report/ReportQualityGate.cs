@@ -194,19 +194,8 @@ public static class ReportQualityGate
             sanitized.ActionNarratives[action.ActionId] = item;
         }
 
-        // 6. Fenix Law Recommendation
-        if (ctx.FenixLaw.RequiresLegalWork)
-        {
-            var flText = rawNarratives.FenixLawRecommendation?.Trim();
-            sanitized.FenixLawRecommendation = !string.IsNullOrWhiteSpace(flText) && !ContainsProhibitedContent(flText) && IsFactuallyGrounded(flText, ctx)
-                ? SanitizeText(flText)
-                : ctx.FenixLaw.SummaryText;
-        }
-        else
-        {
-            // If deterministic engine says no legal work needed, enforce no upsell!
-            sanitized.FenixLawRecommendation = ctx.FenixLaw.SummaryText;
-        }
+        // The legal service scope must match the current source-grounded cards.
+        sanitized.FenixLawRecommendation = ctx.FenixLaw.SummaryText;
 
         return sanitized;
     }

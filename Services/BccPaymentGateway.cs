@@ -116,7 +116,9 @@ public sealed class BccPaymentGateway : IPaymentGateway
 
     private void LogTestRequest(string trType, string orderId, IReadOnlyDictionary<string, string> fields)
     {
-        if (!_logTestPayloads || !string.Equals(_options.Environment, "test", StringComparison.OrdinalIgnoreCase))
+        // Явный флаг позволяет снять исходящий запрос для диагностики и в production.
+        // В fields передаются только поля формы BCC, без MAC-ключа и учётных данных Notify.
+        if (!_logTestPayloads)
             return;
 
         string curlRequest = BuildCurlRequest(_options.GatewayUrl, fields);
