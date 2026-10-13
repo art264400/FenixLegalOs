@@ -1853,6 +1853,8 @@
 
   const DEFAULT_PRICING = { priceKzt: 49990, oldPriceKzt: 49990, consultationPriceKzt: 90990, currency: '₸', discountPercent: 0 };
   let currentPricing = { ...DEFAULT_PRICING };
+  let paymentsEnabled = false;
+  let pricingRequestVersion = 0;
   const TARIFFS = {
     report: {
       title: 'FENIX SLS',
@@ -1924,20 +1926,55 @@
   }
 
   async function fetchPricing() {
+    const requestVersion = ++pricingRequestVersion;
+    // Payment is available only after an explicit confirmation from the server.
+    paymentsEnabled = false;
     try {
       const data = await api('GET', '/api/sessions/pricing');
+      if (requestVersion !== pricingRequestVersion) return paymentsEnabled;
+      paymentsEnabled = Boolean(data && data.paymentsEnabled === true);
       if (data && Number.isFinite(data.priceKzt) && data.priceKzt >= 0) {
         currentPricing = { ...DEFAULT_PRICING, ...data };
       }
     } catch (e) {
-      // fallback
+      if (requestVersion === pricingRequestVersion) paymentsEnabled = false;
+      // Landing prices can use their defaults; payment remains unavailable.
     }
+    return paymentsEnabled;
   }
 
   let selectedTier = 'consultation';
 
   function getSelectedPriceKzt() {
     return getTierPriceKzt(selectedTier);
+  }
+
+  function renderPaymentUnavailableSection() {
+    return '<section class="payment-unavailable" id="pay-section" aria-labelledby="payment-unavailable-title">' +
+      '<div class="payment-unavailable-icon" aria-hidden="true">✓</div>' +
+      '<div class="payment-unavailable-badge">Скрининг завершён</div>' +
+      '<h2 id="payment-unavailable-title">Оплата пока недоступна</h2>' +
+      '<p class="payment-unavailable-description">Ответы сохранены, предварительные результаты готовы.<br>Оплата полного отчёта пока недоступна.</p>' +
+      '<p class="payment-unavailable-note">Вы можете вернуться позже — возможность оплаты будет добавлена.</p>' +
+      '<button type="button" class="btn btn-secondary" id="payment-results-btn">Вернуться к результатам</button>' +
+    '</section>';
+  }
+
+  function screenPaymentUnavailable(sessionId) {
+    if (state.sessionId !== sessionId || lastResultSessionId !== sessionId || !lastResult) return;
+    if (isPaid) { screenFullReport(sessionId); return; }
+    setProgress(1);
+    render('<div id="preliminary-results" tabindex="-1">' + heroBlock(lastResult) + '</div>' +
+      renderPaymentUnavailableSection());
+    animateGauges();
+    const backButton = document.getElementById('payment-results-btn');
+    if (backButton) backButton.addEventListener('click', function () {
+      const results = document.getElementById('preliminary-results');
+      if (results) {
+        results.focus({ preventScroll: true });
+        results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
   }
 
   function renderPaywallSection(sessionId) {
@@ -1964,6 +2001,8 @@
   }
 
   function openPaymentConfirmationModal(sessionId) {
+    if (!paymentsEnabled) { screenPaymentUnavailable(sessionId); return; }
+    const paymentPageHash = location.hash;
     const rawPhone = currentUser && currentUser.phone ? String(currentUser.phone).trim() : '';
     if (!rawPhone) {
       alert('Для оплаты необходимо указать корректный номер телефона в профиле.');
@@ -2082,6 +2121,12 @@
           document.body.appendChild(bccForm);
           bccForm.submit();
         } catch (err) {
+          if (err && ['payment_disabled', 'payment_gateway_not_configured'].includes(err.code)) {
+            paymentsEnabled = false;
+            closeModal();
+            if (state.sessionId === sessionId && location.hash === paymentPageHash) screenPaymentUnavailable(sessionId);
+            return;
+          }
           if (submitBtn) {
             submitBtn.disabled = false;
             submitBtn.textContent = 'Перейти к оплате';
@@ -2105,7 +2150,12 @@
     }
   }
 
-  function startCardPayment(sessionId) {
+  async function startCardPayment(sessionId) {
+    const expectedHash = location.hash;
+    await fetchPricing();
+    if (state.sessionId !== sessionId || location.hash !== expectedHash) return;
+    if (!paymentsEnabled) { screenPaymentUnavailable(sessionId); return; }
+    if (isPaid) { screenFullReport(sessionId); return; }
     if (!currentUser || !currentUser.termsAccepted) {
       openAuthModal(function () {
         startCardPayment(sessionId);
@@ -2128,7 +2178,12 @@
       return;
     }
 
+    const sessionId = state.sessionId;
+    const expectedHash = location.hash;
     await fetchPricing();
+    if (state.sessionId !== sessionId || lastResultSessionId !== sessionId || location.hash !== expectedHash) return;
+    if (isPaid) { screenFullReport(sessionId); return; }
+    if (!paymentsEnabled) { screenPaymentUnavailable(sessionId); return; }
     const r = lastResult;
     setProgress(1);
     track('score_viewed', { overall: r.overall });

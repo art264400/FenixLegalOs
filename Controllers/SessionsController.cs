@@ -20,6 +20,7 @@ public class SessionsController : ControllerBase
     private readonly SettingsRepository _settings;
     private readonly QuestionRepository _questionRepo;
     private readonly UserRepository? _users;
+    private readonly PaymentService? _paymentService;
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Task<byte[]?>> _pdfGenerationTasks = new();
 
     public SessionsController(
@@ -30,7 +31,8 @@ public class SessionsController : ControllerBase
         AiReportService aiReportService,
         SettingsRepository settings,
         QuestionRepository questionRepo,
-        UserRepository? users = null)
+        UserRepository? users = null,
+        PaymentService? paymentService = null)
     {
         _sessions = sessions;
         _leads = leads;
@@ -40,6 +42,7 @@ public class SessionsController : ControllerBase
         _settings = settings;
         _questionRepo = questionRepo;
         _users = users;
+        _paymentService = paymentService;
     }
 
     private UserAccount? GetAuthenticatedUser()
@@ -77,9 +80,19 @@ public class SessionsController : ControllerBase
     }
 
     [HttpGet("pricing")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public IActionResult GetPricing()
     {
-        return Ok(_settings.GetPricing());
+        var pricing = _settings.GetPricing();
+        return Ok(new
+        {
+            priceKzt = pricing.PriceKzt,
+            oldPriceKzt = pricing.OldPriceKzt,
+            consultationPriceKzt = pricing.ConsultationPriceKzt,
+            currency = pricing.Currency,
+            discountPercent = pricing.DiscountPercent,
+            paymentsEnabled = _paymentService?.PaymentsEnabled ?? false
+        });
     }
 
     [HttpPost]

@@ -42,7 +42,7 @@ public sealed class PaymentControllersTests : IDisposable
         _settings = new SettingsRepository(database);
         _userRepo = new UserRepository(database);
         var gateway = new BccPaymentGateway(configuration);
-        _paymentService = new PaymentService(_sessions, _settings, _paymentRepo, gateway, _userRepo);
+        _paymentService = new PaymentService(_sessions, _settings, _paymentRepo, gateway, _userRepo, configuration: EnabledPaymentsConfig());
         _payments = new PaymentsController(_paymentService)
         {
             ControllerContext = new ControllerContext
@@ -68,7 +68,7 @@ public sealed class PaymentControllersTests : IDisposable
             })
             .Build();
         var gateway = new BccPaymentGateway(config);
-        var paymentService = new PaymentService(_sessions, _settings, _paymentRepo, gateway, _userRepo);
+        var paymentService = new PaymentService(_sessions, _settings, _paymentRepo, gateway, _userRepo, configuration: EnabledPaymentsConfig());
         var payments = new PaymentsController(paymentService)
         {
             ControllerContext = new ControllerContext
@@ -625,7 +625,7 @@ public sealed class PaymentControllersTests : IDisposable
     public async Task StartPayment_WhenAttemptCreatedOrPending_ReturnsExistingAttempt()
     {
         var fullyGateway = CreateFullyConfiguredGateway();
-        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo);
+        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo, configuration: EnabledPaymentsConfig());
         var fullyPayments = new PaymentsController(fullyService)
         {
             ControllerContext = new ControllerContext
@@ -1443,7 +1443,7 @@ public sealed class PaymentControllersTests : IDisposable
 
         // Сессия с настроенным шлюзом и телефоном
         var fullyGateway = CreateFullyConfiguredGateway();
-        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo);
+        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo, configuration: EnabledPaymentsConfig());
         var fullyPayments = new PaymentsController(fullyService)
         {
             ControllerContext = new ControllerContext
@@ -1503,7 +1503,7 @@ public sealed class PaymentControllersTests : IDisposable
     public async Task StartPayment_EmptyBillingAddress_ReturnsBadRequestAndDoesNotCreatePayment()
     {
         var fullyGateway = CreateFullyConfiguredGateway();
-        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo);
+        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo, configuration: EnabledPaymentsConfig());
         var fullyPayments = new PaymentsController(fullyService)
         {
             ControllerContext = new ControllerContext
@@ -1549,7 +1549,7 @@ public sealed class PaymentControllersTests : IDisposable
     public async Task StartPayment_BillingAddressTooLong_ReturnsBadRequestAndDoesNotCreatePayment()
     {
         var fullyGateway = CreateFullyConfiguredGateway();
-        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo);
+        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo, configuration: EnabledPaymentsConfig());
         var fullyPayments = new PaymentsController(fullyService)
         {
             ControllerContext = new ControllerContext
@@ -1591,7 +1591,7 @@ public sealed class PaymentControllersTests : IDisposable
     public async Task StartPayment_PhoneStrictlyFromDatabase_ClientCannotSpoof()
     {
         var fullyGateway = CreateFullyConfiguredGateway();
-        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo);
+        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo, configuration: EnabledPaymentsConfig());
         var fullyPayments = new PaymentsController(fullyService)
         {
             ControllerContext = new ControllerContext
@@ -1671,7 +1671,7 @@ public sealed class PaymentControllersTests : IDisposable
     public async Task StartPayment_ClientIpReadFromRemoteIpAddress_NotDirectlyFromHeader()
     {
         var fullyGateway = CreateFullyConfiguredGateway();
-        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo);
+        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo, configuration: EnabledPaymentsConfig());
         var httpContext = new DefaultHttpContext();
         httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("203.0.113.195");
         httpContext.Request.Headers["X-Forwarded-For"] = "198.51.100.42"; // Сырой заголовок не должен использоваться напрямую
@@ -1707,7 +1707,7 @@ public sealed class PaymentControllersTests : IDisposable
     public async Task StartPayment_ConcurrentStarts_DoNotCreateTwoActiveRecords()
     {
         var fullyGateway = CreateFullyConfiguredGateway();
-        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo);
+        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo, configuration: EnabledPaymentsConfig());
         var fullyPayments = new PaymentsController(fullyService)
         {
             ControllerContext = new ControllerContext
@@ -1788,7 +1788,7 @@ public sealed class PaymentControllersTests : IDisposable
     public async Task StartPayment_ReopeningActivePayment_PreservesOriginalOrderTariffAndAmount()
     {
         var fullyGateway = CreateFullyConfiguredGateway();
-        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo);
+        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo, configuration: EnabledPaymentsConfig());
         var fullyPayments = new PaymentsController(fullyService)
         {
             ControllerContext = new ControllerContext
@@ -1840,7 +1840,7 @@ public sealed class PaymentControllersTests : IDisposable
     public async Task StartPayment_ReopeningActivePayment_UpdatesDbMatchingFormFields()
     {
         var fullyGateway = CreateFullyConfiguredGateway();
-        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo);
+        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo, configuration: EnabledPaymentsConfig());
         var fullyPayments = new PaymentsController(fullyService)
         {
             ControllerContext = new ControllerContext
@@ -1895,7 +1895,7 @@ public sealed class PaymentControllersTests : IDisposable
     public async Task StartPayment_WhenAttemptPaidOrRefunded_CannotReopen()
     {
         var fullyGateway = CreateFullyConfiguredGateway();
-        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo);
+        var fullyService = new PaymentService(_sessions, _settings, _paymentRepo, fullyGateway, _userRepo, configuration: EnabledPaymentsConfig());
         var fullyPayments = new PaymentsController(fullyService)
         {
             ControllerContext = new ControllerContext
@@ -2857,6 +2857,10 @@ public sealed class PaymentControllersTests : IDisposable
         return new FormCollection(dict);
     }
 
+    private static IConfiguration EnabledPaymentsConfig() => new ConfigurationBuilder()
+        .AddInMemoryCollection(new Dictionary<string, string?> { ["PAYMENTS_ENABLED"] = "true" })
+        .Build();
+
     private static BccPaymentGateway CreateFullyConfiguredGateway()
 
     {
@@ -2897,7 +2901,7 @@ public sealed class PaymentControllersTests : IDisposable
     {
         var logger = new ListLogger<PaymentService>();
         var configuredGateway = CreateFullyConfiguredGateway();
-        var serviceWithLogger = new PaymentService(_sessions, _settings, _paymentRepo, configuredGateway, _userRepo, logger);
+        var serviceWithLogger = new PaymentService(_sessions, _settings, _paymentRepo, configuredGateway, _userRepo, logger, configuration: EnabledPaymentsConfig());
 
         string sessionId = CreateCompletedSession();
         var result = await serviceWithLogger.StartAsync(
@@ -3134,7 +3138,7 @@ public sealed class PaymentControllersTests : IDisposable
             .Build();
 
         var gateway = new BccPaymentGateway(config, gLogger);
-        var paymentService = new PaymentService(_sessions, _settings, _paymentRepo, gateway, _userRepo, pLogger);
+        var paymentService = new PaymentService(_sessions, _settings, _paymentRepo, gateway, _userRepo, pLogger, configuration: EnabledPaymentsConfig());
 
         string sessionId = _sessions.CreateSession();
         _sessions.CompleteSession(sessionId, "{}", new ScoreResult { Overall = 50 });

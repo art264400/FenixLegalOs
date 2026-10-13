@@ -133,7 +133,7 @@ public class InvestmentScoreExplanationPdfTests : IDisposable
             Assert.Equal("%PDF-", Encoding.ASCII.GetString(pdf.Take(5).ToArray()));
             await File.WriteAllBytesAsync(Path.Combine(directory, scenario.Id + ".pdf"), pdf);
             await File.WriteAllTextAsync(Path.Combine(directory, scenario.Id + ".typ"), _pdf.BuildTypstMarkup(context));
-            await File.WriteAllTextAsync(Path.Combine(directory, scenario.Id + ".json"), JsonSerializer.Serialize(new { answers = scenario.Id.StartsWith("user-") ? userAnswers : null, result = scenario.Result, facts = scenario.Facts, context, narratives, sanitized }, JsonOptions));
+            await File.WriteAllTextAsync(Path.Combine(directory, scenario.Id + ".json"), JsonSerializer.Serialize(new { answers = scenario.Id.StartsWith("user-") ? userAnswers : null, result = scenario.Result, facts = scenario.Facts, context, compactRows = context.FenixLaw.ServiceCards.Select(FenixLawSummaryBuilder.Build).ToList(), narratives, sanitized }, JsonOptions));
         }
     }
 

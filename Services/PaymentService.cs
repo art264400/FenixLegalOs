@@ -4,6 +4,7 @@ using FenixLegalOs.Models;
 using FenixLegalOs.Models.Payments;
 using FenixLegalOs.Repositories;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -21,6 +22,9 @@ public sealed class PaymentService
     private readonly IPaymentGateway _gateway;
     private readonly UserRepository _users;
     private readonly ILogger<PaymentService> _logger;
+    private readonly bool _paymentsEnabled;
+
+    public bool PaymentsEnabled => _paymentsEnabled && _gateway.IsConfigured;
 
     public PaymentService(
         SessionRepository sessions,
@@ -28,7 +32,8 @@ public sealed class PaymentService
         PaymentRepository payments,
         IPaymentGateway gateway,
         UserRepository users,
-        ILogger<PaymentService>? logger = null)
+        ILogger<PaymentService>? logger = null,
+        IConfiguration? configuration = null)
     {
         _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
@@ -36,6 +41,7 @@ public sealed class PaymentService
         _gateway = gateway ?? throw new ArgumentNullException(nameof(gateway));
         _users = users ?? throw new ArgumentNullException(nameof(users));
         _logger = logger ?? NullLogger<PaymentService>.Instance;
+        _paymentsEnabled = bool.TryParse(configuration?["PAYMENTS_ENABLED"]?.Trim(), out bool enabled) && enabled;
     }
 
     /// <summary>
@@ -128,6 +134,18 @@ public sealed class PaymentService
             {
                 error = "payment_refunded",
                 message = "Оплата по этой диагностике была возвращена. Повторная оплата этой сессии невозможна, пройдите новую диагностику."
+            });
+        }
+
+        // Disabling checkout also blocks reopening a pending attempt, without changing
+        // stored payments or interfering with status checks, callbacks and refunds.
+        if (!_paymentsEnabled)
+        {
+            _logger.LogWarning(PaymentEvents.PaymentRejected, "Запуск оплаты отключен для сессии {SessionId}", sessionId);
+            return PaymentServiceResult.ServiceUnavailable(new
+            {
+                error = "payment_disabled",
+                message = "Оплата полного отчёта пока недоступна. Вы можете вернуться позже — возможность оплаты будет добавлена."
             });
         }
 

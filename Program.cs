@@ -88,7 +88,10 @@ void LoadDotEnv()
                         var val = trimmed.Substring(idx + 1).Trim().Trim('"', '\'');
                         if (!string.IsNullOrEmpty(key))
                         {
-                            Environment.SetEnvironmentVariable(key, val);
+                            // The checkout switch can be overridden by the deployment environment.
+                            // Keep existing loading behavior for the other application settings.
+                            if (key != "PAYMENTS_ENABLED" || Environment.GetEnvironmentVariable(key) == null)
+                                Environment.SetEnvironmentVariable(key, val);
                         }
                     }
                 }

@@ -1682,6 +1682,51 @@ table.data tr.clickable:hover td { background: rgba(89, 194, 255, 0.05); }
 
 /* Pricing & Paywall Gate Styles ------------------------------------------ */
 
+.payment-unavailable {
+  max-width: 760px;
+  margin: 40px auto 56px;
+  padding: 40px 32px;
+  background: var(--bg-elev);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  text-align: center;
+  box-shadow: var(--shadow-lg);
+}
+.payment-unavailable-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 16px;
+  border: 1px solid rgba(46, 213, 115, 0.3);
+  border-radius: 50%;
+  background: var(--positive-bg);
+  color: var(--positive);
+  font-size: 24px;
+  font-weight: 700;
+}
+.payment-unavailable-badge {
+  color: var(--positive);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+.payment-unavailable h2 { color: var(--ink); font-size: 28px; margin-bottom: 16px; }
+.payment-unavailable-description { color: var(--ink-2); font-size: 16px; line-height: 1.6; }
+.payment-unavailable-note { color: var(--ink-soft); font-size: 14px; line-height: 1.6; max-width: 540px; margin: 14px auto 24px; }
+.payment-unavailable .btn { max-width: 100%; }
+#preliminary-results { scroll-margin-top: 90px; }
+#preliminary-results:focus { outline: none; }
+@media (max-width: 520px) {
+  .payment-unavailable { padding: 28px 20px; margin: 28px auto 40px; }
+  .payment-unavailable h2 { font-size: 24px; }
+  .payment-unavailable-description { font-size: 15px; }
+  .payment-unavailable .btn { width: 100%; justify-content: center; }
+}
+
 .paywall-overlay-wrapper {
   position: relative;
   margin-top: 36px;

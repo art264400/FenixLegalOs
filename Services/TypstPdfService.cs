@@ -1242,20 +1242,15 @@ public class TypstPdfService
         // =========================================================================
         // SECTION N+4: Recommended Next Step / Fenix Law
         // =========================================================================
-        var secNextSubtitle = ctx.FenixLaw.RequiresLegalWork
-            ? "Конкретные задачи по выявленным рискам и сведениям, требующим уточнения."
-            : "Следующий шаг по результатам текущей диагностики.";
-        sb.AppendLine($$"""
-#block(breakable: false)[
-  #section-header("{{secNum++.ToString("D2")}}", "РЕКОМЕНДОВАННЫЙ СЛЕДУЮЩИЙ ШАГ", category: "Юридическое сопровождение от Fenix Law") <sec-fenix-law>
-  #text(font: sans, size: 8.5pt, fill: rgb("#94A3B8"))[{{secNextSubtitle}}]
-  #v(0.35cm)
-  #card(fill: rgb("#0D1628"), inset: 13pt, compact: true)[
-    #text(font: sans, size: 9pt, fill: rgb("#E2E8F0"))[{{EscapeTypst(ctx.FenixLaw.SummaryText)}}]
-  ]
-]
-#v(0.3cm)
-""");
+        var serviceCards = ctx.FenixLaw.ServiceCards;
+        var hasLegalTasks = ctx.FenixLaw.RequiresLegalWork && serviceCards.Count > 0;
+        var legalItems = serviceCards.SelectMany(card => card.Items).ToList();
+        var clarificationOnly = legalItems.Count > 0 && legalItems.All(item => item.RequiresClarification && !item.HasConfirmedIssue);
+        var compactIntro = !hasLegalTasks ? ctx.FenixLaw.SummaryText
+            : clarificationOnly ? "По указанным направлениям сначала требуется проверить и уточнить исходные сведения."
+            : legalItems.Any(item => item.RequiresClarification)
+                ? "Ниже — выявленные задачи. Неопределенные сведения сначала нужно проверить."
+                : "По вашим ответам юридическая доработка нужна по следующим направлениям.";
 
         var tgUser = string.IsNullOrWhiteSpace(ctx.FenixLaw.Telegram) ? "@fenixlaw" : ctx.FenixLaw.Telegram.Trim();
         var tgLink = "https://t.me/" + tgUser.TrimStart('@');
@@ -1265,83 +1260,62 @@ public class TypstPdfService
         var phoneDigits = System.Text.RegularExpressions.Regex.Replace(phoneVal, @"[^\d+]", "");
         var phoneLink = "tel:" + phoneDigits;
 
-        if (ctx.FenixLaw.RequiresLegalWork && ctx.FenixLaw.ServiceCards.Count > 0)
+        sb.AppendLine($$"""
+#block(breakable: false)[
+  #section-header("{{secNum++.ToString("D2")}}", "РЕКОМЕНДОВАННЫЙ СЛЕДУЮЩИЙ ШАГ", category: "Юридическое сопровождение от Fenix Law") <sec-fenix-law>
+  #text(font: sans, size: 9pt, fill: rgb("#CBD5E1"))[{{EscapeTypst(compactIntro)}}]
+  #v(0.4cm)
+""");
+        if (hasLegalTasks)
         {
-            // Keep each full-width domain together when it fits on a fresh A4 page.
-            // Oversized domains may break only between complete findings.
+            // This is a concise overview; the complete findings and action plan remain earlier in the report.
             sb.AppendLine("""
-#let fenix-domain-card(body) = layout(size => {
-  let whole = card(body, fill: rgb("#0D1628"), inset: 11pt, compact: true, breakable: false)
-  // A4 height minus the document's top and bottom margins.
-  let available-height = 29.7cm - 2.2cm - 1.6cm
-  if measure(block(width: size.width, whole)).height <= available-height {
-    whole
-  } else {
-    card(body, fill: rgb("#0D1628"), inset: 11pt, compact: true, breakable: true)
-  }
-})
+  #card(fill: rgb("#0D1628"), inset: 13pt, compact: true, breakable: false)[
 """);
-            foreach (var card in ctx.FenixLaw.ServiceCards)
+            for (var index = 0; index < serviceCards.Count; index++)
             {
-                sb.AppendLine("""
-#fenix-domain-card[
-  #block(breakable: false, above: 0pt, below: 0pt)[
-""");
+                var row = FenixLawSummaryBuilder.Build(serviceCards[index]);
+                if (index > 0)
+                    sb.AppendLine("""    #v(8pt)#line(length: 100%, stroke: 0.5pt + rgb("#1E2D4A"))#v(8pt)""");
                 sb.AppendLine($$"""
-    #text(font: serif, size: 10pt, weight: "bold", fill: rgb("#E5C07B"))[{{EscapeTypst(card.Title)}}]
-    #v(5pt)
+    #grid(
+      columns: (3.5cm, 1fr), gutter: 12pt,
+      [#text(font: serif, size: 9.5pt, weight: "bold", fill: rgb("#E5C07B"))[{{EscapeTypst(row.Title)}}]],
+      [#text(font: sans, size: 9pt, fill: rgb("#E2E8F0"))[{{EscapeTypst(row.Task)}}]]
+    )
 """);
-                for (var index = 0; index < card.Items.Count; index++)
-                {
-                    var item = card.Items[index];
-                    if (index > 0)
-                        sb.AppendLine("  #block(breakable: false, above: 0pt, below: 0pt)[");
-                    if (item.RequiresClarification)
-                        sb.AppendLine("""    #text(font: sans, size: 7pt, weight: "bold", fill: rgb("#38BDF8"))[ТРЕБУЕТ УТОЧНЕНИЯ]#v(2pt)""");
-                    sb.AppendLine($$"""
-    #text(font: sans, size: 8pt, weight: "bold", fill: rgb("#FFFFFF"))[{{EscapeTypst(item.Title)}}]
-    #v(2pt)
-    #text(font: sans, size: 8pt, fill: rgb("#CBD5E1"))[{{EscapeTypst(item.Recommendation)}}]
-  ]
-  #v(4pt)
-""");
-                }
-                if (card.Items.Count == 0)
-                {
-                    sb.AppendLine($$"""    #text(font: sans, size: 8pt, fill: rgb("#CBD5E1"))[{{EscapeTypst(card.Description)}}]""");
-                    sb.AppendLine("  ]");
-                }
-                sb.AppendLine("]\n#v(0.3cm)");
             }
             sb.AppendLine($$"""
-#card(fill: rgb("#0D1628"), stroke: rgb("#E5C07B"), inset: 13pt, breakable: false)[
-  #text(font: serif, size: 10.5pt, weight: "bold", fill: rgb("#E5C07B"))[{{EscapeTypst(ctx.FenixLaw.CtaTitle.ToUpperInvariant())}}]
-  #v(3pt)
-  #text(font: sans, size: 8.5pt, fill: rgb("#94A3B8"))[{{EscapeTypst(ctx.FenixLaw.CtaSubtext)}}]
-  #v(0.25cm)
-  #grid(
-    columns: (1fr, 1fr, 1fr), gutter: 12pt,
-    [#text(font: sans, size: 7.5pt, fill: rgb("#94A3B8"))[Телеграм]#v(2pt)
-     #link("{{tgLink}}")[#text(font: sans, size: 9pt, weight: "bold", fill: rgb("#38BDF8"))[{{EscapeTypst(tgUser)}}]]],
-    [#text(font: sans, size: 7.5pt, fill: rgb("#94A3B8"))[Сайт]#v(2pt)
-     #link("{{webLink}}")[#text(font: sans, size: 9pt, weight: "bold", fill: rgb("#E2E8F0"))[{{EscapeTypst(webUrl)}}]]],
-    [#text(font: sans, size: 7.5pt, fill: rgb("#94A3B8"))[Телефон]#v(2pt)
-     #link("{{phoneLink}}")[#text(font: sans, size: 9pt, weight: "bold", fill: rgb("#E2E8F0"))[{{EscapeTypst(phoneVal)}}]]]
-  )
-]
+  ]
+  #v(0.3cm)
+  #text(font: sans, size: 8pt, fill: rgb("#94A3B8"))[Подробные риски и полный план действий — в предыдущих разделах отчета.]
+  #v(0.4cm)
+  #card(fill: rgb("#0D1628"), stroke: rgb("#E5C07B"), inset: 13pt, compact: true, breakable: false)[
+    #text(font: serif, size: 10.5pt, weight: "bold", fill: rgb("#E5C07B"))[{{(clarificationOnly ? "ОБСУДИТЬ ЮРИДИЧЕСКУЮ ПРОВЕРКУ" : "ОБСУДИТЬ ЗАДАЧИ ПО ОТЧЕТУ")}}]
+    #v(0.25cm)
+    #grid(
+      columns: (1fr, 1fr, 1fr), gutter: 12pt,
+      [#text(font: sans, size: 7.5pt, fill: rgb("#94A3B8"))[Телеграм]#v(2pt)
+       #link("{{tgLink}}")[#text(font: sans, size: 9pt, weight: "bold", fill: rgb("#38BDF8"))[{{EscapeTypst(tgUser)}}]]],
+      [#text(font: sans, size: 7.5pt, fill: rgb("#94A3B8"))[Сайт]#v(2pt)
+       #link("{{webLink}}")[#text(font: sans, size: 9pt, weight: "bold", fill: rgb("#E2E8F0"))[{{EscapeTypst(webUrl)}}]]],
+      [#text(font: sans, size: 7.5pt, fill: rgb("#94A3B8"))[Телефон]#v(2pt)
+       #link("{{phoneLink}}")[#text(font: sans, size: 9pt, weight: "bold", fill: rgb("#E2E8F0"))[{{EscapeTypst(phoneVal)}}]]]
+    )
+  ]
 """);
         }
         else
         {
             sb.AppendLine($$"""
-#card(fill: rgb("#0D1628"), inset: 13pt, breakable: false)[
-  #text(font: serif, size: 10.5pt, weight: "bold", fill: rgb("#E5C07B"))[{{EscapeTypst(ctx.FenixLaw.CtaTitle.ToUpperInvariant())}}]
-  #v(4pt)
-  #text(font: sans, size: 8.5pt, fill: rgb("#CBD5E1"))[{{EscapeTypst(ctx.FenixLaw.CtaSubtext)}}]
-]
+  #card(fill: rgb("#0D1628"), inset: 13pt, compact: true, breakable: false)[
+    #text(font: serif, size: 10.5pt, weight: "bold", fill: rgb("#E5C07B"))[{{EscapeTypst(ctx.FenixLaw.CtaTitle.ToUpperInvariant())}}]
+    #v(4pt)
+    #text(font: sans, size: 8.5pt, fill: rgb("#CBD5E1"))[{{EscapeTypst(ctx.FenixLaw.CtaSubtext)}}]
+  ]
 """);
         }
-        sb.AppendLine("#pagebreak()\n");
+        sb.AppendLine("]\n#pagebreak()\n");
 
         // =========================================================================
         // SECTION N+6: Legal Terms & Disclaimer + Fenix Law Expertise Block
