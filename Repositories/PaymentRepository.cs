@@ -293,6 +293,30 @@ public class PaymentRepository
         return rows > 0;
     }
 
+    // Claim before contacting the bank so parallel tabs/requests share the same cooldown.
+    public bool TryClaimActiveStatusCheck(Payment payment, DateTime checkedAt, DateTime retryBefore)
+    {
+        using var conn = GetConn();
+        return conn.Execute(@"
+            UPDATE payments
+            SET last_status_check_at = @checkedAt
+            WHERE order_id = @OrderId AND status IN ('created', 'pending')
+                AND nonce IS @Nonce AND request_timestamp IS @RequestTimestamp
+                AND (last_status_check_at IS NULL OR julianday(last_status_check_at) <= julianday(@retryBefore))
+                AND order_id = (SELECT p.order_id FROM payments p
+                    WHERE p.session_id = payments.session_id ORDER BY p.created_at DESC LIMIT 1)
+                AND EXISTS (SELECT 1 FROM sessions s WHERE s.id = payments.session_id AND s.paid = 0)
+                AND NOT EXISTS (SELECT 1 FROM payments p
+                    WHERE p.session_id = payments.session_id AND p.status IN ('paid', 'refunded'))", new
+        {
+            payment.OrderId,
+            payment.Nonce,
+            payment.RequestTimestamp,
+            checkedAt = checkedAt.ToString("o"),
+            retryBefore = retryBefore.ToString("o")
+        }) > 0;
+    }
+
     public bool UpdateStatus(
         string orderId,
         string status,
@@ -305,7 +329,8 @@ public class PaymentRepository
         string? bankMessage = null,
         string? paidAt = null,
         string? notificationReceivedAt = null,
-        string? lastStatusCheckAt = null)
+        string? lastStatusCheckAt = null,
+        Payment? expectedActiveAttempt = null)
     {
         if (!PaymentStatuses.IsValid(status))
             throw new ArgumentException($"Invalid payment status '{status}'.", nameof(status));
@@ -315,11 +340,21 @@ public class PaymentRepository
 
         // 1. Читаем текущий статус платежа
         var current = conn.QuerySingleOrDefault<Payment>(
-            "SELECT status AS Status, paid_at AS PaidAt FROM payments WHERE order_id = @orderId",
+            @"SELECT status AS Status, paid_at AS PaidAt, nonce AS Nonce,
+                request_timestamp AS RequestTimestamp, last_status_check_at AS LastStatusCheckAt
+                FROM payments WHERE order_id = @orderId",
             new { orderId },
             tx);
 
         if (current == null)
+            return false;
+
+        // A callback, reopened form or newer check may have superseded the automatic check.
+        if (expectedActiveAttempt != null &&
+            (current.Status is not (PaymentStatuses.Created or PaymentStatuses.Pending)
+             || current.Nonce != expectedActiveAttempt.Nonce
+             || current.RequestTimestamp != expectedActiveAttempt.RequestTimestamp
+             || current.LastStatusCheckAt != expectedActiveAttempt.LastStatusCheckAt))
             return false;
 
         var updatedAt = DateTime.UtcNow.ToString("o");

@@ -2286,9 +2286,16 @@
   function refreshReportResult(sessionId) {
     if (!sessionId || state.sessionId !== sessionId) return Promise.resolve(null);
     if (resultLoad && resultLoad.sessionId === sessionId) return resultLoad.promise;
-    const request = { sessionId: sessionId, epoch: resultLoadEpoch, promise: null };
+    const request = { sessionId: sessionId, epoch: resultLoadEpoch, hash: location.hash, promise: null };
     request.promise = (async function () {
-      const data = await api('GET', '/api/sessions/' + sessionId + '/result');
+      let data = await api('GET', '/api/sessions/' + sessionId + '/result');
+      if (!data.paid && state.sessionId === sessionId && resultLoadEpoch === request.epoch && location.hash === request.hash) {
+        const paid = await reconcileActivePayment(sessionId, request.epoch, request.hash);
+        if (paid && state.sessionId === sessionId && resultLoadEpoch === request.epoch) {
+          // Reload the authoritative full result; never unlock the preview in the browser.
+          data = await api('GET', '/api/sessions/' + sessionId + '/result');
+        }
+      }
       if (state.sessionId !== sessionId || resultLoadEpoch !== request.epoch) return null;
       acceptReportResult(sessionId, data);
       return data;
@@ -2297,6 +2304,25 @@
     });
     resultLoad = request;
     return request.promise;
+  }
+
+  async function reconcileActivePayment(sessionId, epoch, expectedHash) {
+    function isCurrent() { return state.sessionId === sessionId && resultLoadEpoch === epoch && location.hash === expectedHash; }
+    try {
+      let payment = await api('POST', '/api/payments/' + sessionId + '/status/check');
+      // An empty synchronous reply can be followed by a callback. Poll only our DB,
+      // not the bank, and stop after six seconds or when this report is no longer open.
+      for (let attempt = 0; isCurrent() && !payment.paid &&
+          (payment.status === 'created' || payment.status === 'pending') && attempt < 3; attempt++) {
+        await new Promise(function (resolve) { setTimeout(resolve, 2000); });
+        if (!isCurrent()) return false;
+        payment = await api('GET', '/api/payments/' + sessionId + '/status');
+      }
+      return isCurrent() && Boolean(payment.paid);
+    } catch (e) {
+      // A bank/network error must not hide the existing unpaid report or unlock it.
+      return false;
+    }
   }
 
   async function loadResultFromServer(sessionId, backHash) {
@@ -2757,12 +2783,15 @@
       return;
     }
 
-    if (hash === '#/results') { screenResults(); return; }
+    if (hash === '#/results') { loadResultFromServer(state.sessionId, '#/results'); return; }
     screenLanding();
 
   }
 
   window.addEventListener('hashchange', route);
+  window.addEventListener('pageshow', function (event) {
+    if (event.persisted && (location.hash === '#/results' || /^#\/report\//.test(location.hash))) route();
+  });
   updateTopbarAuth();
   // Check auth session freshness from server
   api('GET', '/api/auth/me').then(function (res) {

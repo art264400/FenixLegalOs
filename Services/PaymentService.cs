@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using FenixLegalOs.Models;
 using FenixLegalOs.Models.Payments;
 using FenixLegalOs.Repositories;
@@ -477,6 +478,69 @@ public sealed class PaymentService
             amountKzt,
             provider = _gateway.Provider
         });
+    }
+
+    public async System.Threading.Tasks.Task<PaymentServiceResult> CheckActiveStatusAsync(
+        string sessionId, System.Threading.CancellationToken cancellationToken = default)
+    {
+        // Never trust the session snapshot taken before a callback/async bank request.
+        var session = _sessions.GetSession(sessionId);
+        if (session == null)
+            return PaymentServiceResult.NotFound("session_not_found");
+
+        var payment = _payments.GetLatestBySessionId(sessionId);
+        if (session.Paid || _payments.GetSuccessfulPaymentBySessionId(sessionId) != null
+            || _payments.GetLatestRefundedPaymentBySessionId(sessionId) != null
+            || payment == null || payment.Status is not (PaymentStatuses.Created or PaymentStatuses.Pending)
+            || !_gateway.IsConfigured
+            || !string.Equals(payment.Provider, _gateway.Provider, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(payment.Environment, _gateway.Environment, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(payment.TerminalId, _gateway.TerminalId, StringComparison.Ordinal))
+            return GetStatus(sessionId);
+
+        var now = DateTime.UtcNow;
+        bool validTime = string.IsNullOrWhiteSpace(payment.RequestTimestamp)
+            ? DateTime.TryParse(payment.CreatedAt, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var operationTime)
+            : DateTime.TryParseExact(payment.RequestTimestamp, "yyyyMMddHHmmss", CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out operationTime);
+        // BCC status lookup is limited to 24 hours after the original operation.
+        if (!validTime || operationTime > now || now - operationTime > TimeSpan.FromHours(24)
+            || !_payments.TryClaimActiveStatusCheck(payment, now, now.AddSeconds(-30)))
+            return GetStatus(sessionId);
+
+        payment.LastStatusCheckAt = now.ToString("o");
+        _logger.LogInformation("Автоматическая сверка оплаты с BCC: сессия {SessionId}, заказ {OrderId}, TRTYPE=90, TRAN_TRTYPE=1",
+            sessionId, payment.OrderId);
+
+        try
+        {
+            var check = await _gateway.CheckStatusAsync(payment.OrderId, cancellationToken, tranTrType: "1");
+            // The gateway validates ORDER/TERMINAL/type. Ambiguous answers never grant access.
+            if (check.IsFinal && string.IsNullOrWhiteSpace(check.ErrorCode) && check.TrType == "1"
+                && check.Status == (check.Success ? PaymentStatuses.Paid : PaymentStatuses.Failed))
+            {
+                bool updated = _payments.UpdateStatus(payment.OrderId, check.Status,
+                    rrn: check.Rrn, intRef: check.IntRef, approvalCode: check.ApprovalCode,
+                    actionCode: check.ActionCode, responseCode: check.ResponseCode,
+                    bankMessage: check.BankMessage, paidAt: check.PaidAt, expectedActiveAttempt: payment);
+                _logger.LogInformation(PaymentEvents.PaymentStatusChanged,
+                    "Автоматическая сверка оплаты {OrderId}: статус банка {Status}, ACTION={Action}, RC={ResponseCode}, применён={Updated}",
+                    payment.OrderId, check.Status, check.ActionCode, check.ResponseCode, updated);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(PaymentEvents.BccGatewayWarning,
+                "Не удалось сверить оплату {OrderId}: {ErrorType}. Локальный статус сохранён.",
+                payment.OrderId, ex.GetType().Name);
+        }
+
+        return GetStatus(sessionId);
     }
 
     public PaymentServiceResult GetStatus(string sessionId, DiagnosticSession? cachedSession = null)

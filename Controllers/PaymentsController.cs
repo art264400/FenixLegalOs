@@ -46,6 +46,14 @@ public sealed class PaymentsController(PaymentService paymentService) : Controll
         return ToActionResult(result);
     }
 
+    [HttpPost("{sessionId}/status/check")]
+    [RequireSessionAccess(RouteParamName = "sessionId")]
+    public async System.Threading.Tasks.Task<IActionResult> CheckActivePaymentStatus(string sessionId)
+    {
+        var result = await paymentService.CheckActiveStatusAsync(sessionId, HttpContext?.RequestAborted ?? default);
+        return ToActionResult(result);
+    }
+
     private IActionResult ToActionResult(PaymentServiceResult result)
     {
         return result.StatusCode switch
