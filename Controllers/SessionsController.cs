@@ -4,6 +4,7 @@ using FenixLegalOs.Models;
 using FenixLegalOs.Repositories;
 using FenixLegalOs.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace FenixLegalOs.Controllers;
@@ -95,14 +96,29 @@ public class SessionsController : ControllerBase
         });
     }
 
+    public record CreateSessionRequest(string? CompanyName);
+
     [HttpPost]
-    public IActionResult CreateSession()
+    public IActionResult CreateSession([FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] CreateSessionRequest? request = null)
     {
-        var id = _sessions.CreateSession();
         var authUser = GetAuthenticatedUser();
-        if (authUser != null && _users != null)
+        string? companyName = request?.CompanyName?.Trim();
+        if ((authUser != null || request != null) && (string.IsNullOrWhiteSpace(companyName) || companyName.Length > 150))
+            return BadRequest(new { error = "invalid_company_name", message = "Укажите название компании или проекта (до 150 символов)." });
+        if (authUser != null && !authUser.TermsAccepted)
+            return StatusCode(403, new { error = "terms_required" });
+
+        var id = _sessions.CreateSession(companyName, authUser?.Id);
+        if (authUser != null)
         {
-            _users.AttachUserToSession(id, authUser.Id);
+            // Contact data is linked to a real screening, not an empty session created by login.
+            _leads.CreateLead(new Lead
+            {
+                SessionId = id, Type = "screening", Name = authUser.Name, Email = authUser.Email,
+                Company = companyName, Position = authUser.Position, UserId = authUser.Id,
+                TermsAccepted = true, TermsAcceptedAt = authUser.TermsAcceptedAt,
+                HeatScore = 30, HeatLabel = "warm"
+            });
         }
         _leads.RecordEvent("diagnostic_started", id, null);
         return Ok(new { id });
@@ -344,7 +360,7 @@ public class SessionsController : ControllerBase
 
         var (_, effectiveAnswers, facts) = ScoringEngine.ResolveEffectiveState(_questionRepo.GetQuestions(), answersDict);
         var lead = _leads.FindLeadsBySession(id).FirstOrDefault();
-        string? leadCompany = lead?.Company as string;
+        string? leadCompany = !string.IsNullOrWhiteSpace(session.CompanyName) ? session.CompanyName : lead?.Company as string;
         if (string.IsNullOrWhiteSpace(leadCompany) && !string.IsNullOrWhiteSpace(session.UserId) && _users != null)
         {
             var user = _users.GetUserById(session.UserId);

@@ -25,12 +25,15 @@ public class SessionRepository
         return conn;
     }
 
-    public string CreateSession()
+    public string CreateSession(string? companyName = null, string? userId = null)
     {
         using var conn = GetConn();
         var id = Guid.NewGuid().ToString();
         var now = DateTime.UtcNow.ToString("o");
-        conn.Execute("INSERT INTO sessions (id, created_at, updated_at) VALUES (@id, @now, @now)", new { id, now });
+        conn.Execute(@"INSERT INTO sessions (id, created_at, updated_at, company_name, user_id, terms_accepted, terms_accepted_at)
+            VALUES (@id, @now, @now, @companyName, @userId, @termsAccepted, @termsAcceptedAt)",
+            new { id, now, companyName = companyName?.Trim(), userId,
+                termsAccepted = userId != null ? 1 : 0, termsAcceptedAt = userId != null ? now : null });
         return id;
     }
 
@@ -42,7 +45,7 @@ public class SessionRepository
                    answers AS AnswersJson, last_section_id AS LastSectionId,
                    completed_at AS CompletedAt, result AS ResultJson,
                     paid AS Paid, paid_at AS PaidAt, payment_amount AS PaymentAmount,
-                    payment_method AS PaymentMethod, user_id AS UserId,
+                    payment_method AS PaymentMethod, user_id AS UserId, company_name AS CompanyName,
                     terms_accepted AS TermsAccepted, terms_accepted_at AS TermsAcceptedAt,
                     pdf_bytes AS PdfBytes, pdf_generated_at AS PdfGeneratedAt,
                     current_question_id AS CurrentQuestionId, published_revision_id AS ReportRevisionId

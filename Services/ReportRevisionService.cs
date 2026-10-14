@@ -204,6 +204,7 @@ public sealed class ReportRevisionService(
 
     private string CompanyName(DiagnosticSession session)
     {
+        if (!string.IsNullOrWhiteSpace(session.CompanyName)) return session.CompanyName;
         var lead = leads.FindLeadsBySession(session.Id).FirstOrDefault();
         string? company = lead?.Company as string;
         if (string.IsNullOrWhiteSpace(company) && session.UserId != null) company = users.GetUserById(session.UserId)?.Company;

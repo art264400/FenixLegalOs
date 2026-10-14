@@ -80,17 +80,10 @@ public class AuthController : ControllerBase
             phone: normalizedPhone
         );
 
-        string sessionId = dto.SessionId ?? "";
-        var existingSession = string.IsNullOrEmpty(sessionId) ? null : _sessions.GetSession(sessionId);
-        if (existingSession == null || (!string.IsNullOrEmpty(existingSession.UserId) && existingSession.UserId != user.Id))
-        {
-            sessionId = _sessions.CreateSession();
-        }
-
-        _users.AttachUserToSession(sessionId, user.Id);
+        string? sessionId = AttachExistingSession(dto.SessionId, user);
 
         // Record registration lead
-        var lead = new Lead
+        if (sessionId != null) _leads.CreateLead(new Lead
         {
             SessionId = sessionId,
             Type = "registration",
@@ -103,8 +96,7 @@ public class AuthController : ControllerBase
             TermsAcceptedAt = user.TermsAcceptedAt,
             HeatScore = 30,
             HeatLabel = "warm"
-        };
-        _leads.CreateLead(lead);
+        });
         _leads.RecordEvent("user_registered", sessionId, new { userId = user.Id, email = user.Email });
 
         string token = _users.CreateSessionToken(user.Id);
@@ -144,14 +136,7 @@ public class AuthController : ControllerBase
             return Unauthorized(new { error = "invalid_credentials", message = "Неверный email или пароль." });
         }
 
-        string sessionId = dto.SessionId ?? "";
-        var existingSession = string.IsNullOrEmpty(sessionId) ? null : _sessions.GetSession(sessionId);
-        if (existingSession == null || (!string.IsNullOrEmpty(existingSession.UserId) && existingSession.UserId != user.Id))
-        {
-            sessionId = _sessions.CreateSession();
-        }
-
-        _users.AttachUserToSession(sessionId, user.Id);
+        string? sessionId = AttachExistingSession(dto.SessionId, user);
         _leads.RecordEvent("user_logged_in", sessionId, new { userId = user.Id, email = user.Email });
 
         string token = _users.CreateSessionToken(user.Id);
@@ -175,6 +160,14 @@ public class AuthController : ControllerBase
                 termsAccepted = user.TermsAccepted
             }
         });
+    }
+
+    private string? AttachExistingSession(string? sessionId, UserAccount user)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId)) return null;
+        var session = _sessions.GetOriginalSession(sessionId);
+        if (session == null || (!string.IsNullOrEmpty(session.UserId) && session.UserId != user.Id)) return null;
+        return _users.AttachUserToSession(session.Id, user.Id) ? session.Id : null;
     }
 
     private UserAccount? GetAuthenticatedUser()

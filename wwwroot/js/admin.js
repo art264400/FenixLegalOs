@@ -713,7 +713,7 @@
             'Email: <strong>' + esc(l.email) + '</strong><br>' +
             'Мессенджер: ' + esc(l.messenger || '—') + '<br>' +
             'Согласие с офертой и политикой: <strong style="color:var(--positive, #34D399)">' + (l.termsAccepted ? '✓ Подтверждено' : '—') + '</strong><br>' +
-            'Тип: ' + (l.type === 'consultation' ? 'Заявка на разбор' : (l.type === 'registration' ? 'Регистрация перед скринингом' : 'Запрос отчёта')) + '<br>' +
+            'Тип: ' + (l.type === 'consultation' ? 'Заявка на разбор' : (l.type === 'registration' ? 'Регистрация перед скринингом' : (l.type === 'screening' ? 'Скрининг' : 'Запрос отчёта'))) + '<br>' +
             'Запрос: ' + esc(l.interest || '—') + '<br>' +
             (l.sourceRiskCode ? 'Источник CTA: <code>' + esc(l.sourceRiskCode) + '</code><br>' : '') +
             'Lead heat: <span class="heat heat-' + esc(l.heatLabel) + '">' + l.heatScore + ' · ' + HEAT_LABEL[l.heatLabel] + '</span><br>' +

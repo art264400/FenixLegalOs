@@ -222,6 +222,7 @@ public class DiagnosticSession
     public int? PaymentAmount { get; set; }
     public string? PaymentMethod { get; set; }
     public string? UserId { get; set; }
+    public string? CompanyName { get; set; }
     public bool TermsAccepted { get; set; }
     public string? TermsAcceptedAt { get; set; }
     public byte[]? PdfBytes { get; set; }

@@ -213,9 +213,13 @@ public class UserRepository
             SELECT id AS Id, created_at AS CreatedAt, updated_at AS UpdatedAt,
                    answers AS AnswersJson, completed_at AS CompletedAt,
                    COALESCE((SELECT result FROM report_revisions WHERE id=sessions.published_revision_id AND session_id=sessions.id AND status='published'), result) AS ResultJson, paid AS Paid, paid_at AS PaidAt,
-                   user_id AS UserId, (CASE WHEN published_revision_id IS NULL THEN length(pdf_bytes) ELSE (SELECT length(pdf_bytes) FROM report_revisions WHERE id=sessions.published_revision_id AND session_id=sessions.id AND status='published') END > 0) AS TermsAccepted
+                   user_id AS UserId, company_name AS CompanyName, (CASE WHEN published_revision_id IS NULL THEN length(pdf_bytes) ELSE (SELECT length(pdf_bytes) FROM report_revisions WHERE id=sessions.published_revision_id AND session_id=sessions.id AND status='published') END > 0) AS TermsAccepted
             FROM sessions
             WHERE user_id = @userId
+                AND (company_name IS NOT NULL OR completed_at IS NOT NULL OR result IS NOT NULL
+                    OR TRIM(COALESCE(answers, '')) NOT IN ('', '{}') OR paid = 1 OR pdf_bytes IS NOT NULL
+                    OR published_revision_id IS NOT NULL
+                    OR EXISTS (SELECT 1 FROM payments p WHERE p.session_id = sessions.id))
             ORDER BY created_at DESC
         ", new { userId }).ToList();
 
@@ -232,7 +236,7 @@ public class UserRepository
                 IsPaid = s.Paid,
                 PaidAt = s.PaidAt,
                 HasPdf = s.TermsAccepted, // mapped from alias
-                CompanyName = userCompany
+                CompanyName = string.IsNullOrWhiteSpace(s.CompanyName) ? userCompany : s.CompanyName
             };
 
 

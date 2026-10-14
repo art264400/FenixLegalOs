@@ -140,6 +140,16 @@
     updateTopbarAuth();
   }
 
+  function acceptAuthenticatedSession(res) {
+    const sessionId = res.sessionId || null;
+    if (sessionId !== state.sessionId) {
+      state.sessionId = sessionId;
+      clearDiagnosticAndPdfState();
+    } else {
+      saveState();
+    }
+  }
+
   function openAuthModal(onSuccess, force, onCancel) {
     if (!force && currentUser && currentUser.termsAccepted) {
       if (typeof onSuccess === 'function') onSuccess();
@@ -314,13 +324,7 @@
             const res = await api('POST', '/api/auth/register', payload);
             const userObj = res.user || {};
             saveUser(userObj);
-            if (res.sessionId && res.sessionId !== state.sessionId) {
-              state.sessionId = res.sessionId;
-              clearDiagnosticAndPdfState();
-            } else if (res.sessionId) {
-              state.sessionId = res.sessionId;
-              saveState();
-            }
+            acceptAuthenticatedSession(res);
             close(false);
             if (typeof onSuccess === 'function') onSuccess();
           } catch (err) {
@@ -359,13 +363,7 @@
             const res = await api('POST', '/api/auth/login', payload);
             const userObj = res.user || {};
             saveUser(userObj);
-            if (res.sessionId && res.sessionId !== state.sessionId) {
-              state.sessionId = res.sessionId;
-              clearDiagnosticAndPdfState();
-            } else if (res.sessionId) {
-              state.sessionId = res.sessionId;
-              saveState();
-            }
+            acceptAuthenticatedSession(res);
             close(false);
             if (typeof onSuccess === 'function') onSuccess();
           } catch (err) {
@@ -429,17 +427,101 @@
   }
 
   async function startFreshSession() {
-    try {
-      const created = await api('POST', '/api/sessions');
-      state.sessionId = created.id;
-      clearDiagnosticAndPdfState();
-      state.sessionId = created.id;
-      saveState();
-      location.hash = '#/diagnostic';
-      route();
-    } catch (e) {
-      alert('Не удалось создать новый скрининг. Пожалуйста, проверьте интернет-соединение.');
+    return startDiagnosticSession(undefined, true);
+  }
+
+  let screeningStartBusy = false;
+
+  async function startDiagnosticSession(tier, forceNew) {
+    if (tier === 'report' || tier === 'consultation') selectedTier = tier;
+    if (!currentUser || !currentUser.termsAccepted) {
+      openAuthModal(function () { startDiagnosticSession(tier, forceNew); });
+      return;
     }
+    if (screeningStartBusy) return;
+    screeningStartBusy = true;
+    const userId = currentUser.id;
+    try {
+      let unfinished = null;
+      if (!forceNew) {
+        const data = await api('GET', '/api/auth/me/reports');
+        const drafts = (data.reports || []).filter(function (report) { return !report.isCompleted; });
+        unfinished = drafts.find(function (report) { return report.id === state.sessionId; }) || drafts[0] || null;
+      }
+      if (!currentUser || currentUser.id !== userId) return;
+      showScreeningStart(unfinished, userId);
+    } catch (e) {
+      alert('Не удалось загрузить скрининги. Проверьте соединение и попробуйте ещё раз.');
+    } finally {
+      screeningStartBusy = false;
+    }
+  }
+
+  function showScreeningStart(unfinished, userId) {
+    modalRoot.innerHTML =
+      '<div class="auth-modal-overlay" id="screening-start-overlay">' +
+        '<div class="auth-modal" role="dialog" aria-modal="true" aria-labelledby="screening-start-title">' +
+          '<button type="button" class="auth-modal-close" id="screening-start-close" aria-label="Закрыть">×</button>' +
+          '<h2 class="auth-modal-title" id="screening-start-title">' + (unfinished ? 'Продолжить скрининг?' : 'Начать скрининг') + '</h2>' +
+          (unfinished ? '<p class="auth-modal-sub">У вас есть незавершённый скрининг' +
+            (unfinished.companyName ? ' компании «' + esc(unfinished.companyName) + '»' : '') +
+            '. Ответы сохранены.</p><button type="button" class="btn" id="screening-resume-btn">Продолжить скрининг</button>' : '') +
+          '<form class="auth-form" id="screening-start-form">' +
+            '<p class="auth-modal-sub">' + (unfinished ? 'Или начните новый скрининг. ' : '') + 'Укажите компанию или проект, который будете проверять. Это название попадёт в отчёт.</p>' +
+            '<div class="auth-field"><label for="screening-company">Название компании / проекта</label>' +
+              '<input id="screening-company" required maxlength="150" value="' + esc(currentUser.company || '') + '" placeholder="Например: Fenix Tech"></div>' +
+            '<p class="auth-error-msg" id="screening-start-error" hidden></p>' +
+            '<button type="submit" class="btn' + (unfinished ? ' btn-secondary' : '') + ' auth-submit-btn" id="screening-create-btn">' + (unfinished ? 'Начать новый скрининг' : 'Начать диагностику') + '</button>' +
+          '</form>' +
+        '</div>' +
+      '</div>';
+    let submitting = false;
+    let closed = false;
+    const submit = document.getElementById('screening-create-btn');
+    const resume = document.getElementById('screening-resume-btn');
+    function close() { closed = true; modalRoot.innerHTML = ''; }
+    function lock(value) { submitting = value; submit.disabled = value; if (resume) resume.disabled = value; }
+    document.getElementById('screening-start-close').addEventListener('click', close);
+    document.getElementById('screening-start-overlay').addEventListener('click', function (event) {
+      if (event.target === event.currentTarget) close();
+    });
+    if (resume) resume.addEventListener('click', function () {
+      if (submitting || closed || !currentUser || currentUser.id !== userId) return;
+      selectReportSession(unfinished.id);
+      close();
+      loadSessionAnswersAndResume(unfinished.id);
+    });
+    document.getElementById('screening-start-form').addEventListener('submit', async function (event) {
+      event.preventDefault();
+      if (submitting || closed || !currentUser || currentUser.id !== userId) return;
+      const companyName = document.getElementById('screening-company').value.trim();
+      const error = document.getElementById('screening-start-error');
+      error.hidden = true;
+      if (!companyName || companyName.length > 150) {
+        error.textContent = 'Укажите название компании или проекта (до 150 символов).';
+        error.hidden = false;
+        return;
+      }
+      lock(true);
+      try {
+        const created = await api('POST', '/api/sessions', { companyName: companyName });
+        if (closed || !currentUser || currentUser.id !== userId) return;
+        selectReportSession(created.id);
+        close();
+        const alreadyOpen = location.hash === '#/diagnostic';
+        location.hash = '#/diagnostic';
+        if (alreadyOpen) route();
+      } catch (e) {
+        if (!closed) {
+          error.textContent = 'Не удалось начать скрининг. Проверьте соединение и попробуйте ещё раз.';
+          error.hidden = false;
+          lock(false);
+        }
+      }
+    });
+    const company = document.getElementById('screening-company');
+    if (resume) resume.focus();
+    else { company.focus(); company.select(); }
   }
 
   async function openCabinetModal() {
@@ -729,11 +811,10 @@
         // Обработка неизменяемости завершённой сессии
         if (errData && errData.error === 'session_already_completed') {
           alert('Диагностика по этой анкете уже завершена. Ответы и результат зафиксированы. Для нового прохождения создана новая анкета.');
-          const created = await api('POST', '/api/sessions');
-          state.sessionId = created.id;
+          state.sessionId = null;
           clearDiagnosticAndPdfState();
-          location.hash = '#/diagnostic';
-          route();
+          location.hash = '#/';
+          startFreshSession();
           const sessErr = new Error((errData && errData.message) || 'session_already_completed');
           sessErr.code = (errData && errData.error) || 'session_already_completed';
           sessErr.status = res.status;
@@ -821,9 +902,7 @@
    */
   async function syncNav(answers, currentQuestionId) {
     if (!state.sessionId) {
-      const created = await api('POST', '/api/sessions');
-      state.sessionId = created.id;
-      saveState();
+      throw new Error('session_required');
     }
     const targetQId = currentQuestionId || state.currentQuestionId || null;
     var nav = await api('POST', '/api/sessions/' + state.sessionId + '/navigate', {
@@ -1081,43 +1160,6 @@
         '</div>' +
       '</section>'
     );
-    async function startDiagnosticSession(tier) {
-      if (tier === 'report' || tier === 'consultation') selectedTier = tier;
-      if (!currentUser || !currentUser.termsAccepted) {
-        openAuthModal(function () {
-          startDiagnosticSession(tier);
-        });
-        return;
-      }
-
-      render(
-        '<section class="q-screen wrap-narrow">' +
-          '<div class="spinner" style="margin:50px auto"></div>' +
-        '</section>'
-      );
-      try {
-        const created = await api('POST', '/api/sessions');
-        state.sessionId = created.id;
-        clearDiagnosticAndPdfState();
-        location.hash = '#/diagnostic';
-      } catch (e) {
-        render(
-          '<section class="q-screen wrap-narrow">' +
-            '<h2 style="color:var(--critical); font-size:24px;">Ошибка создания сессии</h2>' +
-            '<p style="color:var(--ink-soft); margin:12px 0 24px;">Не удалось подключиться к серверу для начала диагностики. Проверьте подключение к сети.</p>' +
-            '<div class="q-nav">' +
-              '<button class="btn" id="retry-session-btn">Повторить</button>' +
-              '<button class="btn-ghost" id="cancel-session-btn">На главную</button>' +
-            '</div>' +
-          '</section>'
-        );
-        const retryBtn = document.getElementById('retry-session-btn');
-        if (retryBtn) retryBtn.addEventListener('click', startDiagnosticSession);
-        const cancelBtn = document.getElementById('cancel-session-btn');
-        if (cancelBtn) cancelBtn.addEventListener('click', function () { location.hash = '#/'; });
-      }
-    }
-
     document.getElementById('start-btn').addEventListener('click', function () { startDiagnosticSession('report'); });
     const btn2 = document.getElementById('start-btn-2');
     if (btn2) btn2.addEventListener('click', function () { startDiagnosticSession('report'); });
@@ -1187,11 +1229,10 @@
         let errData = null;
         try { errData = await res.json(); } catch (e) {}
         if (errData && errData.error === 'session_already_completed') {
-          const created = await api('POST', '/api/sessions');
-          state.sessionId = created.id;
+          state.sessionId = null;
           clearDiagnosticAndPdfState();
-          location.hash = '#/diagnostic';
-          route();
+          location.hash = '#/';
+          startFreshSession();
         }
       }
     }).catch(function () {});
@@ -1661,6 +1702,7 @@
   }
 
   async function finishDiagnostic() {
+    if (!state.sessionId) { startDiagnosticSession(); return; }
     setProgress(1);
     render(
       '<section class="q-screen">' +
@@ -1670,11 +1712,6 @@
       '</section>'
     );
     try {
-      if (!state.sessionId) {
-        const created = await api('POST', '/api/sessions');
-        state.sessionId = created.id;
-        saveState();
-      }
       await api('PUT', '/api/sessions/' + state.sessionId + '/answers', { answers: state.answers });
       const data = await api('POST', '/api/sessions/' + state.sessionId + '/complete', { answers: state.answers });
       acceptReportResult(state.sessionId, data);
@@ -2753,6 +2790,7 @@
         });
         return;
       }
+      if (!state.sessionId) { startDiagnosticSession(); return; }
       render(
         '<section class="q-screen wrap-narrow">' +
           '<div class="spinner" style="margin:50px auto"></div>' +

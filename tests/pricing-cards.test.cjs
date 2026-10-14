@@ -40,6 +40,9 @@ function harness(pricing = { priceKzt: 35000, consultationPriceKzt: 79000, payme
   let focused = null;
   let paymentStartError = null;
   let paidReportViews = 0;
+  let reports = [];
+  let creationResponse = { id: 'new-session' };
+  const alerts = [];
   class Element {
     constructor(id) {
       this.id = id;
@@ -80,6 +83,7 @@ function harness(pricing = { priceKzt: 35000, consultationPriceKzt: 79000, payme
     querySelectorAll() { return []; }
     scrollIntoView() {}
     focus() { focused = this.id; }
+    select() {}
     emit(name, event = {}) { return this.listeners.get(name)?.(event); }
   }
   for (const id of ['app', 'modal-root', 'progress']) elements.set(id, new Element(id));
@@ -90,6 +94,7 @@ function harness(pricing = { priceKzt: 35000, consultationPriceKzt: 79000, payme
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     requestAnimationFrame() {}, setTimeout() {}, clearTimeout() {},
     console,
+    alert: message => alerts.push(message),
     recordPaidReportView: () => { paidReportViews++; },
     fetch: async (url, options = {}) => {
       const body = options.body ? JSON.parse(options.body) : null;
@@ -101,7 +106,12 @@ function harness(pricing = { priceKzt: 35000, consultationPriceKzt: 79000, payme
         result = typeof pricing === 'function' ? await pricing() : pricing;
       }
       else if (url === '/api/stats/benchmark' || url === '/api/events') result = {};
-      else if (url === '/api/sessions') result = { id: 'new-session' };
+      else if (url === '/api/auth/me/reports') {
+        if (reports instanceof Error) throw reports;
+        result = { reports };
+      }
+      else if (url === '/api/sessions') result = await creationResponse;
+      else if (url.endsWith('/answers')) result = { answers: { 'FND-C01': 'solo' }, currentQuestionId: 'FND-C02' };
       else if (url === '/api/payments/new-session/start') {
         result = paymentStartError ? { error: paymentStartError, message: 'Payment unavailable' } : {};
         if (paymentStartError) status = 503;
@@ -114,10 +124,12 @@ function harness(pricing = { priceKzt: 35000, consultationPriceKzt: 79000, payme
   let pendingAuth = null;
   openAuthModal = callback => { pendingAuth = callback; };
   screenFullReport = () => recordPaidReportView();
+  route = async function () {};
   globalThis.pricingTest = {
     screenLanding, screenResults, renderPricingCard, getSelectedPriceKzt, fetchPricing,
+    startDiagnosticSession, startFreshSession, acceptAuthenticatedSession,
     setPaid(value) { isPaid = value; },
-    authorize() { currentUser = { id: 'user-a', name: 'Founder', email: 'founder@example.test', phone: '+77001234567', termsAccepted: true }; },
+    authorize() { currentUser = { id: 'user-a', name: 'Founder', company: 'Fenix Tech', email: 'founder@example.test', phone: '+77001234567', termsAccepted: true }; },
     async completeAuth() { this.authorize(); pendingAuth(); },
     hasPendingAuth() { return Boolean(pendingAuth); },
     prepareResult() {
@@ -128,13 +140,16 @@ function harness(pricing = { priceKzt: 35000, consultationPriceKzt: 79000, payme
       lastResult = { overall: 70, risks: [], sections: [], actionPlan: [], strongAreas: [] };
       isPaid = false;
     },
-    snapshot() { return { selectedTier, sessionId: state.sessionId, answers: state.answers, currentQuestionId: state.currentQuestionId }; }
+    snapshot() { return { selectedTier, sessionId: state.sessionId, answers: state.answers, currentQuestionId: state.currentQuestionId, paid: isPaid }; }
   };`;
   vm.runInContext(source.replace(startup, exports), context, { filename: 'wwwroot/js/app.js' });
   return {
     api: context.pricingTest, requests, elements,
     setPricing(value) { pricing = value; },
     setPaymentStartError(code) { paymentStartError = code; },
+    setReports(value) { reports = value; },
+    setCreationResponse(value) { creationResponse = value; },
+    alerts,
     paidReportViews: () => paidReportViews,
     el: id => { assert.ok(elements.has(id), 'Missing rendered element: ' + id); return elements.get(id); },
     focus: () => focused,
@@ -152,6 +167,8 @@ test('configured prices match both pages and card payment modal follows the clic
   assert.equal(h.el('landing-price-2').textContent.trim(), money(79000) + ' ₸');
   h.el('start-btn-2').emit('click');
   await flush();
+  assert.equal(h.requests.some(request => request.url === '/api/sessions'), false);
+  await h.el('screening-start-form').emit('submit', { preventDefault() {} });
   assert.equal(h.api.snapshot().selectedTier, 'report');
   assert.equal(h.api.snapshot().sessionId, 'new-session');
 
@@ -191,12 +208,118 @@ test('consultation selected on landing survives registration callback and sessio
   assert.equal(h.requests.some(request => request.url === '/api/sessions'), false);
   await h.api.completeAuth();
   await flush();
+  assert.equal(h.requests.some(request => request.url === '/api/sessions'), false);
+  await h.el('screening-start-form').emit('submit', { preventDefault() {} });
   assert.equal(h.api.snapshot().sessionId, 'new-session');
   assert.equal(h.api.snapshot().selectedTier, 'consultation');
   h.api.prepareResult();
   await h.api.screenResults();
   assert.equal(h.el('tier-card-consultation').getAttribute('aria-checked'), 'true');
   assert.ok(h.el('btn-pay-card').textContent.includes(money(79000)));
+});
+
+test('screening creation requires explicit company confirmation and submits the edited name', async () => {
+  const h = harness();
+  h.api.authorize();
+  await h.api.startDiagnosticSession('report');
+  assert.equal(h.el('screening-company').value, 'Fenix Tech');
+  assert.equal(h.requests.some(r => r.url === '/api/sessions'), false);
+  h.el('screening-company').value = '  Another company  ';
+  await h.el('screening-start-form').emit('submit', { preventDefault() {} });
+  const creates = h.requests.filter(r => r.url === '/api/sessions');
+  assert.equal(creates.length, 1);
+  assert.deepEqual(creates[0].body, { companyName: 'Another company' });
+  assert.equal(h.api.snapshot().sessionId, 'new-session');
+});
+
+test('resume restores saved answers without creating another screening', async () => {
+  const h = harness();
+  h.api.authorize();
+  h.setReports([{ id: 'saved-screening', isCompleted: false, companyName: 'Saved company' }]);
+  await h.api.startDiagnosticSession();
+  assert.ok(h.el('modal-root').innerHTML.includes('Saved company'));
+  h.el('screening-resume-btn').emit('click');
+  await flush();
+  const state = h.api.snapshot();
+  assert.equal(state.sessionId, 'saved-screening');
+  assert.equal(state.answers['FND-C01'], 'solo');
+  assert.equal(state.currentQuestionId, 'FND-C02');
+  assert.equal(h.requests.some(r => r.url === '/api/sessions'), false);
+  assert.equal(h.requests.filter(r => r.url.endsWith('/answers')).length, 1);
+});
+
+test('starting a new screening is an explicit choice and never overwrites old answers', async () => {
+  const h = harness();
+  h.api.authorize();
+  h.api.prepareResult();
+  h.setReports([{ id: 'new-session', isCompleted: false, companyName: 'Old company' }]);
+  h.setCreationResponse({ id: 'second-session' });
+  await h.api.startDiagnosticSession();
+  assert.equal(h.api.snapshot().answers['question-a'], 'answer-a');
+  h.el('screening-company').value = 'New company';
+  await h.el('screening-start-form').emit('submit', { preventDefault() {} });
+  assert.equal(h.api.snapshot().sessionId, 'second-session');
+  assert.equal(Object.keys(h.api.snapshot().answers).length, 0);
+  assert.equal(h.requests.filter(r => r.method === 'PUT').length, 0);
+});
+
+test('cancel and empty company do not create a screening or clear the current answers', async () => {
+  const h = harness();
+  h.api.authorize();
+  h.api.prepareResult();
+  await h.api.startFreshSession();
+  h.el('screening-company').value = '   ';
+  await h.el('screening-start-form').emit('submit', { preventDefault() {} });
+  assert.equal(h.el('screening-start-error').hidden, false);
+  h.el('screening-start-close').emit('click');
+  assert.equal(h.api.snapshot().answers['question-a'], 'answer-a');
+  assert.equal(h.requests.some(r => r.url === '/api/sessions'), false);
+});
+
+test('double submission creates one screening', async () => {
+  const h = harness();
+  h.api.authorize();
+  let complete;
+  h.setCreationResponse(new Promise(resolve => { complete = resolve; }));
+  await h.api.startFreshSession();
+  const form = h.el('screening-start-form');
+  const first = form.emit('submit', { preventDefault() {} });
+  await form.emit('submit', { preventDefault() {} });
+  assert.equal(h.requests.filter(r => r.url === '/api/sessions').length, 1);
+  complete({ id: 'new-session' });
+  await first;
+  assert.equal(h.api.snapshot().sessionId, 'new-session');
+});
+
+test('a failed history fetch does not create a screening as a fallback', async () => {
+  const h = harness();
+  h.api.authorize();
+  h.setReports(new Error('offline'));
+  await h.api.startDiagnosticSession();
+  assert.equal(h.requests.some(r => r.url === '/api/sessions'), false);
+  assert.equal(h.alerts.length, 1);
+});
+
+test('completed reports are not offered as an unfinished screening', async () => {
+  const h = harness();
+  h.api.authorize();
+  h.setReports([{ id: 'paid-report', isCompleted: true, companyName: 'Finished company' }]);
+  await h.api.startDiagnosticSession();
+  assert.equal(h.elements.has('screening-resume-btn'), false);
+  assert.equal(h.requests.some(r => r.url === '/api/sessions'), false);
+});
+
+test('authentication without an attached session clears stale screening state; own session is preserved', async () => {
+  const h = harness();
+  h.api.prepareResult();
+  h.api.acceptAuthenticatedSession({ sessionId: 'new-session' });
+  assert.equal(h.api.snapshot().answers['question-a'], 'answer-a');
+  h.api.setPaid(true);
+  h.api.acceptAuthenticatedSession({ sessionId: null });
+  const state = h.api.snapshot();
+  assert.equal(state.sessionId, null);
+  assert.equal(Object.keys(state.answers).length, 0);
+  assert.equal(state.paid, false);
 });
 
 test('payment keyboard selection updates focus, radio state and both payment amounts', async () => {

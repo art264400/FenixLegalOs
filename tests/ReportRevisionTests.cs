@@ -52,6 +52,7 @@ public sealed class ReportRevisionTests : IDisposable
         public int Calls;
         public SharedFactStore? LastFacts;
         public ScoreResult? LastResult;
+        public string? LastCompanyName;
         public bool Fail;
         public TaskCompletionSource<bool>? Started;
         public TaskCompletionSource<bool>? Continue;
@@ -60,6 +61,7 @@ public sealed class ReportRevisionTests : IDisposable
             Calls++;
             LastFacts = facts;
             LastResult = result;
+            LastCompanyName = companyName;
             Started?.TrySetResult(true);
             if (Continue != null) await Continue.Task;
             if (Fail) return null;
@@ -388,6 +390,22 @@ public sealed class ReportRevisionTests : IDisposable
         Assert.Equal("unknown_question", Assert.Throws<ReportRevisionException>(() => _service.Save(id, new AnswerEditorRequest { Answers = new() { ["missing-question"] = "yes" } }, "admin:test")).Code);
         Assert.Equal("validation_failed", Assert.Throws<ReportRevisionException>(() => _service.Save(id, new AnswerEditorRequest { Answers = new() { ["FND-C01"] = "fake" } }, "admin:test")).Code);
         Assert.Null(_revisions.GetDraft(id));
+    }
+
+    [Fact]
+    public async Task CompanySnapshot_IsUsedForPreviewAndRegenerationInsteadOfChangingProfile()
+    {
+        var id = CreateCompleted();
+        using (var conn = new SqliteConnection(_db.ConnectionString))
+        {
+            conn.Open();
+            conn.Execute("UPDATE sessions SET company_name='Confirmed company' WHERE id=@id", new { id });
+        }
+        Assert.Equal("Confirmed company", Json(_service.GetEditor(id)).GetProperty("companyName").GetString());
+        var draft = SaveDraft(id);
+        await _service.RecalculateAsync(id, draft.Id, draft.Version);
+        Assert.Equal("Confirmed company", _pdf.LastCompanyName);
+        Assert.Equal(_originalPdf, _sessions.GetOriginalSession(id)!.PdfBytes);
     }
 
     [Fact]

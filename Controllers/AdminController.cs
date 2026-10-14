@@ -844,7 +844,8 @@ public class AdminController : ControllerBase
             if (result == null) return StatusCode(500, new { error = "unreadable_saved_result" });
             var answers = JsonSerializer.Deserialize<Dictionary<string, object>>(session.AnswersJson) ?? new();
             var (_, _, facts) = ScoringEngine.ResolveEffectiveState(_questionRepo.GetQuestions(), answers);
-            string companyName = !string.IsNullOrWhiteSpace((string)lead.Company) ? (string)lead.Company : "Стартап";
+            string companyName = !string.IsNullOrWhiteSpace(session.CompanyName) ? session.CompanyName
+                : !string.IsNullOrWhiteSpace((string)lead.Company) ? (string)lead.Company : "Стартап";
             var generated = await _pdfService.GeneratePdfAsync(result, facts, sessionId, companyName);
             if (generated is not { Length: > 0 }) return Problem("PDF generation failed");
             sessions.SavePdf(sessionId, generated);

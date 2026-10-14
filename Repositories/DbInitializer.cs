@@ -363,6 +363,7 @@ public class DbInitializer
         TryAddColumn(conn, "sessions", "payment_amount", "INTEGER");
         TryAddColumn(conn, "sessions", "payment_method", "TEXT");
         TryAddColumn(conn, "sessions", "user_id", "TEXT");
+        TryAddColumn(conn, "sessions", "company_name", "TEXT");
         TryAddColumn(conn, "sessions", "terms_accepted", "INTEGER NOT NULL DEFAULT 0");
         TryAddColumn(conn, "sessions", "terms_accepted_at", "TEXT");
         TryAddColumn(conn, "sessions", "pdf_bytes", "BLOB");
