@@ -22,6 +22,13 @@ public sealed class BccPaymentGateway : IPaymentGateway
     private readonly System.Net.Http.IHttpClientFactory? _httpClientFactory;
     private readonly bool _logTestPayloads;
 
+    private static readonly JsonSerializerOptions MInfoJsonOptions = new()
+    {
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.Create(
+            System.Text.Unicode.UnicodeRanges.BasicLatin,
+            System.Text.Unicode.UnicodeRanges.Cyrillic)
+    };
+
     public const string HttpClientName = "BccPaymentGatewayClient";
 
     public BccPaymentGateway(
@@ -515,7 +522,8 @@ public sealed class BccPaymentGateway : IPaymentGateway
             billAddrLine1 = billAddrLine1
         };
 
-        byte[] jsonUtf8Bytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(payload);
+        // Кириллица остаётся обычным UTF-8 текстом, как в примере M_INFO от BCC.
+        byte[] jsonUtf8Bytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(payload, MInfoJsonOptions);
         return Convert.ToBase64String(jsonUtf8Bytes);
     }
 

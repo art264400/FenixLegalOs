@@ -1327,6 +1327,30 @@ public sealed class PaymentControllersTests : IDisposable
         Assert.Equal("9B1C58714CFF6E4BCC6E97B4D503275838F4ED68", pSign);
     }
 
+    [Theory(DisplayName = "BCC M_INFO preserves Cyrillic as UTF-8 text and valid JSON")]
+    [InlineData("Адрес, 88", "Адрес")]
+    [InlineData("Керей Жанибек хандар 44", "Керей")]
+    [InlineData("Әл-Фараби даңғылы 77", "Әл-Фараби")]
+    [InlineData("ул. \"Абая\", 10\\1", "Абая")]
+    [InlineData("Kerey Zhanibek khandar 44", "Kerey")]
+    public void BccPaymentGateway_BuildMInfo_PreservesAddressAsUtf8(string address, string expectedText)
+    {
+        string mInfo = BccPaymentGateway.BuildMInfo(1078, 1714, "+77001234567", address);
+        byte[] jsonBytes = Convert.FromBase64String(mInfo);
+        string json = System.Text.Encoding.UTF8.GetString(jsonBytes);
+
+        Assert.Contains(expectedText, json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\\u04", json, StringComparison.OrdinalIgnoreCase);
+
+        using var doc = JsonDocument.Parse(jsonBytes);
+        var root = doc.RootElement;
+        Assert.Equal(address, root.GetProperty("billAddrLine1").GetString());
+        Assert.Equal("1078", root.GetProperty("browserScreenHeight").GetString());
+        Assert.Equal("1714", root.GetProperty("browserScreenWidth").GetString());
+        Assert.Equal("7", root.GetProperty("mobilePhone").GetProperty("cc").GetString());
+        Assert.Equal("7001234567", root.GetProperty("mobilePhone").GetProperty("subscriber").GetString());
+    }
+
     [Fact(DisplayName = "Phone validation and normalization tests for KZ numbers")]
     public void PhoneHelper_ValidationAndNormalizationTests()
     {
