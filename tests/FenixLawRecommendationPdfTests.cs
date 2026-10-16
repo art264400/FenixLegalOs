@@ -42,7 +42,11 @@ public class FenixLawRecommendationPdfTests
             }
             Assert.DoesNotContain("(продолжение)", nextStep);
             if (context.FenixLaw.RequiresLegalWork)
+            {
+                Assert.Contains("Fenix Law может помочь", nextStep);
+                Assert.DoesNotContain("По вашим ответам юридическая доработка нужна", nextStep);
                 Assert.Contains("предыдущих разделах", nextStep, StringComparison.OrdinalIgnoreCase);
+            }
             var pdf = await fixture.Pdf.GeneratePdfAsync(result, facts, context.SessionId, context.ProjectName, rawNarratives: narratives);
             Assert.NotNull(pdf);
             Assert.True(pdf.Length > 10000, $"PDF too small for {scenario}");

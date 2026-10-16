@@ -1247,10 +1247,10 @@ public class TypstPdfService
         var legalItems = serviceCards.SelectMany(card => card.Items).ToList();
         var clarificationOnly = legalItems.Count > 0 && legalItems.All(item => item.RequiresClarification && !item.HasConfirmedIssue);
         var compactIntro = !hasLegalTasks ? ctx.FenixLaw.SummaryText
-            : clarificationOnly ? "По указанным направлениям сначала требуется проверить и уточнить исходные сведения."
+            : clarificationOnly ? "Fenix Law может помочь проверить и уточнить исходные сведения по следующим направлениям."
             : legalItems.Any(item => item.RequiresClarification)
-                ? "Ниже — выявленные задачи. Неопределенные сведения сначала нужно проверить."
-                : "По вашим ответам юридическая доработка нужна по следующим направлениям.";
+                ? "Fenix Law может помочь с юридической доработкой по выявленным направлениям; неопределенные сведения сначала нужно проверить."
+                : "Fenix Law может помочь с юридической доработкой по следующим направлениям.";
 
         var tgUser = string.IsNullOrWhiteSpace(ctx.FenixLaw.Telegram) ? "@fenixlaw" : ctx.FenixLaw.Telegram.Trim();
         var tgLink = "https://t.me/" + tgUser.TrimStart('@');
